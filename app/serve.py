@@ -6,6 +6,7 @@
   Страницы и файлы:
     / и /widget → widget.html (в браузере — та же доска)     /settings → settings.html
     /message?id=N → message.html — отдельное окно: сообщение и лог целиком
+    /assistant → assistant.html — ассистент на локальной модели (ai.py; API /api/ai/…)
     /i18n.js — переводы страниц     /avatar/<файл> — аватары из уведомлений
 
   Сообщения:
@@ -74,6 +75,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs, unquote
 
 import actions
+import ai
 import applog
 import avatars
 import backup
@@ -108,6 +110,7 @@ PAGES = {
     "/widget": ("widget.html", "text/html; charset=utf-8"),
     "/settings": ("settings.html", "text/html; charset=utf-8"),
     "/message": ("message.html", "text/html; charset=utf-8"),     # окно одного сообщения: /message?id=N
+    "/assistant": ("assistant.html", "text/html; charset=utf-8"), # окно ассистента на локальной модели
     "/i18n.js": ("i18n.js", "text/javascript; charset=utf-8"),
 }
 
@@ -815,6 +818,18 @@ def make_handler(db_path):
                                 "bind": read(db_path, lambda c: rules.get_prefs(c)["ingest_bind"])})
                 elif p == "/api/themed":
                     self._json(themed_info(db_path))
+                elif p == "/api/ai/status":
+                    self._json(read(db_path, ai.status))
+                elif p == "/api/ai/sessions":
+                    self._json(read(db_path, ai.list_sessions))
+                elif p == "/api/ai/session":
+                    self._json(read(db_path, ai.get_session, num("id", 0)))
+                elif p == "/api/ai/pull":
+                    self._json(dict(ai.pull))
+                elif p == "/api/ai/model-info":
+                    self._json(read(db_path, ai.model_info, arg("provider"), arg("model")))
+                elif p == "/api/ai/export":
+                    self._json({"text": read(db_path, ai.export_markdown, num("id", 0))})
                 elif p == "/api/quiet":
                     self._json(dict(quiet.public_status(), prefs=read(db_path, rules.get_prefs)["quiet"]))
                 elif p == "/api/scripts":
@@ -842,6 +857,8 @@ def make_handler(db_path):
                 return
             if p == "/api/ingest" and not ingest.authorized(self.headers.get("Authorization")):
                 return self._json({"error": L("Неверный ключ приёма событий", "Bad ingest key")}, 401)
+            if p == "/api/ai/chat":
+                return self._ai_chat()
             try:
                 size = int(self.headers.get("Content-Length") or 0)
                 cap = 1024 * 1024 if p == "/api/config/import" else 65536
@@ -859,6 +876,33 @@ def make_handler(db_path):
                 self._json({"error": str(e)}, 503)
             except OSError as e:          # Ollama/Telegram недоступны, диск и т.п.
                 self._json({"error": str(e)}, 502)
+
+        def _ai_chat(self):
+            """Ответ ассистента потоком (NDJSON, по строке на событие); закрыли окно — модель останавливается."""
+            try:
+                size = min(int(self.headers.get("Content-Length") or 0), 65536)
+                payload = json.loads(self.rfile.read(size) or b"{}")
+                sid, text = int(payload.get("session")), str(payload.get("text") or "")
+            except (ValueError, TypeError):
+                return self._json({"error": L("Неверный запрос", "Bad request")}, 400)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-App-Version", version.__version__)
+            self.end_headers()
+            self.close_connection = True
+
+            def emit(ev):
+                try:
+                    self.wfile.write((json.dumps(ev, ensure_ascii=False) + "\n").encode("utf-8"))
+                    self.wfile.flush()
+                    return True
+                except OSError:              # окно закрыли или нажали «Стоп»
+                    return False
+            try:
+                ai.chat(db_path, sid, text, emit, i18n.lang())
+            except (ValueError, sqlite3.Error) as e:
+                emit({"type": "error", "error": str(e)})
 
         def _post(self, p, payload):
             if p == "/api/read":
@@ -878,6 +922,26 @@ def make_handler(db_path):
                 if payload.get("kind") != "command":
                     raise BadRequest(L("Неизвестное событие", "Unknown event"))
                 return events.command(db_path, payload)
+            if p == "/api/ai/setup":
+                write(db_path, rules.set_prefs, {"ai": dict(payload.get("ai") or {})})
+                return read(db_path, ai.status)
+            if p == "/api/ai/session":
+                if payload.get("id"):
+                    return write(db_path, ai.update_session, int(payload["id"]), payload.get("title"),
+                                 payload.get("settings"))
+                return write(db_path, ai.create_session, payload.get("settings"), str(payload.get("title") or ""))
+            if p == "/api/ai/session/delete":
+                return {"deleted": write(db_path, ai.delete_session, int(payload.get("id")))}
+            if p == "/api/ai/defaults":
+                return write(db_path, ai.save_defaults, dict(payload.get("settings") or {}))
+            if p == "/api/ai/pull":
+                return read(db_path, ai.start_pull, str(payload.get("model") or ""))
+            if p == "/api/ai/pull/cancel":
+                return ai.cancel_pull()
+            if p == "/api/ai/delete-model":
+                return read(db_path, ai.delete_model, str(payload.get("model") or ""))
+            if p == "/api/ai/lmstudio/start":
+                return ai.lmstudio_start()
             if p == "/api/quiet":
                 return write(db_path, quiet.set_manual, str(payload.get("action") or ""))
             if p == "/api/remind":

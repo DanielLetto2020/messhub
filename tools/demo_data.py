@@ -34,6 +34,7 @@ RECENT = {
         ("eXpress", "Команда разработки", "Ирина Соколова: И ещё: созвон переносим на 16:00", 41, {}),
         ("eXpress", "Марина Кузнецова", "Скинешь макет главной? Прошлая версия — https://example.com/mockups/v3", 55, {}),
         ("eXpress", "Олег Никитин", "Нужен отчёт по проекту к пятнице", 190, {"pinned": 1}),
+        ("telegram-desktop", "Стоматология", "Напоминаем о приёме завтра в 10:30", 45, {}),
         ("eXpress", "Флуд", "Дмитрий Белов: Кто идёт на обед?", 20, {}),
         ("telegram-desktop", "Мама", "Позвони, как освободишься", 33, {}),
         ("telegram-desktop", "Семья", "Папа: Купил билеты на субботу 🎉", 64, {}),
@@ -50,6 +51,7 @@ RECENT = {
         ("eXpress", "Dev team", "Emma Wilson: Also, the call moves to 4 pm", 41, {}),
         ("eXpress", "Mary Brooks", "Can you send the home page mockup? Last version — https://example.com/mockups/v3", 55, {}),
         ("eXpress", "Oliver Grant", "I need the project report by Friday", 190, {"pinned": 1}),
+        ("telegram-desktop", "Dentist", "A reminder of your appointment tomorrow at 10:30", 45, {}),
         ("eXpress", "Random", "David Hall: Who's up for lunch?", 20, {}),
         ("telegram-desktop", "Mom", "Call me when you're free", 33, {}),
         ("telegram-desktop", "Family", "Dad: Got the tickets for Saturday 🎉", 64, {}),
@@ -100,6 +102,24 @@ THEMED = {
         ("commands", "make release", "shop", "done in 4m 12s", 8, "", "", None, 1),
         ("commands", "npm run build", "shop-web", "failed (code 1) after 38s", 30, BUILD_LOG, "cmd:~/shop-web\nnpm run build", 14, 2),
     ],
+}
+
+# ассистент: (название беседы, вопрос, ответ с номерами сообщений по порядку: shop-api, shop-db, бэкап, make release, npm build)
+AI_DEMO = {
+    "ru": ("Что на серверах", "Сделай отчёт по серверам: что падало, что починилось, что до сих пор не работает.",
+           "**Не работает сейчас**\n- `shop-api` падает по кругу: третий раз за 10 минут не может подключиться к базе (#{0}).\n"
+           "- Ночной бэкап `backup-nightly.service` не прошёл: на NAS кончилось место (#{2}).\n\n"
+           "**Починилось**\n- `shop-db` был нездоров (unhealthy), через 4 минуты снова работает (#{1}).\n"
+           "- Сборка `npm run build` в shop-web падала с ошибкой, повторный запуск прошёл (#{4}).\n\n"
+           "**Прошло без проблем**\n- `make release` в shop — готово за 4 минуты (#{3}).\n\n"
+           "Похоже, `shop-api` падает из-за базы: стоит проверить, что `shop-db` отвечает, и освободить место на NAS."),
+    "en": ("Servers", "Make a server report: what failed, what got fixed, what still does not work.",
+           "**Broken right now**\n- `shop-api` keeps crashing: third time in 10 minutes it can't reach the database (#{0}).\n"
+           "- The nightly backup `backup-nightly.service` failed: the NAS is out of space (#{2}).\n\n"
+           "**Fixed**\n- `shop-db` was unhealthy and works again after 4 minutes (#{1}).\n"
+           "- The `npm run build` in shop-web failed, the rerun passed (#{4}).\n\n"
+           "**Went fine**\n- `make release` in shop — done in 4 minutes (#{3}).\n\n"
+           "`shop-api` seems to fail because of the database: check that `shop-db` answers and free up space on the NAS."),
 }
 
 # журнал программы (раздел «Логи»): (минут назад, уровень, процесс, текст)
@@ -273,6 +293,23 @@ def build(home, lang):
                       catcher.msk_time(fixed / 60) if fixed is not None else None, mid))
     conn.commit()
 
+    # напоминание на сообщении о приёме: «🔔 напомню завтра 10:00»
+    import reminders
+    mid = conn.execute("SELECT id FROM messages WHERE chat IN ('Стоматология', 'Dentist')").fetchone()[0]
+    tomorrow = (now + timedelta(days=1)).strftime("%Y-%m-%d")
+    reminders.add(conn, mid, f"{tomorrow} 10:00", f"{tomorrow} 10:30")
+    # ассистент: настроен, одна беседа с ответом (модель в снимках не нужна — ответ уже в базе)
+    import ai as ai_mod
+    rules.set_prefs(conn, {"ai": {"provider": "ollama", "model": "qwen3:8b", "setup_done": True}})
+    sess = ai_mod.create_session(conn, {"provider": "ollama", "model": "qwen3:8b"}, AI_DEMO[lang][0])
+    ids = [r[0] for r in conn.execute("SELECT id FROM messages WHERE app IN ('messhub-containers', 'messhub-services', "
+                                      "'messhub-commands') ORDER BY id")]
+    q, a = AI_DEMO[lang][1], AI_DEMO[lang][2].format(*ids)
+    for role, text, meta in (("user", q, {}), ("assistant", a, {"ids": ids, "model": "ollama: qwen3:8b", "ms": 6400, "tokens": 212})):
+        conn.execute("INSERT INTO ai_messages (session_id, role, content, created, meta) VALUES (?,?,?,?,?)",
+                     (sess["id"], role, text, catcher.msk_time(0.1), json.dumps(meta, ensure_ascii=False)))
+    conn.commit()
+
     # журнал программы: несколько записей за сутки
     os.makedirs(paths.LOG_DIR, exist_ok=True)
     for src in ("collect", "widget"):
@@ -302,7 +339,15 @@ def build(home, lang):
         "col_order": ["express", "telegram", "mail", "max", "whatsapp", "containers", "services", "commands"],
         # общие снимки — без тематических колонок; для снимка ИТ-колонок screenshots.py скрывает остальные
         "hidden_cols": ["containers", "services", "commands"],
-        "themed": {"containers": {"enabled": True}, "services": {"enabled": True}, "commands": {"enabled": True}},
+        "themed": {"containers": {"enabled": True}, "services": {"enabled": True}, "commands": {"enabled": True},
+                   "resources": {"enabled": True}, "calendar": {"enabled": True},
+                   "logwatch": {"enabled": True, "watches": [
+                       {"id": "nginx", "name": "nginx", "kind": "file", "target": "/var/log/nginx/error.log",
+                        "pattern": "\\[(error|crit)\\]", "icase": True},
+                       {"id": "shopw", "name": "shop worker", "kind": "unit", "target": "shop-worker.service",
+                        "scope": "user", "pattern": "Traceback|ERROR", "icase": True}]}},
+        "quiet": {"enabled": True, "schedule": [{"days": [0, 1, 2, 3, 4], "from": "22:00", "to": "08:00"},
+                                                {"days": [5, 6], "from": "23:00", "to": "10:00"}]},
         "profiles": [{"id": "work", "name": t["profiles"][0],
                       "schedule": [{"days": [0, 1, 2, 3, 4], "from": "09:00", "to": "18:00"}]},
                      {"id": "home", "name": t["profiles"][1],

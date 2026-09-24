@@ -24,7 +24,9 @@ import catcher
 import i18n
 import rules
 
-APPS = {"containers": "messhub-containers", "services": "messhub-services", "commands": "messhub-commands"}
+APPS = {"containers": "messhub-containers", "services": "messhub-services", "commands": "messhub-commands",
+        "resources": "messhub-resources", "logwatch": "messhub-logwatch", "calendar": "messhub-calendar",
+        "reminders": "messhub-reminders", "digest": "messhub-digest"}
 DETAILS_MAX = 6000
 
 

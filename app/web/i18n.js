@@ -415,6 +415,99 @@ const EN = {
     'Executable files (chmod +x) and .py work. The interval can also be set with a “# messhub: interval=60” line at the top of the file. The example is off (.off at the end of its name): rename it and make it executable.',
   'Создан пример: {p}': 'Example created: {p}', 'Карточек: {n}': 'Cards: {n}',
 
+  // ── ассистент ──
+  'Ассистент': 'Assistant', 'на модели на этом компьютере': 'on a model on this computer', 'Новая беседа': 'New conversation',
+  'Найти беседу': 'Find a conversation', 'Модели': 'Models', 'Настроить заново': 'Set up again',
+  'Модель работает на этом компьютере — сообщения никуда не отправляются.': 'The model runs on this computer — messages are not sent anywhere.',
+  'Нажми, чтобы переименовать': 'Click to rename', 'Модель и настройки беседы': 'Model and conversation settings',
+  'Скопировать беседу (Markdown)': 'Copy the conversation (Markdown)', 'Настройки беседы': 'Conversation settings',
+  'Сегодня': 'Today', 'Раньше': 'Earlier', 'Бесед пока нет': 'No conversations yet', 'Ничего не нашлось': 'Nothing found',
+  'Беседа удалена': 'Conversation deleted', 'Дождись ответа или останови его': 'Wait for the answer or stop it',
+  'Беседа скопирована (Markdown)': 'Conversation copied (Markdown)', 'модель не выбрана': 'no model selected',
+  '{p} не отвечает — запусти или выбери другую модель': '{p} is not responding — start it or pick another model', 'Модель': 'Model',
+  'Что я пропустил?': 'What did I miss?', 'Коротко о главном за сутки': 'The gist of the last day',
+  'Кратко перескажи, что было в сообщениях за период: по каждому активному чату 1–2 пункта, отдельно — что адресовано мне и что ждёт моего ответа.':
+    'Briefly summarize the messages for the period: 1–2 points per active chat, and separately what is addressed to me and waits for my reply.',
+  'Упоминания и вопросы ко мне': 'Mentions and questions to me', 'Где меня звали или спрашивали': 'Where I was mentioned or asked',
+  'Найди сообщения, где упоминают меня или задают мне вопрос, и перечисли их с номерами и кратко — что от меня хотят.':
+    'Find messages that mention me or ask me something, and list them with numbers and briefly what is wanted from me.',
+  'Сроки и договорённости': 'Deadlines and agreements', 'Встречи, дедлайны, обещания': 'Meetings, deadlines, promises',
+  'Выпиши все сроки, встречи и договорённости со временем, кто и что обещал — с номерами сообщений. Сначала ближайшие.':
+    'List all deadlines, meetings and agreements with times, who promised what — with message numbers. Nearest first.',
+  'Отчёт по серверам': 'Server report', 'Контейнеры, службы, команды': 'Containers, services, commands',
+  'Сделай отчёт по контейнерам, службам и командам: что падало, что починилось, что до сих пор не работает. С номерами сообщений.':
+    'Make a report on containers, services and commands: what failed, what got fixed, what still does not work. With message numbers.',
+  'Сводка по чату…': 'Chat summary…', 'Подставь название чата': 'Fill in the chat name',
+  'Сделай сводку по чату «»: о чём говорили, что решили, что осталось открытым.': 'Summarize the chat “”: what was discussed, what was decided, what is still open.',
+  'Найти…': 'Find…', 'Поиск своими словами': 'Search in your own words', 'Найди сообщения про ': 'Find messages about ',
+  'Спроси о своих сообщениях…': 'Ask about your messages…', 'Отправить · Enter': 'Send · Enter', 'Остановить': 'Stop',
+  'Слова «сегодня», «вчера», «за неделю» в вопросе сами сузят выборку.': 'Words like “today”, “yesterday”, “this week” in the question narrow the selection.',
+  'Enter — отправить, Shift+Enter — новая строка': 'Enter — send, Shift+Enter — new line', 'Выборка: {p}': 'Selection: {p}',
+  'за сутки': 'last day', 'за 2 дня': 'last 2 days', 'за неделю': 'last week', 'за месяц': 'last month', 'за всё время': 'all time',
+  'опирался на {n}': 'based on {n}', 'сообщений в выборке не было': 'no messages in the selection', '{n} токенов': '{n} tokens',
+  'остановлено': 'stopped', 'О чём спросить?': 'What to ask?',
+  'Ассистент читает твои сообщения из базы — выборку за период — и отвечает моделью на этом компьютере. Номера вида #123 в ответе открывают само сообщение.':
+    'The assistant reads your messages from the database — a selection for the period — and answers with a model on this computer. Numbers like #123 in the answer open the message itself.',
+  '{p} не отвечает. Запусти его или выбери другую модель в настройках беседы.': '{p} is not responding. Start it or pick another model in the conversation settings.',
+  'Модель не выбрана — открой «Модели» или настройки беседы.': 'No model selected — open “Models” or the conversation settings.',
+  'Выбери модель в настройках беседы': 'Pick a model in the conversation settings', 'Собираю сообщения…': 'Collecting messages…',
+  'Выборка: {s}': 'Selection: {s}', 'Остановлено': 'Stopped', 'Открыть сообщение': 'Open the message',
+  'моделей нет — открой «Модели»': 'no models — open “Models”', 'недоступна': 'unavailable',
+  'Модель умеет контекст до {n} токенов.': 'The model supports a context of up to {n} tokens.', 'Температура': 'Temperature',
+  'Ниже — точнее и повторяемее (для сводок и поиска), выше — свободнее.': 'Lower — more precise and repeatable (summaries, search), higher — freer.',
+  'Размер контекста': 'Context size', 'токенов': 'tokens',
+  'У LM Studio размер контекста задаётся при загрузке модели в самой программе; здесь он лишь решает, сколько сообщений отдать.':
+    'In LM Studio the context size is set when the model is loaded in the app; here it only decides how many messages to pass.',
+  'Больше — больше сообщений влезет в выборку, но нужно больше видеопамяти и ответ медленнее.': 'Bigger — more messages fit into the selection, but it needs more VRAM and answers slower.',
+  'Длина ответа, не больше': 'Answer length, at most', 'Какие сообщения давать модели': 'Which messages to give the model', 'Период': 'Period',
+  'Ничего не выбрано — все источники.': 'Nothing selected — all sources.', 'Сообщений в выборке, не больше': 'Messages in the selection, at most',
+  'Брать и прочитанные': 'Include read ones', 'Брать хвосты логов (тематические колонки)': 'Include log tails (themed columns)',
+  'Системный промпт': 'System prompt', 'Пусто — стандартный (виден подсказкой). Здесь можно задать тон, язык ответа, формат отчётов.':
+    'Empty — the standard one (shown as a hint). Set the tone, answer language or report format here.',
+  'Сделать по умолчанию': 'Make default', 'Стандартный промпт': 'Standard prompt', 'Сохранено как настройки новых бесед': 'Saved as settings for new conversations',
+  'ГБ': 'GB', 'ошибка: {e}': 'error: {e}', 'скачана': 'downloaded', 'Отменить': 'Cancel', 'Отменяю…': 'Cancelling…',
+  'поместится в видеокарту': 'fits the graphics card', 'на процессоре — медленнее': 'on the CPU — slower', 'может не хватить памяти': 'may run out of memory',
+  'Установленные': 'Installed', 'Скачать': 'Download', 'Найти в каталоге или ввести своё имя модели…': 'Search the catalog or type a model name…',
+  'Найти среди установленных…': 'Search installed…', 'загружена': 'loaded', 'контекст до {n}': 'context up to {n}',
+  'По умолчанию': 'Make default', 'Среди установленных такой нет.': 'No such model installed.', 'Посмотри во вкладке «Скачать».': 'Look in the Download tab.',
+  'В LM Studio нет моделей для чата — скачай модель в самой программе (вкладка Discover) и нажми «Проверить ещё раз».':
+    'LM Studio has no chat models — download one in the app (Discover tab) and click “Check again”.',
+  'Моделей для чата ещё нет — открой вкладку «Скачать».': 'No chat models yet — open the Download tab.',
+  'Видеопамять: {v}, оперативная: {r}. Размеры — примерно. Модель скачивается один раз и дальше работает без интернета.':
+    'VRAM: {v}, RAM: {r}. Sizes are approximate. A model is downloaded once and then works offline.',
+  'нет NVIDIA': 'no NVIDIA', 'своё имя: из ollama.com/library (qwen3:30b) или с Hugging Face (hf.co/автор/модель:Q4_K_M)':
+    'your own name: from ollama.com/library (qwen3:30b) or Hugging Face (hf.co/author/model:Q4_K_M)',
+  'В каталоге такой нет — впиши точное имя модели, и появится кнопка «Скачать».': 'Not in the catalog — type the exact model name and a Download button appears.',
+  'Всё из каталога уже установлено.': 'Everything from the catalog is installed.',
+  'Полный список моделей — на ollama.com/library; любое имя оттуда можно вписать в поиск.': 'The full list is at ollama.com/library; type any name from there into the search.',
+  'Точно удалить?': 'Delete for sure?', 'Модель удалена': 'Model deleted', 'Модель по умолчанию: {m}': 'Default model: {m}',
+  'Не скачалось: {e}': 'Download failed: {e}', 'Модель {m} скачана': 'Model {m} downloaded', 'Скачивание остановлено': 'Download stopped',
+  'Модели, которые можно использовать в беседах. Всё работает на этом компьютере.': 'Models you can use in conversations. Everything runs on this computer.',
+  '← К беседе': '← Back to the conversation', 'Ollama не отвечает': 'Ollama is not responding',
+  'Установи Ollama (ollama.com) — на Linux одной командой, потом она работает сама:': 'Install Ollama (ollama.com) — on Linux with one command, then it runs by itself:',
+  'На Windows — установщик с ollama.com/download. Уже стоит, но не запущена: ollama serve.': 'On Windows use the installer from ollama.com/download. Installed but not running: ollama serve.',
+  'LM Studio не отвечает': 'LM Studio is not responding',
+  'Скачай LM Studio (lmstudio.ai), скачай в ней модель и включи сервер: вкладка Developer → Start Server.': 'Get LM Studio (lmstudio.ai), download a model in it and start the server: Developer tab → Start Server.',
+  'Запустить сервер LM Studio': 'Start the LM Studio server', 'Запускаю…': 'Starting…', 'Сервер LM Studio запущен': 'LM Studio server started',
+  'Не получилось': 'Did not work', 'Знакомство': 'Welcome', 'Где модель': 'Where', 'Какая модель': 'Which model', 'Готово': 'Done',
+  'Привет! Это ассистент по твоим сообщениям': 'Hi! This is an assistant for your messages',
+  'Можно спросить своими словами: «что я пропустил за утро?», «кто спрашивал про отчёт?», «что падало на серверах за неделю?», «сделай сводку по чату…». Ассистент соберёт подходящие сообщения из базы и ответит, а номера #123 в ответе откроют сами сообщения.':
+    'Ask in your own words: “what did I miss this morning?”, “who asked about the report?”, “what failed on the servers this week?”, “summarize the chat…”. The assistant gathers matching messages from the database and answers; numbers like #123 open the messages.',
+  'Отвечает модель на этом компьютере — через Ollama или LM Studio. Сообщения никуда не уходят, интернет нужен только чтобы один раз скачать модель.':
+    'A model on this computer answers — via Ollama or LM Studio. Messages go nowhere; the internet is only needed once, to download a model.',
+  'Начать настройку': 'Start setup', 'Где будет работать модель': 'Where the model will run',
+  'Обе программы бесплатные и работают на этом компьютере. Если ни одной нет — проще начать с Ollama: модели скачиваются прямо отсюда.':
+    'Both are free and run on this computer. If you have neither, start with Ollama: models download right from here.',
+  'Простая, модели скачиваются одной кнопкой прямо в этом окне.': 'Simple: models download with one button right in this window.',
+  'Программа с окном: модели ищутся и скачиваются в ней самой.': 'An app with a window: models are found and downloaded in the app itself.',
+  'найдена · моделей для чата: {n}': 'found · chat models: {n}', 'не отвечает — {e}': 'not responding — {e}', '← Назад': '← Back', 'Дальше': 'Next',
+  'Выбери установленную модель или скачай новую. Для сводок и поиска по русским сообщениям хороши модели с флажком 🇷🇺.':
+    'Pick an installed model or download a new one. Models with the 🇷🇺 flag are good for Russian messages.',
+  'Выбери установленную модель (или скачай и выбери)': 'Pick an installed model (or download one and pick it)',
+  'Модель: {m} ({p}). Её и другие настройки — температуру, размер контекста, какие сообщения брать — можно поменять в любой беседе кнопкой настроек вверху.':
+    'Model: {m} ({p}). It and other settings — temperature, context size, which messages to use — can be changed in any conversation with the settings button at the top.',
+  'Начать беседу': 'Start a conversation', 'Сервер виджета не отвечает — ассистент не загрузился.': 'The widget server is not responding — the assistant could not load.',
+
   // ── логи ──
   'Логи': 'Logs',
   'Журнал работы самой программы: запуск, ошибки, фоновые задачи, что сделали правила. Тексты твоих сообщений сюда не пишутся. Журнал лежит только на этом компьютере.':
