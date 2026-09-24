@@ -1,0 +1,80 @@
+name: "🐞 Ошибка / Bug"
+description: "Что-то работает не так / Something doesn't work"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Не вставляй настоящие уведомления, имена людей, названия чатов, токены и пароли** - issues видят все.
+        Если ошибка на конкретном сообщении, перескажи его своими словами.
+        *Don't paste real notifications, names, chat names, tokens or passwords - issues are public.*
+  - type: input
+    id: version
+    attributes:
+      label: "Версия / Version"
+      description: "Номер в шапке доски или `messhub --version` / Number in the board header"
+      placeholder: "1.0.7"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: "Система / OS"
+      options:
+        - "Ubuntu / Debian / Mint"
+        - "Fedora / openSUSE"
+        - "Другой Linux / Other Linux"
+        - "Windows 11"
+        - "Windows 10"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: "Как установлено / Installed with"
+      options:
+        - ".deb"
+        - ".rpm"
+        - ".tar.gz (install.sh)"
+        - "git clone (install.sh)"
+        - ".msi"
+        - "setup.bat"
+        - "portable .zip"
+    validations:
+      required: true
+  - type: dropdown
+    id: session
+    attributes:
+      label: "Сеанс рабочего стола (Linux) / Desktop session"
+      options:
+        - "X11 (GNOME on Xorg)"
+        - "Wayland"
+        - "Не знаю / Don't know"
+        - "Это Windows / It's Windows"
+  - type: textarea
+    id: what
+    attributes:
+      label: "Что случилось / What happened"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Как повторить / Steps to reproduce"
+      placeholder: "1. …\n2. …"
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Что ожидал / What you expected"
+  - type: textarea
+    id: diag
+    attributes:
+      label: "Настройки → Система / Settings → System"
+      description: "Пункты с ✕ и ! (без личного) / Items marked ✕ and ! (nothing private)"
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: "Приватность / Privacy"
+      options:
+        - label: "В тексте нет настоящих сообщений, имён, токенов и паролей / No real messages, names, tokens or passwords"
+          required: true

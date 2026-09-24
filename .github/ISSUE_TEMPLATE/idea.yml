@@ -1,0 +1,19 @@
+name: "💡 Идея / Idea"
+description: "Предложить улучшение / Suggest an improvement"
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: "Какую задачу решает / What problem it solves"
+      placeholder: "Хочу быстрее видеть… / I want to…"
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: "Как это могло бы выглядеть / How it could look"
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "Как обходишься сейчас / How you manage now"

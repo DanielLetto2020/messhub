@@ -14,9 +14,9 @@ class VersionTest(unittest.TestCase):
 
     def test_git_count(self):
         with mock.patch.object(version.subprocess, "run") as run:
-            run.side_effect = [mock.Mock(stdout=version.HERE + "\n"), mock.Mock(stdout="42\n")]
+            run.side_effect = [mock.Mock(stdout=version.ROOT + "\n"), mock.Mock(stdout="42\n")]
             self.assertEqual(version._from_git(), "1.0.41")          # 42 коммита → 1.0.41
-            run.side_effect = [mock.Mock(stdout=version.HERE + "\n"), mock.Mock(stdout="42\n")]
+            run.side_effect = [mock.Mock(stdout=version.ROOT + "\n"), mock.Mock(stdout="42\n")]
             self.assertEqual(version.next_version(), "1.0.42")
 
     def test_foreign_repo_ignored(self):

@@ -1,17 +1,16 @@
 name: packages
-# Сборка и проверка пакетов. По тегу vX.Y.Z — ещё и выпуск на GitHub с этими файлами.
-#   Linux:   .deb, .rpm, .tar.gz — ставятся на чистый Ubuntu, проверяется команда и сервер
-#   Windows: messhub.exe → portable zip, установщик .bat, .msi — ставятся, запускаются, удаляются
+# Сборка и проверка пакетов. По тегу vX.Y.Z - ещё и выпуск на GitHub с этими файлами.
+#   Linux:   .deb, .rpm, .tar.gz - ставятся на чистый Ubuntu, проверяется команда и сервер
+#   Windows: messhub.exe → portable zip, установщик .bat, .msi - ставятся, запускаются, удаляются
 on:
   push:
     tags: ["v*"]
     branches: [main, contrib]
     paths:
-      - "win*.py"
-      - "messhub_win.py"
+      - "app/win*.py"
+      - "app/messhub_win.py"
       - "packaging/**"
       - "tools/build*.py"
-      - "requirements-windows.txt"
       - ".github/workflows/packages.yml"
   workflow_dispatch:
 
@@ -27,7 +26,7 @@ jobs:
           fetch-depth: 0          # номер версии = число коммитов
       - name: Номер версии совпадает с тегом
         if: startsWith(github.ref, 'refs/tags/v')
-        run: test "v$(python3 version.py)" = "${GITHUB_REF_NAME}" || { echo "тег ${GITHUB_REF_NAME}, а коммит — v$(python3 version.py)"; exit 1; }
+        run: test "v$(python3 app/version.py)" = "${GITHUB_REF_NAME}" || { echo "тег ${GITHUB_REF_NAME}, а коммит - v$(python3 app/version.py)"; exit 1; }
       - name: Инструменты сборки
         run: sudo apt-get update -qq && sudo apt-get install -y -qq rpm
       - name: Сборка .deb, .rpm, .tar.gz
@@ -35,10 +34,11 @@ jobs:
       - name: Установка .deb на чистый Ubuntu и проверка
         run: |
           sudo apt-get install -y -qq ./dist/messhub_*_all.deb
-          test "$(messhub --version)" = "$(python3 version.py)"
+          test "$(messhub --version)" = "$(python3 app/version.py)"
           python3 -c 'import gi; gi.require_version("WebKit2", "4.1"); from gi.repository import WebKit2'
           python3 /usr/lib/messhub/serve.py --db /tmp/t.db --port 8799 & sleep 3
           curl -fsS http://127.0.0.1:8799/api/version
+          for p in / /widget /settings /i18n.js; do curl -fsS -o /dev/null "http://127.0.0.1:8799$p" || { echo "нет страницы $p"; exit 1; }; done
           sudo apt-get remove -y -qq messhub && test ! -e /usr/lib/messhub/serve.py
       - uses: actions/upload-artifact@v4
         with:
@@ -59,7 +59,7 @@ jobs:
       - name: Зависимости (pywebview, winrt, PyInstaller, WiX)
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-windows.txt pyinstaller
+          pip install -r packaging/windows/requirements.txt pyinstaller
           dotnet tool install --global wix --version 5.0.2
       - name: Тесты
         run: python -m unittest discover -s tests -t tests -v
@@ -101,7 +101,7 @@ jobs:
         shell: powershell       # Windows PowerShell 5.1: в нём есть типы WinRT для тестового уведомления
         run: |
           $exe = (Resolve-Path dist\win\messhub\messhub.exe).Path
-          # согласие на доступ к уведомлениям: общее (HKLM и HKCU) и для программы без пакета — так его хранит Windows
+          # согласие на доступ к уведомлениям: общее (HKLM и HKCU) и для программы без пакета - так его хранит Windows
           $cs = "Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\userNotificationListener"
           foreach ($k in @("HKLM:\$cs", "HKCU:\$cs", ("HKCU:\$cs\NonPackaged\" + ($exe -replace '\\','#')))) {
             New-Item -Path $k -Force | Out-Null
@@ -121,7 +121,7 @@ jobs:
           $p.WaitForExit(60000) | Out-Null
           Get-Content "$env:RUNNER_TEMP\capture.json" -ErrorAction SilentlyContinue
           if ($p.ExitCode -ne 0) { "notification not captured (CI server may deny notification access)"; exit 1 }
-      - name: Снимок экрана — доска и настройки на демо-данных
+      - name: Снимок экрана - доска и настройки на демо-данных
         continue-on-error: true
         run: |
           $env:MESSHUB_HOME = "$env:RUNNER_TEMP\mh-demo"
@@ -155,11 +155,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4      # только пакеты; проверочный артефакт windows-ci-check в выпуск не идёт
+        with:
+          name: linux
+          path: dist
       - uses: actions/download-artifact@v4
         with:
+          name: windows
           path: dist
-          merge-multiple: true
-      - name: Заметки к выпуску — раздел этой версии из CHANGELOG.md
+      - name: Заметки к выпуску - раздел этой версии из CHANGELOG.md
         env:
           REPO: ${{ github.repository }}
         run: |

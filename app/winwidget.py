@@ -215,4 +215,4 @@ def run(base_url, state_path=paths.WIDGET_STATE, only="", open_settings=False):
     storage = os.path.join(paths.CACHE_DIR, "webview")         # localStorage страницы (фокус, размытие)
     os.makedirs(storage, exist_ok=True)
     webview.start(gui="edgechromium", private_mode=False, storage_path=storage,
-                  icon=os.path.join(paths.HERE, "packaging", "icons", "messhub.ico"))
+                  icon=os.path.join(paths.HERE, "icons", "messhub.ico"))

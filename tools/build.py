@@ -27,14 +27,14 @@ import tempfile
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, "app"))
 import version  # noqa: E402
 
 DIST = os.path.join(ROOT, "dist")
-# что нужно программе во время работы (остальное — тесты, инструменты, документация)
-SKIP_PREFIX = ("tests/", "tools/", "docs/", ".github/")
-SKIP_FILES = {".gitignore", "CONTRIBUTING.md", "SECURITY.md", "requirements-windows.txt"}
-LINUX_ONLY_SKIP = ("winwidget.py", "wincatcher.py", "messhub_win.py", "packaging/windows/")
+# программа — папка app/ целиком; в архив исходников — ещё установщик и шаблоны юнитов
+TAR_EXTRA = ("install.sh", "uninstall.sh", "packaging/systemd/", "LICENSE", "NOTICE", "README.md",
+             "README.en.md", "CHANGELOG.md")
+WINDOWS_ONLY = ("winwidget.py", "wincatcher.py", "messhub_win.py")
 DEB_DEPENDS = ("python3 (>= 3.9), python3-gi, gir1.2-gtk-3.0, gir1.2-webkit2-4.1, "
                "dbus-bin | dbus")
 DEB_RECOMMENDS = "gir1.2-wnck-3.0, libnotify-bin, gnome-session-canberra | pipewire-bin"
@@ -45,7 +45,7 @@ DESCRIPTION = ("messhub keeps the notifications your Linux desktop shows (messen
                "your scripts) in a local database and shows them on a translucent board with a column\n"
                "per app: mail-like rules, search, statistics, snooze, pin. Nothing leaves the computer.")
 HOMEPAGE = "https://github.com/DanielLetto2020/messhub"
-MAINTAINER = "Кузьминский Максим Павлович <i@m-letto.ru>"
+MAINTAINER = "Кузьминский Максим <i@m-letto.ru>"
 
 
 def tracked():
@@ -53,11 +53,10 @@ def tracked():
     return [f for f in out.split("\0") if f and os.path.isfile(os.path.join(ROOT, f))]
 
 
-def runtime_files(windows=False):
-    files = [f for f in tracked() if not f.startswith(SKIP_PREFIX) and f not in SKIP_FILES]
-    if not windows:
-        files = [f for f in files if not f.startswith(LINUX_ONLY_SKIP)]
-    return files
+def app_files(windows=False):
+    """Файлы программы (пути внутри app/). Для Linux — без модулей Windows."""
+    files = [f[4:] for f in tracked() if f.startswith("app/")]
+    return files if windows else [f for f in files if f not in WINDOWS_ONLY]
 
 
 def ver():
@@ -67,11 +66,17 @@ def ver():
     return v
 
 
+def _copy(src_rel, dest):
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    shutil.copy2(os.path.join(ROOT, src_rel), dest)
+
+
 def stage(dest, files, v):
-    """Разложить файлы программы в dest и вписать номер версии."""
+    """Разложить программу (содержимое app/) в dest, рядом — LICENSE и NOTICE, и вписать номер версии."""
     for f in files:
-        os.makedirs(os.path.dirname(os.path.join(dest, f)) or dest, exist_ok=True)
-        shutil.copy2(os.path.join(ROOT, f), os.path.join(dest, f))
+        _copy("app/" + f, os.path.join(dest, f))
+    for f in ("LICENSE", "NOTICE"):
+        _copy(f, os.path.join(dest, f))
     with open(os.path.join(dest, "VERSION"), "w", encoding="utf-8") as fh:
         fh.write(v + "\n")
 
@@ -93,18 +98,14 @@ def write(path, text, mode=0o644):
 def linux_tree(root, v):
     """Общее дерево файлов для .deb и .rpm (корень файловой системы)."""
     app = "/usr/lib/messhub"
-    stage(root + app, runtime_files(), v)
-    for f in ("install.sh", "uninstall.sh", "README.md", "README.en.md", "CHANGELOG.md"):
-        os.remove(root + app + "/" + f)                 # ставит менеджер пакетов; документы — в /usr/share/doc
-    shutil.rmtree(root + app + "/packaging/systemd")
-    shutil.rmtree(root + app + "/packaging/linux")
+    stage(root + app, app_files(), v)
     write(root + "/usr/bin/messhub", open(os.path.join(ROOT, "packaging", "linux", "messhub.sh"),
                                           encoding="utf-8").read(), 0o755)
     write(root + "/usr/lib/systemd/user/messhub.service", render_unit("app.service.in", app))
     write(root + "/usr/lib/systemd/user/messhub-widget.service", render_unit("app-widget.service.in", app))
     write(root + "/usr/share/applications/messhub.desktop",
           open(os.path.join(ROOT, "packaging", "linux", "messhub.desktop"), encoding="utf-8").read())
-    icons = os.path.join(ROOT, "packaging", "icons")
+    icons = os.path.join(ROOT, "app", "icons")
     for size in (16, 24, 32, 48, 64, 128, 256):
         d = f"{root}/usr/share/icons/hicolor/{size}x{size}/apps"
         os.makedirs(d, exist_ok=True)
@@ -130,7 +131,11 @@ def build_tar(v):
     name = f"messhub-{v}"
     out = os.path.join(DIST, f"{name}.tar.gz")
     with tempfile.TemporaryDirectory() as tmp:
-        stage(os.path.join(tmp, name), runtime_files(), v)
+        top = os.path.join(tmp, name)                  # как в репозитории: app/, install.sh, packaging/systemd
+        stage(os.path.join(top, "app"), app_files(), v)
+        for f in tracked():
+            if f.startswith(TAR_EXTRA) or f in TAR_EXTRA:
+                _copy(f, os.path.join(top, f))
         with tarfile.open(out, "w:gz") as tar:
             tar.add(os.path.join(tmp, name), arcname=name, filter=lambda ti: _owner(ti))
     return out
@@ -216,7 +221,7 @@ exit 0
 {chr(10).join(sorted(files))}
 
 %changelog
-* {date} Кузьминский Максим Павлович <i@m-letto.ru> - {v}-1
+* {date} Кузьминский Максим <i@m-letto.ru> - {v}-1
 - См. CHANGELOG.md
 """)
         top = os.path.join(tmp, "rpmbuild")
@@ -236,12 +241,12 @@ def main():
     v = ver()
     os.makedirs(DIST, exist_ok=True)
     if a.what == "stage":
-        stage(a.out, runtime_files(windows=sys.platform == "win32"), v)
+        stage(a.out, app_files(windows=sys.platform == "win32"), v)
         print(a.out)
         return
     if a.what == "windows":
         import build_windows          # tools/build_windows.py — только на Windows
-        for p in build_windows.build(v, runtime_files(windows=True), stage):
+        for p in build_windows.build(v, app_files(windows=True), stage):
             print(p)
         return
     todo = {"tar": [build_tar], "deb": [build_deb], "rpm": [build_rpm],

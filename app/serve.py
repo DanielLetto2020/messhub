@@ -30,7 +30,7 @@
     /api/prefs, /api/stats, /api/data, /api/purge, /api/export, /api/config/export|import,
     /api/backups(/make|/restore), /api/report/preview|send, /api/forward(/test),
     /api/rag/status|install|disable|remove-model|search|ask, /api/ingest/config|token,
-    /api/diag, /api/autostart, /api/restart, /api/version,
+    /api/diag, /api/autostart, /api/restart, /api/version, /api/update (новая версия на GitHub),
     /api/mail (ящики IMAP, см. mail.py) + /api/mail/channel|account|delete|test|check
 
 Все POST — только с Content-Type: application/json (чужая страница в браузере не
@@ -73,6 +73,7 @@ import rag
 import report
 import rules
 import stats
+import updates
 import version
 from i18n import L
 
@@ -619,7 +620,7 @@ def make_handler(db_path):
 
             if p in PAGES:
                 name, ctype = PAGES[p]
-                return self._file(os.path.join(HERE, name), ctype)
+                return self._file(os.path.join(HERE, "web", name), ctype)
             if p.startswith("/avatar/"):
                 f = avatars.file_for(unquote(p[8:]))
                 if not f:
@@ -629,7 +630,11 @@ def make_handler(db_path):
             self._lang()
             try:
                 if p == "/api/version":
-                    self._json({"name": version.APP_NAME, "id": version.APP_ID, "version": version.__version__})
+                    self._json({"name": version.APP_NAME, "id": version.APP_ID, "version": version.__version__,
+                                "author": version.AUTHOR, "email": version.AUTHOR_EMAIL, "repo": version.REPO_URL})
+                elif p == "/api/update":
+                    enabled = read(db_path, rules.get_prefs)["update_check"]
+                    self._json(updates.status(enabled, force=arg("force") == "1"))
                 elif p == "/api/messages":
                     after = arg("after")
                     ids = [int(x) for x in arg("ids").split(",") if x.isdigit()][:5000]

@@ -1,0 +1,42 @@
+name: "📨 Новый источник / New source"
+description: "Приложение или сайт разбирается плохо или не попадает в свою колонку / An app or site isn't parsed well"
+labels: ["source"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Опиши, как выглядит уведомление этого приложения, **на выдуманном примере** - настоящие сообщения не вставляй.
+        *Describe how this app's notification looks, using a made-up example - never paste real messages.*
+  - type: input
+    id: app
+    attributes:
+      label: "Приложение или сайт / App or site"
+      placeholder: "Signal, web.whatsapp.com, Thunderbird…"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: "Система / OS"
+      options: ["Linux", "Windows 10 / 11"]
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: "Как выглядит уведомление (выдуманный пример) / How it looks (made-up example)"
+      placeholder: "Заголовок: «Команда»\nТекст: «Иван: созвон в 15:00»"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Как должно быть на доске / How it should look on the board"
+      placeholder: "Колонка «Signal», чат «Команда», отправитель «Иван»"
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: "Приватность / Privacy"
+      options:
+        - label: "Пример выдуман, настоящих сообщений и имён нет / The example is made up"
+          required: true

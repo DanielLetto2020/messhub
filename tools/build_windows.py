@@ -2,13 +2,14 @@
 # -*- coding: utf-8 -*-
 """
 Сборка для Windows 10/11 — только на Windows (в CI: .github/workflows/release.yml). Зовётся
-из tools/build.py windows; нужны Python 3.9+, pip install -r requirements-windows.txt pyinstaller
+из tools/build.py windows; нужны Python 3.9+, pip install -r packaging/windows/requirements.txt pyinstaller
 и WiX Toolset 5 (dotnet tool install --global wix) для .msi.
 
 Что получается в dist/:
   messhub-<v>-windows-portable.zip   папка messhub с messhub.exe; данные — рядом (portable.txt)
   messhub-<v>-windows-setup.bat      установка для себя без прав администратора (скачает zip)
   messhub-<v>-windows-x64.msi        обычный установщик: меню «Пуск», запуск вместе с Windows
+Зависимости — packaging/windows/requirements.txt.
 """
 
 import os
@@ -27,11 +28,12 @@ def pyinstaller(src, v):
     """messhub.exe (оконная сборка, папкой: так быстрее запуск и меньше ложных тревог антивирусов)."""
     data = [f for f in os.listdir(src) if os.path.isfile(os.path.join(src, f)) and not f.endswith((".py", ".sh"))]
     args = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--windowed",
-            "--name", "messhub", "--icon", os.path.join(src, "packaging", "icons", "messhub.ico"),
+            "--name", "messhub", "--icon", os.path.join(src, "icons", "messhub.ico"),
             "--distpath", os.path.join(DIST, "win"), "--workpath", os.path.join(src, "_build"),
             "--specpath", os.path.join(src, "_build"),
             "--collect-all", "winrt", "--collect-all", "webview",
-            "--add-data", f"{os.path.join(src, 'packaging', 'icons')}{os.pathsep}packaging/icons"]
+            "--add-data", f"{os.path.join(src, 'icons')}{os.pathsep}icons",
+            "--add-data", f"{os.path.join(src, 'web')}{os.pathsep}web"]
     for f in data:
         args += ["--add-data", f"{os.path.join(src, f)}{os.pathsep}."]
     args.append(os.path.join(src, "messhub_win.py"))
@@ -69,7 +71,7 @@ def msi(app, v):
         return None
     out = os.path.join(DIST, f"messhub-{v}-windows-x64.msi")
     subprocess.run([wix, "build", os.path.join(ROOT, "packaging", "windows", "messhub.wxs"), "-arch", "x64",
-                    "-d", f"Version={v}", "-d", f"Icon={os.path.join(ROOT, 'packaging', 'icons', 'messhub.ico')}",
+                    "-d", f"Version={v}", "-d", f"Icon={os.path.join(ROOT, 'app', 'icons', 'messhub.ico')}",
                     "-bindpath", f"app={app}", "-o", out], check=True)
     return out
 

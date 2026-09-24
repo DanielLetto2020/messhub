@@ -5,13 +5,14 @@ import sys
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, "app"))
 TMP = tempfile.mkdtemp(prefix="messhub-test-")
 os.environ["MESSHUB_HOME"] = TMP
 os.environ["MESSHUB_EXPORT_DIR"] = TMP
 os.environ["MESSHUB_FORWARD_CFG"] = os.path.join(TMP, "fwd.json")
 os.environ["MESSHUB_TG_API"] = "http://127.0.0.1:9"      # никуда не достучится
 os.environ["MESSHUB_MAIL_CFG"] = os.path.join(TMP, "mail.json")
+os.environ["MESSHUB_UPDATE_URL"] = "http://127.0.0.1:9/"          # проверка версий — не в сеть
 
 import catcher  # noqa: E402
 

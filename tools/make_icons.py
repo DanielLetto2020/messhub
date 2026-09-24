@@ -4,7 +4,7 @@
 Иконка программы: доска с тремя колонками карточек. Рисуется кодом, без графических
 библиотек, чтобы её можно было пересобрать где угодно.
 
-    python3 tools/make_icons.py        # → packaging/icons/messhub.svg, messhub-<N>.png, messhub.ico
+    python3 tools/make_icons.py        # → app/icons/messhub.svg, messhub-<N>.png, messhub.ico
 
 PNG — для Linux (иконки приложения и окна), ICO (PNG внутри, 16…256) — для Windows.
 """
@@ -14,8 +14,8 @@ import struct
 import sys
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, HERE)
-OUT = os.path.join(HERE, "packaging", "icons")
+sys.path.insert(0, os.path.join(HERE, "app"))
+OUT = os.path.join(HERE, "app", "icons")
 SIZES = (16, 24, 32, 48, 64, 128, 256)
 
 # фигуры в координатах 64×64: (вид, x, y, w, h, радиус, цвет RGBA)

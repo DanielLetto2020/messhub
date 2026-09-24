@@ -8,6 +8,7 @@
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP="$DIR/app"
 PURGE=0 YES=0
 for a in "$@"; do
   case "$a" in
@@ -18,7 +19,7 @@ for a in "$@"; do
   esac
 done
 PY=/usr/bin/python3; [ -x "$PY" ] || PY="$(command -v python3)"
-read -r APP_ID LEGACY DATA CONFIG CACHE < <("$PY" -c "import sys; sys.path.insert(0, '$DIR'); import version, paths; print(version.APP_ID, ','.join(version.LEGACY_IDS), paths.DATA_DIR, paths.CONFIG_DIR, paths.CACHE_DIR)")
+read -r APP_ID LEGACY DATA CONFIG CACHE < <("$PY" -c "import sys; sys.path.insert(0, '$APP'); import version, paths; print(version.APP_ID, ','.join(version.LEGACY_IDS), paths.DATA_DIR, paths.CONFIG_DIR, paths.CACHE_DIR)")
 IDS="$APP_ID ${LEGACY//,/ }"     # и прежние имена — вдруг остались их сервисы
 
 UNIT_DIR="$HOME/.config/systemd/user"

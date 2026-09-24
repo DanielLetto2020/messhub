@@ -13,6 +13,7 @@
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP="$DIR/app"                     # код программы; юниты запускают его отсюда
 WIDGET=1 START=1 HOOK=0 DRY=0
 for a in "$@"; do
   case "$a" in
@@ -32,7 +33,7 @@ say() { printf '%s\n' "$*"; }
 PY=/usr/bin/python3
 [ -x "$PY" ] || PY="$(command -v python3 || true)"
 [ -n "$PY" ] || { say "Нужен python3 (3.9+)."; exit 1; }
-read -r APP_ID APP_NAME VER LEGACY < <("$PY" -c "import sys; sys.path.insert(0, '$DIR'); import version as v; print(v.APP_ID, v.APP_NAME, v.__version__, ','.join(v.LEGACY_IDS))")
+read -r APP_ID APP_NAME VER LEGACY < <("$PY" -c "import sys; sys.path.insert(0, '$APP'); import version as v; print(v.APP_ID, v.APP_NAME, v.__version__, ','.join(v.LEGACY_IDS))")
 say "== $APP_NAME $VER — установка из $DIR"
 
 # ── зависимости ──
@@ -91,12 +92,12 @@ for old in ${LEGACY//,/ }; do
   done
 done
 if [ "$DRY" = 1 ]; then say "  [dry-run] перенести папки данных прежних имён ($LEGACY) в ~/.local/share/$APP_ID, ~/.config/$APP_ID"
-else "$PY" -c "import sys; sys.path.insert(0, '$DIR'); import paths; paths.migrate_old_app_dirs()"; fi
+else "$PY" -c "import sys; sys.path.insert(0, '$APP'); import paths; paths.migrate_old_app_dirs()"; fi
 
 # ── юниты systemd --user ──
 run mkdir -p "$UNIT_DIR"
 render() {   # шаблон → юнит с путями этой установки
-  sed -e "s|@DIR@|$DIR|g" -e "s|@PYTHON@|$PY|g" -e "s|@APP_ID@|$APP_ID|g" -e "s|@APP_NAME@|$APP_NAME|g" "$1"
+  sed -e "s|@DIR@|$APP|g" -e "s|@PYTHON@|$PY|g" -e "s|@APP_ID@|$APP_ID|g" -e "s|@APP_NAME@|$APP_NAME|g" "$1"
 }
 units=("$APP_ID.service")
 [ "$WIDGET" = 1 ] && units+=("$APP_ID-widget.service")
@@ -114,7 +115,7 @@ done
 
 # ── хук терминала ──
 if [ "$HOOK" = 1 ]; then
-  line="source \"$DIR/hooks/long-command.sh\""
+  line="source \"$APP/hooks/long-command.sh\""
   for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
     [ -f "$rc" ] || continue
     if grep -qF "# >>> $APP_ID terminal hook >>>" "$rc"; then say "Хук терминала уже есть в $rc"; continue; fi

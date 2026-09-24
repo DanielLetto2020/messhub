@@ -105,6 +105,7 @@ PREF_DEFAULTS = {
     "report": {"enabled": False, "weekday": 0, "time": "09:00"},  # недельный отчёт в Telegram
     "rag": {"enabled": False, "model": "bge-m3", "chat_model": ""},  # умный поиск (rag.py)
     "ingest_bind": "",        # приём событий из сети: "0.0.0.0:8766"; "" — только локально
+    "update_check": True,     # раз в 12 ч узнавать у GitHub номер последнего выпуска (updates.py)
     # служебное — не настройки, в выгрузку и в версию настроек не входит:
     "backup_last": "", "report_last": "",
 }
@@ -357,7 +358,7 @@ def _clean_pref(k, v):
         return round(min(1.0, max(0.3, float(v))), 2)
     if k == "font_size":
         return int(min(18, max(11, int(v))))
-    if k in ("compact", "group_by_chat", "avatars"):
+    if k in ("compact", "group_by_chat", "avatars", "update_check"):
         return bool(v)
     if k == "theme":
         if v not in ("dark", "light"):

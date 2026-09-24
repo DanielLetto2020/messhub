@@ -22,7 +22,7 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PAGES = ("widget.html", "settings.html")
+PAGES = ("app/web/widget.html", "app/web/settings.html")
 DICTS = ("ACT", "COLOR_NAMES", "HINTS", "MAIL_PRESETS", "SEC_NAMES", "ACT_WORD")
 LISTS = ("DOW", "DOW_LONG")
 KEY_RE = re.compile(r"(?:^|[{,\s])'((?:[^'\\]|\\.)*)'\s*:", re.M)
@@ -63,7 +63,7 @@ def page_keys(src):
 
 
 def main():
-    en, dups = en_keys(open(os.path.join(ROOT, "i18n.js"), encoding="utf-8").read())
+    en, dups = en_keys(open(os.path.join(ROOT, "app", "web", "i18n.js"), encoding="utf-8").read())
     keys = set()
     for p in PAGES:
         keys |= page_keys(open(os.path.join(ROOT, p), encoding="utf-8").read())

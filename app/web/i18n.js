@@ -269,7 +269,13 @@ const EN = {
   'Автозапуск выключен': 'Autostart disabled', 'Перезапустить': 'Restart', 'Версия': 'Version', 'Папки': 'Folders',
   'код': 'code', 'данные': 'data', 'настройки': 'settings', 'кэш': 'cache', 'база': 'database',
 
-  'Виджет перезапускается…': 'Widget is restarting…', 'Запускать вместе с Windows': 'Start with Windows',
+  'Виджет перезапускается…': 'Widget is restarting…',
+  'messhub на GitHub': 'messhub on GitHub', 'автор': 'author', 'Проверять новые версии': 'Check for new versions',
+  'Раз в 12 часов программа спрашивает у GitHub номер последнего выпуска. Ничего о тебе и твоих сообщениях при этом не отправляется. Выключишь — запросов не будет.':
+    'Every 12 hours the app asks GitHub for the latest release number. Nothing about you or your messages is sent. Turn it off and there are no requests at all.',
+  'есть новая версия {v}': 'version {v} is out', 'установлена последняя версия': 'you have the latest version',
+  'GitHub не ответил': 'GitHub did not answer', 'проверяю…': 'checking…', 'Установлена последняя версия': 'You have the latest version',
+  'Есть новая версия {v} — открыть страницу выпуска': 'Version {v} is out — open the release page', 'Запускать вместе с Windows': 'Start with Windows',
 
   // ── почта ──
   'Почта': 'Mail', 'Ящики': 'Mailboxes', 'Откуда брать почту': 'Where mail comes from',

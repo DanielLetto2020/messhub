@@ -42,6 +42,9 @@
   .nav .n { margin-left: auto; font-size: 11px; color: var(--muted); }
   .nav .gap { height: 10px; }
   .side .note { margin-top: auto; padding: 16px 8px 0; color: var(--faint); font-size: 11.5px; line-height: 1.5; }
+  .side .credit { padding: 10px 8px 0; color: var(--faint); font-size: 10.5px; opacity: .75; }
+  .side .credit a { color: inherit; text-decoration: none; }
+  .side .credit a:hover { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
 
   /* ── контент справа ── */
   .main { overflow-y: auto; min-height: 0; }
@@ -60,7 +63,7 @@
   .state button { margin-top: 10px; }
   .muted { color: var(--muted); }
   .q { color: var(--text); font-weight: 600; }
-  button.link { color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+  button.link, a.link { color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 
   /* список источников */
   .list { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
@@ -333,6 +336,7 @@
       <button type="button" data-nav="help"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span data-t="Справка">Справка</span></button>
     </nav>
     <p class="note" data-t="Правила меняют то, что видно в виджете, и что делать с новыми сообщениями. Сами сообщения сохраняются всегда, а если удалить правило, скрытое снова появится.">Правила меняют то, что видно в виджете, и что делать с новыми сообщениями. Сами сообщения сохраняются всегда, а если удалить правило, скрытое снова появится.</p>
+    <div class="credit" id="credit"></div>
   </aside>
   <main class="main" id="main"><div class="page" id="page"></div></main>
 </div>
@@ -401,7 +405,7 @@ function confirmBtn(b,askText,run){
 }
 const swatch=c=>`<span class="swatch" style="background:${COLORS[c]||'#888'}"></span>`;
 const isMode=r=>r.src!=='*'&&!r.chat&&!r.sender&&!r.text;
-let PREFS={profiles:[]};
+let PREFS={profiles:[]}, ABOUT={};
 const profName=id=>(PREFS.profiles.find(p=>p.id===id)||{}).name||id;
 
 // «правило» человеческими словами
@@ -1321,10 +1325,19 @@ async function showSystem(){
       <span class="hv">${esc(c.text)}${c.hint?`<br><span class="hn">${esc(c.hint)}</span>`:''}</span></div>`).join('')}</div>
     <h3>${esc(t('Автозапуск'))}</h3>
     ${sw('collect','Сбор уведомлений')}${sw('widget','Виджет на рабочем столе')}
-    <h3>${esc(t('Версия'))}</h3><p>${esc(d.version)} · Python ${esc(d.python)}</p>
+    <h3>${esc(t('Версия'))}</h3><p>${esc(d.version)} · Python ${esc(d.python)}${ABOUT.author?` · ${esc(t('автор'))}: ${esc(ABOUT.author)} (${esc(ABOUT.email)})`:''}
+      ${ABOUT.repo?` · <a class="link" href="${attr(ABOUT.repo)}" target="_blank" rel="noopener noreferrer">GitHub</a>`:''}</p>
+    <div class="erow"><label class="switch"><input type="checkbox" id="updOn"> ${esc(t('Проверять новые версии'))}</label>
+      <span class="muted" id="updInfo"></span></div>
+    <p class="hint">${esc(t('Раз в 12 часов программа спрашивает у GitHub номер последнего выпуска. Ничего о тебе и твоих сообщениях при этом не отправляется. Выключишь — запросов не будет.'))}</p>
     <h3>${esc(t('Папки'))}</h3>
     <p class="muted">${[['код',d.paths.code],['данные',d.paths.data],['настройки',d.paths.config],['кэш',d.paths.cache],['база',d.paths.db]].map(([k,v])=>`${esc(t(k))}: <code>${esc(v)}</code>`).join('<br>')}</p>`;
   $('reDiag').onclick=showSystem;
+  const upd=async(force)=>{try{const u=await api('/api/update'+(force?'?force=1':''));$('updOn').checked=u.enabled;
+    $('updInfo').innerHTML=!u.enabled?'':u.newer?`<a class="link" href="${attr(u.url)}" target="_blank" rel="noopener noreferrer">${esc(t('есть новая версия {v}',{v:u.latest}))}</a>`
+      :u.latest?esc(t('установлена последняя версия')):esc(u.error?t('GitHub не ответил'):t('проверяю…'));}catch(e){}};
+  upd(false);
+  $('updOn').onchange=async()=>{try{await api('/api/prefs',{update_check:$('updOn').checked});upd(true);}catch(e){toast(e.message,true);}};
   page.querySelectorAll('[data-as]').forEach(cb=>cb.onchange=async()=>{
     try{await api('/api/autostart',{which:cb.dataset.as,enabled:cb.checked});toast(t(cb.checked?'Автозапуск включён':'Автозапуск выключен'));}
     catch(e){cb.checked=!cb.checked;toast(e.message,true);}});
@@ -1349,11 +1362,11 @@ ru: [
 ['Долгие команды в терминале', `
 <p>Когда команда в терминале шла дольше минуты, в виджет падает «готово» с кодом выхода — удобно для сборок и выгрузок.</p>
 <pre>./install.sh --terminal-hook</pre>
-<p>или вручную — добавь в <code>~/.bashrc</code> или <code>~/.zshrc</code> строку <code>source &lt;папка программы&gt;/hooks/long-command.sh</code>. Порог — переменная <code>MESSHUB_LONG_CMD</code> (секунды, по умолчанию 60).</p>`],
+<p>или вручную — добавь в <code>~/.bashrc</code> или <code>~/.zshrc</code> строку <code>source &lt;папка программы&gt;/app/hooks/long-command.sh</code> (из пакета — <code>source /usr/lib/messhub/hooks/long-command.sh</code>). Порог — переменная <code>MESSHUB_LONG_CMD</code> (секунды, по умолчанию 60).</p>`],
 ['Второй виджет с отдельными колонками', `
 <p>Например, отдельное окно только для рабочего мессенджера на втором мониторе:</p>
-<pre>python3 widget.py --only express --state ~/.config/messhub/widget-work.json</pre>
-<p>Ключи колонок видны в адресе источника в настройках (например <code>express</code>, <code>telegram</code>, <code>max</code>). У каждого окна свой файл места и размера.</p>`],
+<pre>messhub widget --only express --state ~/.config/messhub/widget-work.json</pre>
+<p>Из исходников — <code>python3 app/widget.py …</code> с теми же ключами. Ключи колонок видны в адресе источника в настройках (например <code>express</code>, <code>telegram</code>, <code>max</code>). У каждого окна свой файл места и размера.</p>`],
 ['Умный поиск (RAG)', `
 <p>Нужна локальная <b>Ollama</b> — это программа, которая запускает модели прямо на компьютере:</p>
 <pre>curl -fsSL https://ollama.com/install.sh | sh</pre>
@@ -1376,7 +1389,7 @@ ru: [
 <pre>./uninstall.sh           # убрать автозапуск, данные оставить
 ./uninstall.sh --purge   # и удалить все данные</pre>`],
 ['Что уходит с компьютера', `
-<p>Ничего, кроме того, что ты сам настроишь: пересылка в Telegram по правилу и недельный отчёт идут через серверы Telegram. Всё остальное — база, поиск, умный поиск через Ollama — работает локально. Если подключены почтовые ящики, программа сама ходит на почтовый сервер за новыми письмами — это только чтение.</p>`],
+<p>Ничего, кроме того, что ты сам настроишь: пересылка в Telegram по правилу и недельный отчёт идут через серверы Telegram. Всё остальное — база, поиск, умный поиск через Ollama — работает локально. Если подключены почтовые ящики, программа сама ходит на почтовый сервер за новыми письмами — это только чтение. Раз в 12 часов она спрашивает у GitHub номер последней версии (без каких-либо данных о тебе); это выключается в «Системе».</p>`],
 ['Почта: уведомления или ящики', `
 <p>Способ выбирается в разделе «Почта», работает один из двух.</p>
 <ul><li><b>Уведомления почтовых программ</b> — Thunderbird, Evolution, Geary или почта в браузере показывают уведомление, и оно попадает в колонку «Почта». Ничего настраивать не нужно, но письмо придёт, только пока программа открыта.</li>
@@ -1397,10 +1410,10 @@ en: [
 ['Long terminal commands', `
 <p>When a terminal command runs longer than a minute, a “done” card with the exit code lands in the widget.</p>
 <pre>./install.sh --terminal-hook</pre>
-<p>or add <code>source &lt;app folder&gt;/hooks/long-command.sh</code> to <code>~/.bashrc</code> or <code>~/.zshrc</code>. Threshold: <code>MESSHUB_LONG_CMD</code> (seconds, default 60).</p>`],
+<p>or add <code>source &lt;app folder&gt;/app/hooks/long-command.sh</code> (package: <code>/usr/lib/messhub/hooks/long-command.sh</code>) to <code>~/.bashrc</code> or <code>~/.zshrc</code>. Threshold: <code>MESSHUB_LONG_CMD</code> (seconds, default 60).</p>`],
 ['A second widget with its own columns', `
-<pre>python3 widget.py --only express --state ~/.config/messhub/widget-work.json</pre>
-<p>Column keys: <code>express</code>, <code>telegram</code>, <code>max</code>, … Each window keeps its own position file.</p>`],
+<pre>messhub widget --only express --state ~/.config/messhub/widget-work.json</pre>
+<p>From source: <code>python3 app/widget.py …</code> with the same options. Column keys: <code>express</code>, <code>telegram</code>, <code>max</code>, … Each window keeps its own position file.</p>`],
 ['Smart search (RAG)', `
 <p>You need a local <b>Ollama</b>:</p>
 <pre>curl -fsSL https://ollama.com/install.sh | sh</pre>
@@ -1423,7 +1436,7 @@ en: [
 <pre>./uninstall.sh           # remove autostart, keep data
 ./uninstall.sh --purge   # and delete all data</pre>`],
 ['What leaves the computer', `
-<p>Nothing except what you set up: rule-based forwarding and the weekly report go through Telegram servers. Everything else — the database, search, smart search via Ollama — stays local. If mailboxes are connected, the app fetches new mail from the mail server — read-only.</p>`],
+<p>Nothing except what you set up: rule-based forwarding and the weekly report go through Telegram servers. Everything else — the database, search, smart search via Ollama — stays local. If mailboxes are connected, the app fetches new mail from the mail server — read-only. Every 12 hours it asks GitHub for the latest version number (nothing about you is sent); turn it off under “System”.</p>`],
 ['Mail: notifications or mailboxes', `
 <p>Pick the source under “Mail”; only one works at a time.</p>
 <ul><li><b>Mail app notifications</b> — Thunderbird, Evolution, Geary or webmail show a notification and it lands in the Mail column. Nothing to set up, but mail only arrives while the app is open.</li>
@@ -1440,7 +1453,8 @@ function showHelp(){
 (async()=>{
   try{PREFS=await api('/api/prefs');setLang(PREFS._lang);}catch(e){}
   translateDom();
-  try{const v=await api('/api/version');$('appVer').textContent=`${v.name} ${v.version}`;document.title=`${v.name} — ${t('Настройки').toLowerCase()}`;}catch(e){}
+  try{const v=await api('/api/version');ABOUT=v;$('appVer').textContent=`${v.name} ${v.version}`;document.title=`${v.name} — ${t('Настройки').toLowerCase()}`;
+    if(v.author)$('credit').innerHTML=`<a href="${attr(v.repo)}" target="_blank" rel="noopener noreferrer" title="${attr(v.email)}">© ${esc(v.author)}</a>`;}catch(e){}
   try{fwdReady=(await api('/api/forward')).configured;}catch(e){}
   route();
 })();

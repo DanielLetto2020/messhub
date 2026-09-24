@@ -491,7 +491,7 @@ def main():
     # имя и значок приложения: окна группируются с ярлыком messhub.desktop в панели задач
     GLib.set_prgname(version.APP_ID)
     GLib.set_application_name(version.APP_NAME)
-    icon = os.path.join(paths.HERE, "packaging", "icons", "messhub-128.png")
+    icon = os.path.join(paths.HERE, "icons", "messhub-128.png")
     if os.path.exists(icon):
         Gtk.Window.set_default_icon_from_file(icon)
     else:

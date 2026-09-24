@@ -47,6 +47,17 @@ class ApiTest(unittest.TestCase):
             except ValueError:
                 return e.code, raw.decode(), e.headers
 
+    def test_pages_served(self):
+        """Страницы и переводы отдаются (после переноса файлов было «not found»)."""
+        for path, marker in (("/", b"id=\"board\""), ("/widget", b"id=\"board\""),
+                             ("/settings", b"id=\"page\""), ("/i18n.js", b"const EN")):
+            with urllib.request.urlopen(self.base + path, timeout=10) as r:
+                body = r.read()
+                self.assertEqual(r.status, 200, path)
+                self.assertIn(marker, body, path)
+        code, v, _ = self.req("/api/version")
+        self.assertEqual((v["author"], v["email"]), ("Кузьминский Максим", "i@m-letto.ru"))
+
     def test_version_header_and_json_only(self):
         code, v, h = self.req("/api/version")
         self.assertEqual(h["X-App-Version"], v["version"])

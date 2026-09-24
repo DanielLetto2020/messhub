@@ -7,7 +7,7 @@ import unittest
 
 import common
 
-HOOK = os.path.join(common.ROOT, "hooks", "long-command.sh")
+HOOK = os.path.join(common.ROOT, "app", "hooks", "long-command.sh")
 
 
 @unittest.skipUnless(shutil.which("bash"), "нужен bash")

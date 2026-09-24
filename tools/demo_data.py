@@ -5,7 +5,7 @@
 
     python3 tools/demo_data.py --home /tmp/messhub-demo            # русские данные
     python3 tools/demo_data.py --home /tmp/messhub-demo-en --lang en
-    MESSHUB_HOME=/tmp/messhub-demo python3 serve.py --db /tmp/messhub-demo/share/messages.db --port 8799
+    MESSHUB_HOME=/tmp/messhub-demo python3 app/serve.py --db /tmp/messhub-demo/share/messages.db --port 8799
 
 Создаёт в --home (как MESSHUB_HOME) базу, настройки, правила, профили, два почтовых ящика
 (несуществующие адреса example.com), ключ приёма событий и резервную копию. Живые данные
@@ -127,7 +127,7 @@ def build(home, lang):
     os.environ["MESSHUB_HOME"] = home
     for k in ("MESSHUB_MAIL_CFG", "MESSHUB_FORWARD_CFG"):
         os.environ.pop(k, None)
-    sys.path.insert(0, HERE)
+    sys.path.insert(0, os.path.join(HERE, "app"))
     import avatars
     import backup
     import catcher
@@ -220,7 +220,7 @@ def build(home, lang):
                       "schedule": [{"days": [0, 1, 2, 3, 4], "from": "18:00", "to": "24:00"},
                                    {"days": [5, 6], "from": "00:00", "to": "24:00"}]}],
         "profile": "", "mail_channel": "imap", "retention_days": 180,
-        "report": {"enabled": True, "weekday": 0, "time": "09:00"},
+        "report": {"enabled": True, "weekday": 0, "time": "09:00"}, "update_check": True,
     })
     conn.commit()
 

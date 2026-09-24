@@ -39,9 +39,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Переводы — у всех строк интерфейса есть английский
+      - name: Переводы - у всех строк интерфейса есть английский
         run: python tools/i18n_check.py
-      - name: Можно ли публиковать — нет баз, секретов, личных путей
+      - name: Можно ли публиковать - нет баз, секретов, личных путей
         env:
           EVENT: ${{ github.event_name }}
           BASE: ${{ github.base_ref }}
@@ -52,4 +52,4 @@ jobs:
             python tools/check_public.py --commits
           fi
       - name: Скрипты оболочки
-        run: bash -n install.sh uninstall.sh hooks/long-command.sh
+        run: bash -n install.sh uninstall.sh app/hooks/long-command.sh

@@ -211,9 +211,35 @@ def wait_http(url, timeout=15):
     raise SystemExit(f"Сервер не поднялся: {url}")
 
 
-def shoot(lang, out_dir, only, display):
+def fake_github(ver):
+    """Локальный «GitHub»: последний выпуск = ver. На снимках — ✓ «последняя версия», без сети."""
+    import http.server
+    body = json.dumps({"tag_name": "v" + ver, "html_url": "https://github.com/DanielLetto2020/messhub/releases/latest"}).encode()
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    import threading
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv, f"http://127.0.0.1:{srv.server_address[1]}/"
+
+
+def shoot(lang, out_dir, only, display, ver):
     home = tempfile.mkdtemp(prefix=f"messhub-shots-{lang}-")
-    env = dict(os.environ, MESSHUB_HOME=home, OLLAMA_HOST="http://127.0.0.1:9",
+    gh, gh_url = fake_github(ver)
+    # копия программы с номером будущего выпуска: снимки идут в тот же коммит, что и выпуск
+    app = os.path.join(home, "app")
+    shutil.copytree(os.path.join(HERE, "app"), app, ignore=shutil.ignore_patterns("__pycache__"))
+    with open(os.path.join(app, "VERSION"), "w", encoding="utf-8") as f:
+        f.write(ver + "\n")
+    env = dict(os.environ, MESSHUB_HOME=home, OLLAMA_HOST="http://127.0.0.1:9", MESSHUB_UPDATE_URL=gh_url,
                MESSHUB_TG_API="http://127.0.0.1:9", MESSHUB_EXPORT_DIR=os.path.join(home, "Downloads"))
     for k in ("MESSHUB_MAIL_CFG", "MESSHUB_FORWARD_CFG"):
         env.pop(k, None)
@@ -221,14 +247,19 @@ def shoot(lang, out_dir, only, display):
     db = subprocess.run([PY, os.path.join(HERE, "tools", "demo_data.py"), "--home", home, "--lang", lang],
                         env=env, check=True, capture_output=True, text=True).stdout.strip()
     port = free_port()
-    srv = subprocess.Popen([PY, os.path.join(HERE, "serve.py"), "--db", db, "--port", str(port)],
+    srv = subprocess.Popen([PY, os.path.join(app, "serve.py"), "--db", db, "--port", str(port)],
                            env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         base = f"http://127.0.0.1:{port}"
         wait_http(base + "/api/version")
+        urllib.request.urlopen(base + "/api/update", timeout=5).read()          # запустить проверку версии
+        for _ in range(50):
+            if json.load(urllib.request.urlopen(base + "/api/update", timeout=5)).get("latest"):
+                break
+            time.sleep(0.1)
         user_home = os.path.expanduser("~")
         dl = "~/Загрузки" if lang == "ru" else "~/Downloads"
-        masks = [[os.path.join(home, "share"), "~/.local/share/messhub"],
+        masks = [[app, "~/messhub/app"], [os.path.join(home, "share"), "~/.local/share/messhub"],
                  [os.path.join(home, ".config"), "~/.config/messhub"],
                  [os.path.join(home, ".cache"), "~/.cache/messhub"],
                  [env["MESSHUB_EXPORT_DIR"], dl], [HERE, "~/messhub"], [user_home, "~"]]
@@ -246,6 +277,7 @@ def shoot(lang, out_dir, only, display):
     finally:
         srv.terminate()
         srv.wait(5)
+        gh.shutdown()
         shutil.rmtree(home, ignore_errors=True)
 
 
@@ -254,6 +286,7 @@ def main():
     ap.add_argument("--lang", nargs="+", default=["ru", "en"], choices=["ru", "en"])
     ap.add_argument("--out", default=os.path.join(HERE, "docs", "screens"))
     ap.add_argument("--only", default="", help="имена снимков через запятую")
+    ap.add_argument("--version", default="", help="номер на снимках (по умолчанию — номер следующего коммита)")
     ap.add_argument("--harness", help=argparse.SUPPRESS)
     a = ap.parse_args()
     if a.harness:
@@ -266,7 +299,11 @@ def main():
     try:
         time.sleep(1)
         only = {x.strip() for x in a.only.split(",") if x.strip()}
-        bad = [lang for lang in a.lang if shoot(lang, os.path.join(a.out, lang), only, display)]
+        sys.path.insert(0, os.path.join(HERE, "app"))
+        import version
+        ver = a.version or version.next_version()
+        print(f"номер на снимках: {ver}", flush=True)
+        bad = [lang for lang in a.lang if shoot(lang, os.path.join(a.out, lang), only, display, ver)]
     finally:
         xvfb.terminate()
         xvfb.wait(5)

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "🔒 Уязвимость / Security issue"
+    url: https://github.com/DanielLetto2020/messhub/security/advisories/new
+    about: "Не публично - приватный отчёт владельцу / Report privately to the maintainer"
+  - name: "📖 Установка и справка / Install and help"
+    url: https://github.com/DanielLetto2020/messhub#readme
+    about: "Инструкции для Linux и Windows / Instructions for Linux and Windows"

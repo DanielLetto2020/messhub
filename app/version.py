@@ -26,7 +26,11 @@ APP_ID = "messhub"
 LEGACY_IDS = ("express-msgs",)      # до переименования проект назывался eXpress-msgs
 SERIES = "1.0"                      # МАЖОР.МИНОР; третье число — номер коммита
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.abspath(__file__))       # app/ — код программы
+ROOT = os.path.dirname(HERE)                            # корень репозитория (в клоне git)
+REPO_URL = "https://github.com/DanielLetto2020/messhub"
+AUTHOR = "Кузьминский Максим"
+AUTHOR_EMAIL = "i@m-letto.ru"
 
 
 def _stamped():
@@ -38,7 +42,7 @@ def _stamped():
 
 
 def _from_git():
-    """Номер коммита — только если эта папка и есть корень репозитория программы
+    """Номер коммита — только если над этой папкой (app/) — корень репозитория программы
     (а не, скажем, чей-то домашний каталог под git, куда распаковали архив)."""
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
 
@@ -46,7 +50,7 @@ def _from_git():
         return subprocess.run(["git", "-C", HERE, *args], capture_output=True, text=True,
                               timeout=5, env=env).stdout.strip()
     try:
-        if os.path.realpath(git("rev-parse", "--show-toplevel") or "/nonexistent") != os.path.realpath(HERE):
+        if os.path.realpath(git("rev-parse", "--show-toplevel") or "/nonexistent") != os.path.realpath(ROOT):
             return None
         n = int(git("rev-list", "--count", "HEAD"))
         return f"{SERIES}.{n - 1}" if n > 0 else None
