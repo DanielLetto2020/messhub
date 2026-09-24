@@ -63,9 +63,17 @@ RECENT = {
 }
 
 # тематические колонки: (колонка, чат, отправитель, текст, минут назад, хвост лога, ключ, «починилось» минут назад)
-SHOP_LOG = """2026-09-24 18:41:07 INFO  shop-api: listening on :8080
+SHOP_LOG = """2026-09-24 18:41:05 INFO  shop-api 3.8.1 starting (env=staging)
+2026-09-24 18:41:05 INFO  loading config from /etc/shop/api.yaml
+2026-09-24 18:41:06 INFO  cache: redis://shop-cache:6379/0 connected
+2026-09-24 18:41:06 INFO  queue: 3 workers, prefetch 20
+2026-09-24 18:41:07 INFO  shop-api: listening on :8080
 2026-09-24 18:41:09 INFO  connecting to postgres://shop-db:5432/shop
+2026-09-24 18:41:19 WARN  postgres not ready yet, retry 1/3 in 10s
+2026-09-24 18:41:29 WARN  postgres not ready yet, retry 2/3 in 10s
 2026-09-24 18:41:39 ERROR connection to shop-db timed out after 30s
+2026-09-24 18:41:39 ERROR   at db.Pool.connect (pool.js:118)
+2026-09-24 18:41:39 ERROR   at App.start (app.js:42)
 2026-09-24 18:41:39 FATAL cannot start without a database, exiting"""
 BACKUP_LOG = """2026-09-24T03:00:01 backup-nightly[4120]: rsync -a /srv/photos nas:/backup/photos
 2026-09-24T03:12:44 backup-nightly[4120]: rsync: write failed on "/backup/photos": No space left on device (28)

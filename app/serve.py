@@ -41,7 +41,8 @@
 
 Защита от чужих страниц в браузере: сервер отвечает, только если в Host стоит localhost или
 IP-адрес (так не пройдёт DNS rebinding — подмена имени сайта на 127.0.0.1), не отвечает на
-запросы с Sec-Fetch-Site: cross-site и с чужим Origin. Все POST — только с Content-Type:
+запросы к API с Sec-Fetch-Site: cross-site и с чужим Origin (переход на саму страницу по ссылке
+разрешён — ответ чужому сайту всё равно не достаётся). Все POST — только с Content-Type:
 application/json (чужая страница не пришлёт такой запрос без CORS-preflight, а на OPTIONS
 мы не отвечаем);
 ошибки — {"error": "текст для человека"} на языке из настроек. Каждый ответ несёт
@@ -680,18 +681,23 @@ def make_handler(db_path):
                 pref = "auto"
             i18n.set_lang(i18n.pick(pref, self.headers.get("Accept-Language", "")))
 
-        def _file(self, path, ctype):
+        def _file(self, path, ctype, headers=None):
             try:
                 with open(path, "rb") as f:
-                    self._send(200, f.read(), ctype)
+                    self._send(200, f.read(), ctype, headers)
             except OSError:
                 self._send(404, b"not found", "text/plain; charset=utf-8")
 
         def _guard(self):
-            """Чужие страницы в браузере сюда не ходят (см. докстринг модуля). → можно ли отвечать."""
+            """Чужие страницы в браузере сюда не ходят (см. докстринг модуля). → можно ли отвечать.
+            Переход на саму страницу (ссылка из другой программы или сайта) разрешён: прочитать ответ
+            чужой сайт не может, а Host всё равно проверяется. С чужого сайта нельзя только API."""
             host = self.headers.get("Host", "")
-            if not host_allowed(host) or self.headers.get("Sec-Fetch-Site", "") == "cross-site" \
-                    or not origin_allowed(self.headers.get("Origin"), host):
+            page_nav = (self.command == "GET" and urlparse(self.path).path in PAGES
+                        and self.headers.get("Sec-Fetch-Mode", "navigate") == "navigate"
+                        and self.headers.get("Sec-Fetch-Dest", "document") == "document")    # не во фрейме
+            cross = self.headers.get("Sec-Fetch-Site", "") == "cross-site" and not page_nav
+            if not host_allowed(host) or cross or not origin_allowed(self.headers.get("Origin"), host):
                 self._send(403, b"forbidden", "text/plain; charset=utf-8")
                 return False
             return True
@@ -707,7 +713,8 @@ def make_handler(db_path):
 
             if p in PAGES:
                 name, ctype = PAGES[p]
-                return self._file(os.path.join(HERE, "web", name), ctype)
+                return self._file(os.path.join(HERE, "web", name), ctype, {
+                    "X-Frame-Options": "DENY", "Content-Security-Policy": "frame-ancestors 'none'"})
             if p.startswith("/avatar/"):
                 f = avatars.file_for(unquote(p[8:]))
                 if not f:

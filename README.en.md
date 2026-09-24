@@ -49,8 +49,12 @@ the screen anyway.
 
 A translucent window at the bottom of the screen. Move and resize it with the mouse, or lock it in
 place and keep it below other windows. On every card: ✓ - read, ⏰ - snooze, 📌 - pin,
-ⓘ - "why is this here?". Click a name to open the app, double-click the text to copy it, links
-open in the browser.
+ⓘ - "why is this here?", ⤢ - open in full. Click a name to open the app, double-click the text to
+copy it, links open in the browser.
+
+**A long message or a big log** - a card shows up to 10 lines and a "Show in full" link. It opens a
+window with the full text and log: copy them, pin the message or mark it read from there. Esc or a
+click outside closes it.
 
 **Snooze** - the message disappears and comes back in an hour, in the evening or tomorrow morning.
 
@@ -94,6 +98,8 @@ and stays with you: a Telegram forwarding rule sends only the card text. Your ow
 same through Event intake (the `key` field and `status: "resolved"`).
 
 ![Themed columns on the board](docs/screens/en/widget-it.png)
+
+![The full log](docs/screens/en/widget-full.png)
 
 ![Themed column settings](docs/screens/en/settings-themed.png)
 

@@ -93,6 +93,18 @@ class GuardTest(ServerCase):
         self.assertEqual(code, 403)
         code, _ = self.req("/api/messages", headers={"Sec-Fetch-Site": "cross-site"})
         self.assertEqual(code, 403)
+        # переход на саму страницу по ссылке с другого сайта — можно (ответ чужому сайту не достаётся)
+        nav = {"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document"}
+        code, _ = self.req("/settings", headers=nav)
+        self.assertEqual(code, 200)
+        code, _ = self.req("/api/messages", headers=nav)
+        self.assertEqual(code, 403)
+        code, _ = self.req("/widget", headers={"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "no-cors"})
+        self.assertEqual(code, 403)                   # страница картинкой/скриптом чужого сайта — нет
+        code, _ = self.req("/widget", headers=dict(nav, **{"Sec-Fetch-Dest": "iframe"}))
+        self.assertEqual(code, 403)                   # и во фрейме чужого сайта — нет
+        with urllib.request.urlopen(self.base + "/widget", timeout=10) as r:
+            self.assertEqual(r.headers["X-Frame-Options"], "DENY")
         code, _ = self.req("/api/read", {"ids": []}, headers={"Origin": f"http://127.0.0.1:{self.port}"})
         self.assertEqual(code, 200)
 

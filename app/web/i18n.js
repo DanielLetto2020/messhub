@@ -340,6 +340,10 @@ const EN = {
   'Хвосты логов и вывода хранятся только в базе на этом компьютере: в виджете они свёрнуты, а правило «Переслать в Telegram» отправляет только текст карточки. Колонка появится на доске с первым событием.':
     'Log and output tails are kept only in the database on this computer: they are collapsed in the widget, and the “Forward to Telegram” rule sends only the card text. A column appears on the board with its first event.',
   'Лог': 'Log', 'Двойной клик — скопировать лог': 'Double-click to copy the log', '✓ Починилось в {hm}': '✓ Fixed at {hm}',
+  // окно «целиком»
+  'Открыть целиком': 'Open in full', 'Показать целиком': 'Show in full', 'целиком': 'in full',
+  'Скопировать текст': 'Copy text', 'Скопировать лог': 'Copy log', 'Закрыть · Esc': 'Close · Esc',
+  'Отметить прочитанным': 'Mark read',
 
   // ── логи ──
   'Логи': 'Logs',

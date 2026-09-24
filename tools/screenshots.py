@@ -78,6 +78,8 @@ def plan(lang):
             "body:JSON.stringify({hidden_cols:['express','telegram','mail','max','whatsapp','other:ci']})})"
             ".then(()=>location.reload());'ok'", 2200, DARK_DESK,
             "document.querySelector('.col[data-key=containers] .msg [data-act=det]').click();'ok'", 500]),
+        ("widget-full", "/widget", IT, [DARK_DESK, 600,
+            "document.querySelector('.col[data-key=containers] .det [data-act=full]').click();'ok'", 500]),
         ("widget-light", "/widget", W, [
             "fetch('/api/prefs',{method:'POST',headers:{'Content-Type':'application/json'},"
             "body:JSON.stringify({theme:'light',opacity:0.9,hidden_cols:['containers','services','commands']})})"
