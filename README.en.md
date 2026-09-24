@@ -35,7 +35,12 @@ the screen anyway.
   column per app.
 - **The important stuff drowns in noise.** Mail-like rules: hide the chatty chat, pin messages
   from your manager, highlight mentions of your name, play a sound for urgent ones.
-- **Sharing your screen on a call.** One button blurs every message so colleagues don't read too much.
+- **Sharing your screen on a call.** The board blurs by itself as soon as you start sharing (or with
+  one button), so colleagues don't read too much.
+- **"Ask your messages".** An assistant on a model on your own computer: "what did I miss?", "who
+  asked about the report?", "summarize the chat" - with message numbers in the answer.
+- **Deadlines get lost in chats.** "Call tomorrow at 10", "report by Friday" - the card gets a ⏰, one
+  click and the reminder comes on time. Quiet hours - no sounds at night and on weekends.
 - **You'd rather not hand your messages to a service.** Everything is stored and processed on your
   computer. Only what you turn on yourself goes out (for example, forwarding important messages to
   Telegram).
@@ -92,6 +97,14 @@ everyday users and save a trip to the terminal for people who work with code and
   Windows, services from the event log.
 - **Commands** - `messhub run -- make build`: the command runs as usual, and its result with the exit
   code and output tail lands on the board. A successful rerun clears the previous failure.
+- **Resources** - a disk is full, memory or swap is nearly exhausted, the CPU or GPU is overheating.
+  A full-disk card also shows how much images and containers take.
+- **Log watch** - log lines matching your pattern: a file (like `tail -F`) or a journald unit.
+  Matches within an hour go into one card with a counter.
+- **Calendar** - events from GNOME Calendar, Evolution and your own `.ics`: a card a few minutes
+  before the start and a plan for the day in the morning.
+- **Your own sources** - a script in the `sources.d` folder prints JSON lines, and they become cards.
+  A new column without touching the app.
 
 When the problem is gone, the card fades and gets "✓ fixed". The log tail is collapsed under the card
 and stays with you: a Telegram forwarding rule sends only the card text. Your own scripts can do the
@@ -102,6 +115,31 @@ same through Event intake (the `key` field and `status: "resolved"`).
 ![The message and its log in full, in a separate window](docs/screens/en/message.png)
 
 ![Themed column settings](docs/screens/en/settings-themed.png)
+
+![Resources, log watch, calendar](docs/screens/en/settings-themed-more.png)
+
+### An assistant on a model on your computer
+
+The ✨ button in the board header opens a separate window, like settings. Ask in your own words: the
+assistant gathers matching messages from the database and answers with a model on this computer -
+via [Ollama](https://ollama.com) or [LM Studio](https://lmstudio.ai). Numbers like #123 in the answer
+open the message itself.
+
+- **First start** - a wizard finds Ollama and LM Studio and shows installed models. For Ollama a
+  model downloads right in the window: Installed and Download tabs, catalog search, any name from
+  ollama.com/library or Hugging Face, a hint whether the model fits your GPU, download progress.
+- **Conversations** - listed on the left, each with its own settings: model, temperature, context
+  size, answer length, which messages to use (period, sources, read ones, logs) and its own system
+  prompt. Ready-made questions: "What did I miss?", "Mentions and questions to me", "Deadlines and
+  agreements", "Server report".
+- **Everything stays with you** - the model address must be on this computer (your home network only
+  if you allow it); cloud addresses are refused.
+
+![Assistant](docs/screens/en/assistant.png)
+
+![Models: installed and catalog](docs/screens/en/assistant-models.png)
+
+![Conversation settings](docs/screens/en/assistant-settings.png)
 
 ### Settings
 
@@ -129,6 +167,13 @@ highlight with a color, mark read right away, pin, play a sound, forward to Tele
 them by hand or let a schedule do it.
 
 ![Profiles](docs/screens/en/settings-profiles.png)
+
+**Quiet hours** - by schedule (an interval may cross midnight), by hand from the board header ("quiet
+for an hour", "until morning") or together with GNOME "Do Not Disturb". While quiet, rules play no
+sound, and afterwards one digest arrives: how much came and from where. Optionally the app turns
+"Do Not Disturb" on by itself.
+
+![Quiet hours](docs/screens/en/settings-quiet.png)
 
 **Mentions** - your name and nicknames: such messages are highlighted and shown in focus mode.
 
@@ -284,6 +329,8 @@ keep the sender name and message preview on.
 - Passwords and keys are stored in files only you can read and are never sent anywhere.
 - The board and settings pages are open only to this computer, and other websites in your browser
   can't reach them: the server answers only its own pages.
+- The assistant answers with a model on this computer (Ollama or LM Studio). The internet is only
+  needed once to download a model; a cloud model address is refused.
 - Themed columns and the app log are stored locally too. Log tails are never forwarded, not even
   by a "Forward to Telegram" rule.
 - Every 12 hours the app asks GitHub for the latest version number to show "a new version is out".

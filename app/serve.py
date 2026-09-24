@@ -831,7 +831,10 @@ def make_handler(db_path):
                 elif p == "/api/ai/export":
                     self._json({"text": read(db_path, ai.export_markdown, num("id", 0))})
                 elif p == "/api/quiet":
-                    self._json(dict(quiet.public_status(), prefs=read(db_path, rules.get_prefs)["quiet"]))
+                    st = quiet.public_status()
+                    if os.environ.get(f"{paths.ENV_PREFIX}_THEMED_DEMO") == "1" and st["dnd"] is None:
+                        st["dnd"] = False                 # снимки экрана: как на GNOME, «Не беспокоить» выключено
+                    self._json(dict(st, prefs=read(db_path, rules.get_prefs)["quiet"]))
                 elif p == "/api/scripts":
                     self._json(dict(scripts.info(db_path), dir=scripts.DIR.replace(os.path.expanduser("~"), "~")
                                     if os.environ.get(f"{paths.ENV_PREFIX}_THEMED_DEMO") else scripts.DIR))

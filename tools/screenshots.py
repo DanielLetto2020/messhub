@@ -35,6 +35,7 @@ DARK_DESK = ("document.documentElement.style.background='#0e1014';"
 W, S = (1640, 470), (1150, 800)        # размер окна: виджет и настройки
 IT = (1240, 470)                        # доска только с тематическими колонками
 M = (900, 640)                          # окно одного сообщения
+A = (1200, 780)                         # окно ассистента
 LANG_Q = {"ru": {"search": "созвон"}, "en": {"search": "call"}}
 
 
@@ -70,7 +71,14 @@ def plan(lang):
         ("settings-forward", "/settings#forward", S, [900]),
         ("settings-ingest", "/settings#ingest", S, [900]),
         ("settings-system", "/settings#system", (1150, 1000), ["wait-for:.check", 600]),
-        ("settings-themed", "/settings#themed", (1150, 1240), ["wait-for:.tcard", 700]),
+        ("settings-themed", "/settings#themed", (1150, 1100), ["wait-for:.tcard", 700]),
+        ("settings-themed-more", "/settings#themed", (1150, 1100), ["wait-for:.tcard",
+            "document.querySelector('.tcard[data-col=resources]').scrollIntoView();'ok'", 500]),
+        ("settings-quiet", "/settings#quiet", S, ["wait-for:.slot", 600]),
+        ("assistant", "/assistant", A, ["wait-for:.msg.ai", 900]),
+        ("assistant-settings", "/assistant", A, ["wait-for:.msg.ai", "openDrawer();'ok'", 1000]),
+        ("assistant-models", "/assistant", A, ["wait-for:.srow", "showModels();'ok'", 1200,
+            "document.querySelector('[data-tab=get]').click();'ok'", 700]),
         ("settings-logs", "/settings#logs", S, ["wait-for:.lg", 600]),
         ("settings-help", "/settings#help", S, [900]),
         # в конце — снимки, которые меняют настройки демо-папки: ИТ-колонки (остальные скрыты), светлая тема

@@ -170,6 +170,10 @@ def occurrences(e, frm, to):
             pass
     byday = [DAYS[d[-2:]] for d in rr.get("BYDAY", "").split(",") if d[-2:] in DAYS] if freq == "WEEKLY" else []
     out, n, cur = [], 0, start
+    if byday and start.weekday() not in byday:        # по RFC 5545 DTSTART — всегда первое повторение
+        n = 1
+        if start < to and start + length > frm and start not in e["exdates"]:
+            out.append(start)
     for _ in range(5000):
         cands = [cur] if not byday else [
             (cur - timedelta(days=cur.weekday()) + timedelta(days=d)).replace(hour=start.hour, minute=start.minute)

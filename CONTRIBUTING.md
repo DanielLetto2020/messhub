@@ -4,7 +4,8 @@
 
 ```
 app/            программа целиком - это и ставится (в пакетах - в /usr/lib/messhub)
-  web/          страницы: доска (widget.html), настройки (settings.html), окно сообщения (message.html), переводы (i18n.js)
+  web/          страницы: доска (widget.html), настройки (settings.html), окно сообщения (message.html),
+                ассистент (assistant.html), переводы (i18n.js)
   icons/        значок (tools/make_icons.py)
   hooks/        хук терминала «долгая команда закончилась»
 packaging/      сборка: linux/ (команда messhub, ярлык), windows/ (msi, bat, зависимости), systemd/
@@ -29,6 +30,9 @@ docs/screens/   картинки для README (только вымышленн�
 | `events.py` | тематические колонки: карточки и «проблема → починилось» (ключ события), итог команд |
 | `containers.py`, `services.py`, `run.py` | колонки «Контейнеры» (события docker/podman), «Службы» (systemd, журнал событий Windows), обёртка `messhub run` |
 | `applog.py` | журнал программы для раздела «Логи»: вывод процессов, необработанные ошибки, ошибки страниц |
+| `ai.py` | ассистент: Ollama и LM Studio, каталог и скачивание моделей, беседы, выборка сообщений, ответ потоком |
+| `resources.py`, `logwatch.py`, `calendar_src.py`, `scripts.py` | колонки «Ресурсы», «Журналы», «Календарь», свои источники из `sources.d` |
+| `quiet.py`, `reminders.py`, `when.py`, `screen.py` | тихие часы, напоминания, время в тексте, «идёт ли показ экрана» |
 | `backup.py`, `report.py`, `stats.py`, `ingest.py`, `diag.py`, `avatars.py` | копии, недельный отчёт, статистика, приём событий, самодиагностика, аватары |
 | `paths.py`, `version.py` | где лежат данные, имя, автор и номер версии |
 | `wincatcher.py`, `winwidget.py`, `messhub_win.py` | Windows 10/11: чтение уведомлений (UserNotificationListener), окно на WebView2, всё одним процессом `messhub.exe` |

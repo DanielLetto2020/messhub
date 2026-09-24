@@ -1662,8 +1662,20 @@ ru: [
 <p>В разделе «Тематические колонки» включаются колонки для тех, кто работает с кодом и серверами. Каждая — отдельно, по умолчанию все выключены.</p>
 <ul><li><b>Контейнеры</b> — Docker и Podman: упал, не хватило памяти, healthcheck «нездоров», перезапуск по кругу. Программа только слушает события движка.</li>
 <li><b>Службы</b> — упавшие службы systemd (на Windows — службы из журнала событий).</li>
-<li><b>Команды</b> — итог команды через обёртку <code>messhub run -- make build</code> (из исходников — <code>python3 app/run.py -- …</code>, на Windows — <code>messhub-run.exe -- …</code>).</li></ul>
+<li><b>Команды</b> — итог команды через обёртку <code>messhub run -- make build</code> (из исходников — <code>python3 app/run.py -- …</code>, на Windows — <code>messhub-run.exe -- …</code>).</li>
+<li><b>Ресурсы</b> — диск, память, swap, температура процессора и видеокарты; <b>Журналы</b> — строки логов по своему шаблону; <b>Календарь</b> — события из GNOME Календаря, Evolution и .ics.</li>
+<li><b>Свои источники</b> — скрипты в папке sources.d (раздел «Приём событий»): каждая напечатанная JSON-строка становится карточкой.</li></ul>
 <p>Когда проблема ушла (контейнер снова работает, служба поднялась, команда прошла), карточка бледнеет и получает «✓ починилось». Хвост лога свёрнут под карточкой, двойной клик по нему копирует лог. Свои скрипты могут делать так же через «Приём событий»: поле <code>key</code> и <code>status: "resolved"</code>.</p>`],
+['Ассистент: вопросы по сообщениям локальной модели', `
+<p>Кнопка ✨ в шапке доски открывает ассистента. Он собирает подходящие сообщения из базы и отвечает моделью на этом компьютере — через <b>Ollama</b> или <b>LM Studio</b>. Сообщения никуда не уходят; адреса моделей — только на этом компьютере (домашняя сеть — если явно разрешить).</p>
+<ul><li>При первом запуске мастер найдёт Ollama и LM Studio, покажет установленные модели и предложит скачать новую (для Ollama — прямо в окне, с подсказкой, поместится ли модель в видеокарту).</li>
+<li>У каждой беседы свои настройки: модель, температура, размер контекста, длина ответа, какие сообщения брать (период, источники, прочитанные, логи) и свой системный промпт.</li>
+<li>Номера вида #123 в ответе открывают само сообщение; «опирался на …» показывает всю выборку.</li></ul>
+<pre>curl -fsSL https://ollama.com/install.sh | sh     # Ollama на Linux</pre>`],
+['Тихие часы и показ экрана', `
+<p><b>Тихие часы</b> — по расписанию, вручную (луна в шапке доски: «тихо на час», «до утра») или вместе с «Не беспокоить» GNOME. Пока тихо, правила не играют звук, а в конце приходит сводка в колонку «Сводки». По желанию программа сама включает «Не беспокоить» на это время.</p>
+<p><b>Показ экрана</b>: пока идёт демонстрация (панелька «… предоставлен доступ к вашему экрану» в Chrome, индикатор Firefox, панель Zoom, поток захвата PipeWire), доска размывается сама и возвращается после. Свои признаки — в «Внешнем виде».</p>
+<p><b>Время в тексте</b>: «в 15:00», «завтра в 10», «к пятнице» дают на плашке ⏰ — по клику напоминание за 10 или 30 минут; в срок оно придёт в колонку «Напоминания» со звуком.</p>`],
 ['Долгие команды в терминале', `
 <p>Когда команда в терминале шла дольше минуты, приходит всплывашка «готово» с кодом выхода, а на доске — карточка в колонке «Команды» (включи её в «Тематических колонках»).</p>
 <pre>./install.sh --terminal-hook</pre>
@@ -1725,6 +1737,15 @@ en: [
 ['Logs: when something does not work', `
 <p>“Logs” is the app's own log: start-up, errors, background jobs. Message texts are never written there. The number next to the menu item is errors in the last day.</p>
 <p>“Export” saves the log to Downloads with your home folder replaced by “~”. You can attach it to a bug report on GitHub, but look through it first.</p>`],
+['Assistant: ask a local model about your messages', `
+<p>The ✨ button in the board header opens the assistant. It gathers matching messages from the database and answers with a model on this computer — via <b>Ollama</b> or <b>LM Studio</b>. Messages go nowhere; model addresses must be on this computer (your home network only if you allow it).</p>
+<ul><li>On first start a wizard finds Ollama and LM Studio, shows installed models and offers to download one (for Ollama right in the window, with a hint whether it fits your GPU).</li>
+<li>Each conversation has its own settings: model, temperature, context size, answer length, which messages to use (period, sources, read ones, logs) and its own system prompt.</li>
+<li>Numbers like #123 in an answer open the message; “based on …” shows the whole selection.</li></ul>`],
+['Quiet hours and screen sharing', `
+<p><b>Quiet hours</b> — by schedule, by hand (the moon in the board header: “quiet for an hour”, “until morning”) or together with GNOME “Do Not Disturb”. While quiet, rules play no sound, and a digest lands in the Digests column afterwards. Optionally the app turns “Do Not Disturb” on for that time.</p>
+<p><b>Screen sharing</b>: while you share your screen (Chrome's “… is sharing your screen” bar, the Firefox indicator, the Zoom toolbar, a PipeWire capture stream) the board blurs and comes back afterwards. Add your own signs under Appearance.</p>
+<p><b>Time in text</b>: “at 3 pm”, “tomorrow at 10”, “by Friday” give a card a ⏰ — click it for a reminder 10 or 30 minutes before; it arrives in the Reminders column with a sound.</p>`],
 ['Long terminal commands', `
 <p>When a terminal command runs longer than a minute, you get a “done” pop-up with the exit code and a card in the Commands column (turn it on under “Themed columns”).</p>
 <pre>./install.sh --terminal-hook</pre>

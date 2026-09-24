@@ -143,13 +143,17 @@ class CalendarTest(unittest.TestCase):
         self.assertEqual(evs[0]["location"], "Zoom, комната 2")
         occ = calendar_src.occurrences(evs[0], datetime(2026, 9, 25), datetime(2026, 10, 3))
         self.assertEqual([d.strftime("%a %H:%M") for d in occ], ["Fri 11:00", "Mon 11:00", "Wed 11:00", "Fri 11:00"])
+        # DTSTART во вторник, повтор по пн/ср/пт: сам вторник — первое повторение (RFC 5545)
+        tue = calendar_src.parse_events(self.ICS.format(start="20260929T110000", end="20260929T113000"))[0]
+        occ = calendar_src.occurrences(tue, datetime(2026, 9, 28), datetime(2026, 10, 3))
+        self.assertEqual([d.strftime("%a %d") for d in occ], ["Tue 29", "Wed 30", "Fri 02"])
         # за 10 минут до начала — карточка; второй проверкой — не повторяется
         start = (datetime.now() + timedelta(minutes=7)).replace(second=0, microsecond=0)
         d = tempfile.mkdtemp(dir=common.TMP)
         path = os.path.join(d, "work.ics")
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(self.ICS.format(start=start.strftime("%Y%m%dT%H%M%S"),
-                                    end=(start + timedelta(minutes=30)).strftime("%Y%m%dT%H%M%S")))
+        with open(path, "w", encoding="utf-8") as f:          # без повтора: день недели не важен
+            f.write(self.ICS.replace("RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR\n", "").format(
+                start=start.strftime("%Y%m%dT%H%M%S"), end=(start + timedelta(minutes=30)).strftime("%Y%m%dT%H%M%S")))
         db = common.new_db("cal.db")
         prefs(db, {"themed": {"calendar": {"enabled": True, "before": 10, "agenda": False, "files": [path]}}})
         conn = sqlite3.connect(db)

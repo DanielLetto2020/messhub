@@ -38,7 +38,7 @@ jobs:
           python3 -c 'import gi; gi.require_version("WebKit2", "4.1"); from gi.repository import WebKit2'
           python3 /usr/lib/messhub/serve.py --db /tmp/t.db --port 8799 & sleep 3
           curl -fsS http://127.0.0.1:8799/api/version
-          for p in / /widget /settings "/message?id=1" /i18n.js; do curl -fsS -o /dev/null "http://127.0.0.1:8799$p" || { echo "нет страницы $p"; exit 1; }; done
+          for p in / /widget /settings "/message?id=1" /assistant /i18n.js; do curl -fsS -o /dev/null "http://127.0.0.1:8799$p" || { echo "нет страницы $p"; exit 1; }; done
           # чужое имя сайта в Host (DNS rebinding) сервер не пускает
           test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.example:8799' http://127.0.0.1:8799/api/version)" = 403
           # messhub run: команда выполняется, код выхода сохраняется
