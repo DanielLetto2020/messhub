@@ -1,0 +1,55 @@
+name: tests
+on:
+  push:
+    branches: [main, contrib]
+  pull_request:
+    branches: [main, contrib]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.9", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Тесты (только стандартная библиотека, без сети и рабочего стола)
+        run: python -m unittest discover -s tests -t tests -v
+  test-windows:
+    runs-on: windows-latest
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: "Тесты на Windows (без WinRT: логика сбора проверяется на поддельных объектах)"
+        run: python -m unittest discover -s tests -t tests -v
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Переводы — у всех строк интерфейса есть английский
+        run: python tools/i18n_check.py
+      - name: Можно ли публиковать — нет баз, секретов, личных путей
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.base_ref }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            python tools/check_public.py --commits "origin/$BASE..HEAD"
+          else
+            python tools/check_public.py --commits
+          fi
+      - name: Скрипты оболочки
+        run: bash -n install.sh uninstall.sh hooks/long-command.sh

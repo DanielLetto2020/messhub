@@ -1,0 +1,17 @@
+# Собирается install.sh — не править вручную (поставится заново при следующей установке).
+[Unit]
+Description=@APP_NAME@ — виджет на рабочем столе
+After=@APP_ID@.service graphical-session.target
+Wants=@APP_ID@.service
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=@DIR@
+ExecStart=@PYTHON@ @DIR@/widget.py
+Environment=PYTHONUNBUFFERED=1
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

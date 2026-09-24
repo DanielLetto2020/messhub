@@ -1,0 +1,1290 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>eXpress-msgs — настройки</title>
+<style>
+  /* тот же язык, что у виджета: тёмное стекло, синий акцент, системный шрифт
+     (всё локально — никаких внешних шрифтов) */
+  :root {
+    --bg: #171a21; --side: #12151b; --surface: rgba(255,255,255,.035); --surface2: rgba(255,255,255,.06);
+    --line: rgba(255,255,255,.08); --line2: rgba(255,255,255,.14);
+    --text: #eef1f6; --muted: #98a1b2; --faint: #6d7586;
+    --accent: #6aa2ff; --accent-bg: rgba(106,162,255,.14);
+    --on: #43d69a; --on-bg: rgba(67,214,154,.12); --off: #ff8a7a; --off-bg: rgba(255,138,122,.12);
+    --warn: #f2b25a; --warn-bg: rgba(242,178,90,.1);
+    color-scheme: dark;   /* системные галочки/ползунки — тоже тёмные */
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--text);
+    font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+  code, pre { background: var(--surface2); border-radius: 5px; padding: 1px 5px; font-size: 12px;
+    font-family: ui-monospace, "DejaVu Sans Mono", monospace; }
+  pre { padding: 10px 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; margin: 6px 0 12px; max-width: 760px; }
+
+  .app { display: grid; grid-template-columns: 236px 1fr; height: 100%; }
+
+  /* ── меню слева ── */
+  .side { background: var(--side); border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; padding: 18px 12px 14px; min-height: 0; overflow-y: auto; }
+  .side h2 { font-size: 15px; font-weight: 650; margin: 0 8px 2px; letter-spacing: .1px; }
+  .side .appver { margin: 0 8px 14px; color: var(--faint); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  .nav { display: flex; flex-direction: column; gap: 1px; }
+  .nav button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+    background: none; border: 0; border-radius: 8px; padding: 7px 10px; cursor: pointer; color: var(--muted); }
+  .nav button:hover { background: var(--surface2); color: var(--text); }
+  .nav button[aria-current="page"] { background: var(--accent-bg); color: var(--text); }
+  .nav button[aria-current="page"] svg { color: var(--accent); }
+  .nav .n { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .nav .gap { height: 10px; }
+  .side .note { margin-top: auto; padding: 16px 8px 0; color: var(--faint); font-size: 11.5px; line-height: 1.5; }
+
+  /* ── контент справа ── */
+  .main { overflow-y: auto; min-height: 0; }
+  .page { max-width: 920px; padding: 26px 32px 60px; }
+  .crumb { background: none; border: 0; padding: 4px 6px; margin: -4px 0 8px -6px; color: var(--muted);
+    cursor: pointer; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px; }
+  .crumb:hover { color: var(--text); background: var(--surface2); }
+  h1 { font-size: 21px; font-weight: 650; margin: 0 0 6px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  h1 .btn { font-size: 13px; font-weight: 400; }
+  .lead { color: var(--muted); margin: 0 0 22px; max-width: 68ch; }
+  h3 { font-size: 13.5px; font-weight: 650; margin: 28px 0 10px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  h3 .n { color: var(--muted); font-weight: 400; }
+  h3 .sp { flex: 1; }
+  .hint { color: var(--muted); margin: -4px 0 12px; max-width: 72ch; }
+  .state { color: var(--muted); padding: 30px 0; }
+  .state button { margin-top: 10px; }
+  .muted { color: var(--muted); }
+  .q { color: var(--text); font-weight: 600; }
+  button.link { color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+
+  /* список источников */
+  .list { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .src { display: grid; grid-template-columns: 34px 1fr auto 16px; align-items: center; gap: 14px;
+    width: 100%; background: none; border: 0; border-top: 1px solid var(--line);
+    padding: 13px 16px; text-align: left; cursor: pointer; }
+  .src:first-child { border-top: 0; }
+  .src:hover { background: var(--surface); }
+  .src .ico { font-size: 22px; text-align: center; }
+  .src .nm { font-size: 14.5px; font-weight: 600; }
+  .src .apps { color: var(--faint); font-size: 11.5px; }
+  .src .stats { text-align: right; color: var(--muted); font-size: 12px; line-height: 1.55; }
+  .src .stats b { color: var(--text); font-weight: 600; }
+  .src .chev { color: var(--faint); }
+
+  /* варианты-кнопки: режим источника */
+  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .mode { display: flex; gap: 10px; align-items: flex-start; text-align: left; cursor: pointer;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 11px; padding: 12px 14px; }
+  .mode:hover { border-color: var(--line2); }
+  .mode .dot { flex: 0 0 auto; width: 15px; height: 15px; margin-top: 2px; border-radius: 50%; border: 2px solid var(--line2); }
+  .mode b { display: block; font-weight: 600; margin-bottom: 2px; }
+  .mode span { color: var(--muted); font-size: 12px; }
+  .mode[aria-checked="true"] { border-color: var(--accent); background: var(--accent-bg); }
+  .mode[aria-checked="true"] .dot { border-color: var(--accent); box-shadow: inset 0 0 0 3px var(--bg); background: var(--accent); }
+
+  /* правило — читается как фраза почтового фильтра */
+  .rules { display: flex; flex-direction: column; gap: 6px; }
+  .rule { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px 8px 14px; background: var(--surface); }
+  .rule .desc { flex: 1 1 280px; }
+  .rule .pf { color: var(--accent); font-size: 12px; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin: 0 4px -1px 2px; }
+  .empty-note { color: var(--muted); border: 1px dashed var(--line2); border-radius: 10px; padding: 12px 14px; }
+
+  /* сегменты: «показывать / не показывать», тема, плотность */
+  .seg { display: inline-flex; border: 1px solid var(--line2); border-radius: 8px; padding: 2px; gap: 2px; flex-wrap: wrap; }
+  .seg button { background: none; border: 0; border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    color: var(--muted); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .seg button:hover { color: var(--text); }
+  .seg button[aria-pressed="true"] { background: var(--accent-bg); color: var(--text); }
+  .seg button[aria-pressed="true"].show { background: var(--on-bg); color: var(--on); }
+  .seg button[aria-pressed="true"].hide { background: var(--off-bg); color: var(--off); }
+
+  .btn { background: var(--surface2); border: 1px solid var(--line2); border-radius: 8px;
+    padding: 5px 12px; cursor: pointer; white-space: nowrap; }
+  .btn:hover { border-color: var(--muted); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #0d1320; font-weight: 600; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.ghost { background: none; border-color: transparent; color: var(--muted); }
+  .btn.ghost:hover { color: var(--text); background: var(--surface2); }
+  .btn.danger { background: none; border-color: transparent; color: var(--off); }
+  .btn.danger:hover { background: var(--off-bg); }
+  .btn.confirm { color: var(--warn); border-color: var(--warn); background: var(--warn-bg); }
+  .btn:disabled { opacity: .5; pointer-events: none; }
+
+  input.inp, select.inp, textarea.inp { background: var(--surface); border: 1px solid var(--line2); border-radius: 8px;
+    padding: 6px 10px; color: var(--text); min-width: 0; }
+  input.inp::placeholder, textarea.inp::placeholder { color: var(--faint); }
+  /* свой вид у списков: системный в WebKitGTK белый, и текст на нём не читается */
+  select.inp { -webkit-appearance: none; appearance: none; padding-right: 30px; cursor: pointer;
+    background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2398a1b2' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 10px center; }
+  select.inp option { background: #1e222b; color: var(--text); }
+  .search { width: 100%; max-width: 340px; margin: 0 0 12px; }
+  .field { display: grid; grid-template-columns: 180px 1fr; gap: 10px 16px; align-items: center; margin: 0 0 14px; max-width: 720px; }
+  .field > label { color: var(--muted); }
+  .field .ctl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  input[type=range] { accent-color: var(--accent); width: 220px; }
+  input[type=checkbox] { accent-color: var(--accent); }
+
+  /* «кто писал» — дерево: чат → отправители */
+  .who { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .row { display: grid; grid-template-columns: 22px 1fr auto auto; align-items: center; gap: 12px;
+    padding: 9px 12px 9px 10px; border-top: 1px solid var(--line); }
+  .who > .row:first-child { border-top: 0; }
+  .row.kid { padding-left: 42px; background: rgba(0,0,0,.12); }
+  .row .nm { font-weight: 600; overflow-wrap: anywhere; }
+  .row.kid .nm { font-weight: 500; }
+  .row .sub { color: var(--muted); font-size: 12px; }
+  .row .why { color: var(--faint); font-size: 11.5px; }
+  .tw { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;
+    background: none; border: 0; border-radius: 6px; color: var(--muted); cursor: pointer; padding: 0; }
+  .tw:hover { background: var(--surface2); color: var(--text); }
+  .tw svg { transition: transform .15s ease; }
+  .tw[aria-expanded="true"] svg { transform: rotate(90deg); }
+  .tag { display: inline-block; font-size: 10.5px; font-weight: 500; color: var(--muted);
+    border: 1px solid var(--line2); border-radius: 999px; padding: 0 7px; margin-left: 6px; vertical-align: 1px; }
+  .tag.bot { color: #c08cff; border-color: rgba(192,140,255,.5); }
+  .tag.on { color: var(--on); border-color: rgba(67,214,154,.4); }
+  .tag.off { color: var(--off); border-color: rgba(255,138,122,.4); }
+  .tag.acc { color: var(--accent); border-color: rgba(106,162,255,.45); }
+  .vis { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; white-space: nowrap;
+    border-radius: 999px; padding: 2px 9px 2px 7px; }
+  .vis.on { color: var(--on); background: var(--on-bg); }
+  .vis.off { color: var(--off); background: var(--off-bg); }
+
+  /* редактор правила */
+  .editor { border-top: 1px solid var(--line); background: rgba(106,162,255,.06); padding: 14px 16px 14px 42px; }
+  .editor.standalone { border: 1px solid rgba(106,162,255,.35); border-radius: 12px; padding: 14px 16px; margin: 0 0 10px; }
+  .erow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0 0 10px; }
+  .erow .lbl { color: var(--muted); min-width: 92px; }
+  .chip { background: var(--surface); border: 1px solid var(--line2); border-radius: 8px;
+    padding: 4px 10px; cursor: pointer; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+  .chip:hover { color: var(--text); }
+  .chip[aria-checked="true"] { border-color: var(--accent); color: var(--text); background: var(--accent-bg); }
+  .chip.show[aria-checked="true"] { border-color: var(--on); background: var(--on-bg); color: var(--on); }
+  .chip.hide[aria-checked="true"] { border-color: var(--off); background: var(--off-bg); color: var(--off); }
+  .chip.only { cursor: default; color: var(--text); }
+  .chip:disabled { opacity: .45; cursor: not-allowed; }
+  .colors { display: inline-flex; gap: 6px; }
+  .colors button { width: 22px; height: 22px; border-radius: 6px; border: 2px solid transparent; cursor: pointer; }
+  .colors button[aria-checked="true"] { border-color: var(--text); }
+  .ehint { color: var(--muted); font-size: 12px; margin: -2px 0 10px 102px; max-width: 62ch; }
+  .eerr { color: var(--off); margin: 0 0 10px 102px; }
+  .editor .actions { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+
+  /* упоминания — «чипсы» */
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+  .tagx { display: inline-flex; align-items: center; gap: 6px; background: var(--surface2);
+    border: 1px solid var(--line2); border-radius: 999px; padding: 3px 4px 3px 11px; }
+  .tagx button { background: none; border: 0; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; color: var(--muted); }
+  .tagx button:hover { background: var(--off-bg); color: var(--off); }
+
+  /* карточки: профили, копии, проверки */
+  .card { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--surface); margin: 0 0 10px; }
+  .card .ch { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  .slot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+  .days { display: inline-flex; gap: 2px; }
+  .days label { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 26px;
+    border: 1px solid var(--line2); border-radius: 6px; cursor: pointer; color: var(--muted); font-size: 12px; user-select: none; }
+  .days input { display: none; }
+  .days input:checked + span { color: var(--text); }
+  .days label:has(input:checked) { background: var(--accent-bg); border-color: var(--accent); color: var(--text); }
+  input[type=time].inp { width: 96px; }
+  /* пустое поле даты WebKitGTK рисует сегодняшней датой — делаем его бледным, чтобы не путало */
+  input[type=date].inp.empty { color: var(--faint); }
+
+  /* поиск и история */
+  .results { display: flex; flex-direction: column; gap: 6px; }
+  .res { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: var(--surface); }
+  .res .rh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+  .res .rh b { color: var(--text); font-weight: 600; }
+  .res .rh .sp { flex: 1; }
+  .res .rt { margin-top: 3px; white-space: pre-wrap; word-break: break-word; }
+  .res .rt mark { background: rgba(242,178,90,.32); color: inherit; border-radius: 3px; }
+  .res .rw { margin-top: 6px; color: var(--muted); font-size: 12px; }
+  .answer { border: 1px solid rgba(106,162,255,.35); border-radius: 12px; padding: 12px 14px; background: rgba(106,162,255,.06);
+    white-space: pre-wrap; margin: 0 0 12px; max-width: 760px; }
+  .answer a { color: var(--accent); cursor: pointer; }
+  textarea.inp { width: 100%; max-width: 620px; min-height: 60px; resize: vertical; }
+  .res.flash { outline: 2px solid var(--accent); }
+
+  /* проверки системы */
+  .check { display: grid; grid-template-columns: 22px 220px 1fr; gap: 10px; align-items: start; padding: 7px 0; border-top: 1px solid var(--line); }
+  .check:first-child { border-top: 0; }
+  .check .st { font-weight: 700; text-align: center; }
+  .st.ok { color: var(--on); } .st.warn { color: var(--warn); } .st.bad { color: var(--off); } .st.info { color: var(--muted); }
+  .check .hn { color: var(--muted); font-size: 12px; }
+  .switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+  .switch input { width: 34px; height: 20px; -webkit-appearance: none; appearance: none; background: var(--line2);
+    border-radius: 999px; position: relative; cursor: pointer; transition: background .15s; margin: 0; }
+  .switch input::after { content: ''; position: absolute; left: 3px; top: 3px; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--text); transition: left .15s; }
+  .switch input:checked { background: var(--accent); }
+  .switch input:checked::after { left: 17px; }
+
+  /* справка */
+  details.help { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); margin: 0 0 8px; }
+  details.help summary { cursor: pointer; padding: 11px 14px; font-weight: 600; list-style: none; display: flex; gap: 8px; align-items: center; }
+  details.help summary::-webkit-details-marker { display: none; }
+  details.help summary::before { content: '›'; color: var(--muted); transition: transform .15s; display: inline-block; }
+  details.help[open] summary::before { transform: rotate(90deg); }
+  details.help .hb { padding: 0 16px 12px 30px; max-width: 76ch; }
+  details.help .hb p { margin: 6px 0; }
+  details.help .hb ol, details.help .hb ul { margin: 6px 0; padding-left: 20px; }
+
+  /* статистика */
+  .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 18px; }
+  .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0 0 8px; }
+  .tile { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--surface); }
+  .tile .v { font-size: 24px; font-weight: 650; line-height: 1.15; }
+  .tile .l { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .bars { display: flex; flex-direction: column; gap: 7px; max-width: 800px; }
+  .brow { display: grid; grid-template-columns: minmax(120px, 230px) 1fr 44px auto; align-items: center; gap: 10px; min-height: 26px; }
+  .brow .bl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .brow .bt { height: 10px; }
+  .brow .bf { display: block; height: 10px; background: var(--accent); border-radius: 0 4px 4px 0; min-width: 2px; }
+  .brow .bv { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .brow:hover .bf { filter: brightness(1.15); }
+  .heat { display: grid; grid-template-columns: 30px repeat(24, minmax(10px, 1fr)); gap: 2px; max-width: 800px; }
+  .heat .hl { color: var(--muted); font-size: 11px; display: flex; align-items: center; }
+  .heat .hx { color: var(--faint); font-size: 10px; }
+  .heat .cell { aspect-ratio: 1 / 1; border-radius: 3px; min-height: 12px; }
+  .heat .cell:hover { outline: 2px solid var(--text); outline-offset: -1px; }
+  .legend { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 11.5px; margin: 8px 0 0; flex-wrap: wrap; }
+  .legend i { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+  table.tbl { border-collapse: collapse; font-size: 11.5px; font-variant-numeric: tabular-nums; margin-top: 10px; }
+  table.tbl th, table.tbl td { padding: 2px 5px; text-align: right; border-bottom: 1px solid var(--line); }
+  table.tbl th { color: var(--muted); font-weight: 500; }
+  .tip { position: fixed; z-index: 50; pointer-events: none; background: #262b36; border: 1px solid var(--line2);
+    border-radius: 8px; padding: 5px 9px; font-size: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.4); }
+  .tip[hidden] { display: none; }
+
+  .result { margin-top: 10px; color: var(--on); overflow-wrap: anywhere; }
+  .result.err { color: var(--off); }
+  .warnbox { border: 1px solid rgba(242,178,90,.4); background: var(--warn-bg); border-radius: 10px;
+    padding: 10px 14px; margin: 0 0 18px; max-width: 72ch; }
+
+  .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+    background: #262b36; border: 1px solid var(--line2); border-radius: 10px; padding: 8px 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.4); opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 60; }
+  .toast.show { opacity: 1; }
+  .toast.err { border-color: var(--off); color: var(--off); }
+
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 6px; }
+
+  @media (max-width: 760px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    .side { border-right: 0; border-bottom: 1px solid var(--line); padding: 10px; }
+    .side h2, .side .appver, .nav .gap { display: none; }
+    .nav { flex-direction: row; overflow-x: auto; }
+    .nav button { white-space: nowrap; }
+    .side .note { display: none; }
+    .page { padding: 20px 16px 50px; }
+    .modes, .tiles { grid-template-columns: 1fr 1fr; }
+    .row { grid-template-columns: 22px 1fr; }
+    .row .vis, .row .btn { grid-column: 2; justify-self: start; }
+    .field { grid-template-columns: 1fr; }
+    .check { grid-template-columns: 22px 1fr; }
+    .check .hv { grid-column: 2; }
+    .ehint, .eerr { margin-left: 0; }
+    .editor { padding-left: 16px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+<script src="/i18n.js"></script>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <h2 data-t="Настройки">Настройки</h2>
+    <div class="appver" id="appVer"></div>
+    <nav class="nav" data-t-aria="Разделы настроек">
+      <button type="button" data-nav="sources"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg><span data-t="Источники">Источники</span><span class="n" id="navN"></span></button>
+      <button type="button" data-nav="rules"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg><span data-t="Правила для всех">Правила для всех</span></button>
+      <button type="button" data-nav="profiles"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span data-t="Профили">Профили</span></button>
+      <button type="button" data-nav="mentions"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/></svg><span data-t="Упоминания">Упоминания</span></button>
+      <button type="button" data-nav="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><span data-t="Поиск">Поиск</span></button>
+      <div class="gap"></div>
+      <button type="button" data-nav="look"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="1.5"/><circle cx="17.5" cy="10.5" r="1.5"/><circle cx="8.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="12.5" r="1.5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.5-.75 1.5-1.5 0-.4-.15-.74-.4-1-.26-.27-.4-.62-.4-1 0-.83.67-1.5 1.5-1.5H16c3.31 0 6-2.69 6-6 0-4.96-4.49-9-10-9z"/></svg><span data-t="Внешний вид">Внешний вид</span></button>
+      <button type="button" data-nav="stats"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span data-t="Статистика">Статистика</span></button>
+      <button type="button" data-nav="data"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg><span data-t="Данные">Данные</span></button>
+      <div class="gap"></div>
+      <button type="button" data-nav="forward"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg><span data-t="Пересылка в Telegram">Пересылка в Telegram</span></button>
+      <button type="button" data-nav="ingest"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span data-t="Приём событий">Приём событий</span></button>
+      <button type="button" data-nav="system"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg><span data-t="Система">Система</span></button>
+      <button type="button" data-nav="help"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span data-t="Справка">Справка</span></button>
+    </nav>
+    <p class="note" data-t="Правила меняют то, что видно в виджете, и что делать с новыми сообщениями. Сами сообщения сохраняются всегда, а если удалить правило, скрытое снова появится.">Правила меняют то, что видно в виджете, и что делать с новыми сообщениями. Сами сообщения сохраняются всегда, а если удалить правило, скрытое снова появится.</p>
+  </aside>
+  <main class="main" id="main"><div class="page" id="page"></div></main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const page = $('page');
+const I = {
+  eye: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>',
+  eyeOff: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>',
+  chev: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>',
+  back: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>',
+};
+const ACT = {show:'показывать в виджете', hide:'не показывать в виджете', highlight:'подсвечивать',
+  read:'сразу отмечать прочитанным', pin:'закреплять', sound:'играть звук', forward:'пересылать в Telegram'};
+const COLORS = {red:'#ff6b6b', orange:'#f59f45', yellow:'#e2c23b', green:'#3ec98f', blue:'#5b9bff', purple:'#b884ff'};
+const COLOR_NAMES = {red:'красным', orange:'оранжевым', yellow:'жёлтым', green:'зелёным', blue:'синим', purple:'фиолетовым'};
+const HINTS = {
+  show: 'Показывать в виджете, даже если чат или весь источник скрыт.',
+  hide: 'Не показывать в виджете. Само сообщение всё равно сохранится.',
+  highlight: 'Цветная полоска и фон на плашке. В режиме фокуса такие сообщения видны.',
+  read: 'Считать прочитанным сразу, в виджете не появится. Действует на новые сообщения.',
+  pin: 'Закрепить сверху колонки, само через 24 ч не прочитается. Действует на новые сообщения.',
+  sound: 'Проиграть системный звук, когда придёт. Действует на новые сообщения.',
+  forward: 'Переслать текст в твой Telegram через бота. Это единственное, что уходит с компьютера.',
+};
+const DOW=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+const DOW_LONG=['понедельник','вторник','среда','четверг','пятница','суббота','воскресенье'];
+
+function esc(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
+const attr = s => esc(s).replace(/"/g,'&quot;');
+const q = s => LANG==='en'?`<span class="q">“${esc(s)}”</span>`:`<span class="q">«${esc(s)}»</span>`;
+function when(s){
+  if(!s)return'';
+  const d=new Date(s.replace(' ','T')),now=new Date();
+  const day=x=>new Date(x.getFullYear(),x.getMonth(),x.getDate()).getTime();
+  const diff=Math.round((day(now)-day(d))/864e5),hm=s.slice(11,16);
+  if(diff===0)return t('сегодня в {hm}',{hm}); if(diff===1)return t('вчера в {hm}',{hm});
+  return t('{d} в {hm}',{d:s.slice(8,10)+'.'+s.slice(5,7)+'.'+s.slice(2,4),hm});
+}
+let toastT=0;
+function toast(msg,err){const el=$('toast');el.textContent=msg;el.className='toast show'+(err?' err':'');
+  clearTimeout(toastT);toastT=setTimeout(()=>el.className='toast',2400);}
+async function api(path,body){
+  const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});
+  let data=null;try{data=await r.json();}catch(e){}
+  if(!r.ok)throw new Error((data&&data.error)||t('Сервер ответил {c}',{c:r.status}));
+  return data;
+}
+function failed(retry){
+  page.innerHTML=`<div class="state">${esc(t('Сервер виджета не отвечает, поэтому настройки не загрузились.'))}<br>
+    ${esc(t('Проверь, что работает сбор:'))} <code>systemctl --user status express-msgs</code><br>
+    <button class="btn" type="button" id="retry">${esc(t('Загрузить ещё раз'))}</button></div>`;
+  $('retry').onclick=retry;
+}
+// кнопка с подтверждением вторым кликом (удалить, восстановить, заменить ключ)
+function confirmBtn(b,askText,run){
+  let armed=0; const orig=b.textContent;
+  b.onclick=async()=>{
+    if(!b.classList.contains('confirm')){b.classList.add('confirm');b.textContent=askText;
+      armed=setTimeout(()=>{b.classList.remove('confirm');b.textContent=orig;},4000);return;}
+    clearTimeout(armed);b.classList.remove('confirm');b.textContent=orig;await run();
+  };
+}
+const swatch=c=>`<span class="swatch" style="background:${COLORS[c]||'#888'}"></span>`;
+const isMode=r=>r.src!=='*'&&!r.chat&&!r.sender&&!r.text;
+let PREFS={profiles:[]};
+const profName=id=>(PREFS.profiles.find(p=>p.id===id)||{}).name||id;
+
+// «правило» человеческими словами
+function condText(r){
+  const p=[];
+  if(r.chat)p.push(t('в чате {x}',{x:q(r.chat)}));
+  if(r.sender)p.push(t('от {x}',{x:q(r.sender)}));
+  if(r.text)p.push(r.text_mode==='regex'?t('по выражению {x}',{x:q(r.text)}):t('с текстом {x}',{x:q(r.text)}));
+  return p.join(' ')||esc(t('все'));
+}
+const actText=r=>r.action==='highlight'?`${esc(t('подсвечивать'))} ${swatch(r.param)}${esc(t(COLOR_NAMES[r.param]||''))}`:esc(t(ACT[r.action]));
+function whyText(rule){
+  if(!rule)return'';
+  if(isMode(rule))return esc(t('режим источника'))+(rule.profile?' · '+esc(t('в профиле «{p}»',{p:profName(rule.profile)})):'');
+  const parts=[];if(rule.chat)parts.push(t('чат {x}',{x:rule.chat}));if(rule.sender)parts.push(t('от {x}',{x:rule.sender}));
+  return esc(t('правило: {r}',{r:parts.join(', ')}))+(rule.src==='*'?' '+esc(t('(для всех источников)')):'')+
+    (rule.profile?' · '+esc(t('в профиле «{p}»',{p:profName(rule.profile)})):'');
+}
+function visPill(show,rule){
+  const why=t(rule?(isMode(rule)?'Так решает режим источника':'Так решает правило'):'По умолчанию всё показывается');
+  return show?`<span class="vis on" title="${attr(t('Показывается в виджете. {why}',{why}))}">${I.eye}${esc(t('в виджете'))}</span>`
+             :`<span class="vis off" title="${attr(t('Не показывается в виджете. {why}',{why}))}">${I.eyeOff}${esc(t('скрыто'))}</span>`;
+}
+
+// ── список правил (общий для источника и «для всех») ──
+function rulesListHtml(rs){
+  return `<div class="rules">${rs.map((r,i)=>`<div class="rule" data-i="${i}">
+    <span class="desc">${t('Сообщения {c} — {a}',{c:condText(r),a:actText(r)})}${r.profile?` <span class="pf">· ${esc(t('в профиле «{p}»',{p:profName(r.profile)}))}</span>`:''}</span>
+    ${r.action==='show'||r.action==='hide'?`<span class="seg">
+      <button type="button" class="show" aria-pressed="${r.action==='show'}" data-flip="show">${I.eye}${esc(t('Показывать'))}</button>
+      <button type="button" class="hide" aria-pressed="${r.action==='hide'}" data-flip="hide">${I.eyeOff}${esc(t('Не показывать'))}</button></span>`:''}
+    <button class="btn danger" type="button" data-del>${esc(t('Удалить'))}</button></div>`).join('')}</div>`;
+}
+function bindRulesList(box,rs,reload){
+  box.querySelectorAll('.rule').forEach(el=>{
+    const r=rs[+el.dataset.i];
+    el.querySelectorAll('[data-flip]').forEach(b=>b.onclick=async()=>{
+      if(b.dataset.flip===r.action)return;
+      try{await api('/api/rules',{...r,action:b.dataset.flip});toast(t('Правило изменено'));reload();}
+      catch(e){toast(e.message,true);}
+    });
+    el.querySelector('[data-del]').onclick=async()=>{
+      try{await api('/api/rules/delete',{id:r.id});toast(t('Правило удалено'));reload();}
+      catch(e){toast(e.message,true);}
+    };
+  });
+}
+
+// ── редактор правила ──
+// ed: {src, conds|null, cond, chat, sender, text, text_mode, action, param, profile, err}
+// conds — готовые варианты условия (из строки «кто писал»); иначе поля «чат» и «отправитель»
+let fwdReady=false;
+function editorHtml(ed,ctx){
+  const cond=ed.conds
+    ?(ed.conds.length===1?`<span class="chip only">${ed.conds[0].label}</span>`
+      :ed.conds.map((c,k)=>`<button type="button" class="chip" role="radio" aria-checked="${k===ed.cond}" data-cond="${k}">${c.label}</button>`).join(''))
+    :`<input class="inp" id="edChat" list="dlChats" placeholder="${attr(t('из чата — любого'))}" value="${attr(ed.chat)}" style="width:210px" aria-label="${attr(t('Чат'))}">
+      <input class="inp" id="edSender" list="dlSenders" placeholder="${attr(t('от кого — от любого'))}" value="${attr(ed.sender)}" style="width:210px" aria-label="${attr(t('Отправитель'))}">
+      <datalist id="dlChats">${(ctx.chats||[]).map(x=>`<option value="${attr(x)}">`).join('')}</datalist>
+      <datalist id="dlSenders">${(ctx.senders||[]).map(x=>`<option value="${attr(x)}">`).join('')}</datalist>`;
+  const chip=(a,label,extra='')=>`<button type="button" class="chip ${a}" role="radio" aria-checked="${ed.action===a}" data-act="${a}" ${extra}>${label}</button>`;
+  const profs=PREFS.profiles||[];
+  return `<div class="erow"><span class="lbl">${esc(t('Сообщения'))}</span>${cond}</div>
+    <div class="erow"><span class="lbl">${esc(t('с текстом'))}</span>
+      <input class="inp" id="edText" placeholder="${attr(t(ed.conds?'любым (необязательно)':'любым'))}" value="${attr(ed.text)}" style="width:260px" aria-label="${attr(t('Текст'))}">
+      <label class="muted"><input type="checkbox" id="edRegex" ${ed.text_mode==='regex'?'checked':''}> ${esc(t('регулярное выражение'))}</label></div>
+    <div class="erow" role="radiogroup" aria-label="${attr(t('Что делать'))}"><span class="lbl">${esc(t('Что делать'))}</span>
+      ${chip('show',I.eye+esc(t('Показывать')))}${chip('hide',I.eyeOff+esc(t('Не показывать')))}
+      ${chip('highlight',esc(t('Подсветить')))}${chip('read',esc(t('Сразу прочитано')))}${chip('pin',esc(t('Закрепить')))}${chip('sound',esc(t('Звук')))}
+      ${chip('forward',esc(t('Переслать в Telegram')),fwdReady?'':`disabled title="${attr(t('Сначала настрой раздел «Пересылка в Telegram»'))}"`)}</div>
+    ${ed.action==='highlight'?`<div class="erow"><span class="lbl">${esc(t('Цвет'))}</span><span class="colors" role="radiogroup" aria-label="${attr(t('Цвет подсветки'))}">${
+      Object.keys(COLORS).map(c=>`<button type="button" role="radio" aria-checked="${ed.param===c}" aria-label="${attr(t(COLOR_NAMES[c]))}" title="${attr(t(COLOR_NAMES[c]))}" data-color="${c}" style="background:${COLORS[c]}"></button>`).join('')}</span></div>`:''}
+    ${profs.length?`<div class="erow"><span class="lbl">${esc(t('Профиль'))}</span><select class="inp" id="edProf">
+      <option value="">${esc(t('Во всех профилях'))}</option>${profs.map(p=>`<option value="${attr(p.id)}"${ed.profile===p.id?' selected':''}>${esc(t('Только в профиле «{p}»',{p:p.name}))}</option>`).join('')}</select></div>`:''}
+    <div class="ehint">${esc(t(HINTS[ed.action]||''))}${fwdReady?'':' '+esc(t('Пересылка станет доступна, когда настроишь бота в разделе «Пересылка в Telegram».'))}</div>
+    ${ed.err?`<div class="eerr">${esc(ed.err)}</div>`:''}
+    <div class="actions"><button class="btn primary" type="button" id="edSave">${esc(t('Сохранить правило'))}</button>
+      <button class="btn ghost" type="button" id="edCancel">${esc(t('Отмена'))}</button></div>`;
+}
+function mountEditor(slot,ed,ctx){
+  const draw=()=>{slot.innerHTML=editorHtml(ed,ctx);bind();};
+  function bind(){
+    slot.querySelectorAll('[data-cond]').forEach(b=>b.onclick=()=>{ed.cond=+b.dataset.cond;draw();});
+    slot.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{ed.action=b.dataset.act;
+      if(ed.action==='highlight'&&!ed.param)ed.param='orange';ed.err='';draw();});
+    slot.querySelectorAll('[data-color]').forEach(b=>b.onclick=()=>{ed.param=b.dataset.color;draw();});
+    for(const [id,k] of [['edChat','chat'],['edSender','sender'],['edText','text']]){
+      const el=slot.querySelector('#'+id);if(el)el.oninput=()=>{ed[k]=el.value;};}
+    const rx=slot.querySelector('#edRegex');rx.onchange=()=>{ed.text_mode=rx.checked?'regex':'contains';};
+    const pf=slot.querySelector('#edProf');if(pf)pf.onchange=()=>{ed.profile=pf.value;};
+    slot.querySelector('#edCancel').onclick=ctx.onCancel;
+    slot.querySelector('#edSave').onclick=async()=>{
+      const c=ed.conds?ed.conds[ed.cond]:{chat:ed.chat.trim(),sender:ed.sender.trim()};
+      try{
+        await api('/api/rules',{src:ed.src,chat:c.chat,sender:c.sender,text:ed.text.trim(),text_mode:ed.text_mode,
+          action:ed.action,param:ed.action==='highlight'?ed.param:'',profile:ed.profile||''});
+        toast(t('Правило сохранено'));ctx.onSaved();
+      }catch(e){ed.err=e.message;draw();}
+    };
+  }
+  draw();
+}
+const newEd=(src,action)=>({src,conds:null,cond:0,chat:'',sender:'',text:'',text_mode:'contains',
+  action:action||'hide',param:action==='highlight'?'orange':'',profile:'',err:''});
+
+// ── маршрут ──
+const ROUTES={sources:showSources,rules:showGlobalRules,profiles:showProfiles,mentions:showMentions,search:showSearch,
+  look:showLook,stats:showStats,data:showData,forward:showForward,ingest:showIngest,system:showSystem,help:showHelp};
+function route(){
+  const h=location.hash.slice(1);
+  let sec='sources';
+  if(h.startsWith('source='))showSource(decodeURIComponent(h.slice(7)));
+  else{sec=ROUTES[h]?h:'sources';ROUTES[sec]();}
+  document.querySelectorAll('.nav button').forEach(b=>{
+    if(b.dataset.nav===sec)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
+  $('main').scrollTop=0;
+}
+window.addEventListener('hashchange',route);
+document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>{location.hash='#'+b.dataset.nav;});
+async function refreshPrefs(){try{PREFS=await api('/api/prefs');}catch(e){}return PREFS;}
+
+// ── Источники: список ──
+async function showSources(){
+  page.innerHTML=`<div class="state">${esc(t('Загружаю источники…'))}</div>`;
+  let list;
+  try{list=await api('/api/settings/sources');}catch(e){failed(showSources);return;}
+  $('navN').textContent=list.length||'';
+  if(!list.length){
+    page.innerHTML=`<h1>${esc(t('Источники'))}</h1><p class="lead">${esc(t('Источников пока нет. Они появятся здесь сами, как только придёт первое уведомление от приложения.'))}</p>`;
+    return;
+  }
+  page.innerHTML=`<h1>${esc(t('Источники'))}</h1>
+    <p class="lead">${esc(t('Приложения и сайты, от которых приходят уведомления. Открой источник, чтобы решить, чьи сообщения показывать в виджете, переименовать его или задать правила.'))}</p>
+    <div class="list">${list.map((s,i)=>`
+      <button class="src" type="button" data-i="${i}">
+        <span class="ico">${esc(s.ico)}</span>
+        <span><span class="nm">${esc(s.name)}</span><br><span class="apps">${esc(s.apps.join(', '))}</span></span>
+        <span class="stats"><b>${esc(tp(s.n,...W.msg))}</b> ${esc(t('в {n}',{n:tp(s.chats,...W.chatIn)}))}<br>
+          ${esc(t(s.mode==='hide'?'показываются только разрешённые':'показываются все'))}${s.rules?', '+esc(tp(s.rules,...W.rule)):''}</span>
+        <span class="chev">${I.chev}</span>
+      </button>`).join('')}</div>`;
+  page.querySelectorAll('.src').forEach(b=>b.onclick=()=>{location.hash='#source='+encodeURIComponent(list[+b.dataset.i].key);});
+}
+
+// ── Источник: название, режим, правила, «кто писал» ──
+const cur={src:null,data:null,open:new Set(),edit:null,q:'',newRule:null,rename:false};
+let rowsIdx=[];
+async function showSource(src,keep){
+  if(!keep){Object.assign(cur,{src,open:new Set(),edit:null,q:'',newRule:null,rename:false});
+    page.innerHTML=`<div class="state">${esc(t('Загружаю…'))}</div>`;}
+  try{cur.data=await api('/api/settings/source?src='+encodeURIComponent(src));PREFS.profiles=cur.data.profiles;}
+  catch(e){if(keep)toast(t('Не удалось обновить — сервер не отвечает'),true);else failed(()=>showSource(src));return;}
+  if(!keep)renderSource();else{renderHead();renderMode();renderRules();renderWho();}
+}
+function renderSource(){
+  page.innerHTML=`<button class="crumb" type="button" id="back">${I.back}${esc(t('Источники'))}</button>
+    <div id="head"></div>
+    <p class="lead">${esc(t('Реши, что из этого источника показывать в виджете и что делать с новыми сообщениями. Правило с текстом главнее правила для отправителя, отправитель главнее чата, а всё это главнее режима источника.'))}</p>
+    <h3>${esc(t('Что показывать в виджете'))}</h3><div id="mode"></div>
+    <h3>${esc(t('Правила'))} <span class="n" id="rulesN"></span><span class="sp"></span><button class="btn" type="button" id="addRule">${esc(t('Новое правило'))}</button></h3>
+    <div id="newRuleSlot"></div><div id="rules"></div>
+    <h3>${esc(t('Кто писал'))}</h3>
+    <p class="hint">${esc(t('Все чаты и отправители, от которых были уведомления. Нажми «Создать правило» у нужной строки.'))}</p>
+    <div id="profNote"></div>
+    <input class="inp search" id="search" type="search" placeholder="${attr(t('Найти чат или отправителя'))}" autocomplete="off">
+    <div id="whoBox"></div>`;
+  $('back').onclick=()=>{location.hash='#sources';};
+  $('addRule').onclick=()=>{cur.newRule=cur.newRule?null:newEd(cur.src);renderNewRule();};
+  const inp=$('search');inp.value=cur.q;inp.oninput=()=>{cur.q=inp.value;renderWho();};
+  renderHead();renderMode();renderRules();renderWho();
+}
+function renderHead(){
+  const s=cur.data.source,box=$('head'),c=cur.data.custom||{};
+  $('profNote').innerHTML=cur.data.active_profile?`<p class="hint">${esc(t('Сейчас действует профиль «{p}» — строки ниже учитывают его правила.',{p:profName(cur.data.active_profile)}))}</p>`:'';
+  if(!cur.rename){
+    box.innerHTML=`<h1><span>${esc(s.ico)}</span>${esc(s.name)}<button class="btn ghost" type="button" id="ren">${esc(t('Переименовать'))}</button></h1>`;
+    $('ren').onclick=()=>{cur.rename=true;renderHead();};
+    return;
+  }
+  box.innerHTML=`<h1><span>${esc(s.ico)}</span>${esc(s.name)}</h1>
+    <div class="field"><label for="rnName">${esc(t('Название колонки'))}</label><div class="ctl"><input class="inp" id="rnName" maxlength="40" value="${attr(c.name||s.name)}"></div>
+      <label for="rnIco">${esc(t('Значок (эмодзи)'))}</label><div class="ctl"><input class="inp" id="rnIco" maxlength="8" value="${attr(c.ico||s.ico)}" style="width:70px"></div>
+      <span></span><div class="ctl"><button class="btn primary" type="button" id="rnSave">${esc(t('Сохранить'))}</button>
+        <button class="btn ghost" type="button" id="rnCancel">${esc(t('Отмена'))}</button>
+        ${c.name||c.ico?`<button class="btn danger" type="button" id="rnReset">${esc(t('Вернуть как было'))}</button>`:''}</div></div>`;
+  const saveNames=async(val,msg)=>{
+    try{const p=await api('/api/prefs');const names={...p.source_names};
+      if(val)names[cur.src]=val;else delete names[cur.src];
+      await api('/api/prefs',{source_names:names});cur.rename=false;toast(msg);await showSource(cur.src,true);}
+    catch(e){toast(e.message,true);}
+  };
+  $('rnSave').onclick=()=>saveNames({name:$('rnName').value.trim(),ico:$('rnIco').value.trim()},t('Название сохранено'));
+  $('rnCancel').onclick=()=>{cur.rename=false;renderHead();};
+  if($('rnReset'))$('rnReset').onclick=()=>saveNames(null,t('Название возвращено'));
+}
+function renderMode(){
+  const m=cur.data.mode,box=$('mode');
+  box.innerHTML=`<div class="modes" role="radiogroup" aria-label="${attr(t('Что показывать в виджете'))}">
+    <button class="mode" type="button" role="radio" aria-checked="${m==='show'}" data-mode="show"><span class="dot"></span>
+      <span><b>${esc(t('Все сообщения'))}</b><span>${esc(t('кроме тех, что скрыты правилами'))}</span></span></button>
+    <button class="mode" type="button" role="radio" aria-checked="${m==='hide'}" data-mode="hide"><span class="dot"></span>
+      <span><b>${esc(t('Только разрешённые'))}</b><span>${esc(t('остальное скрыто, пока правило не разрешит'))}</span></span></button></div>`;
+  box.querySelectorAll('.mode').forEach(b=>b.onclick=async()=>{
+    if(b.dataset.mode===cur.data.mode)return;
+    try{await api('/api/source-mode',{src:cur.src,mode:b.dataset.mode});toast(t('Режим источника сохранён'));await showSource(cur.src,true);}
+    catch(e){toast(e.message,true);}
+  });
+}
+function renderNewRule(){
+  const slot=$('newRuleSlot');
+  if(!cur.newRule){slot.innerHTML='';return;}
+  slot.innerHTML='<div class="editor standalone" id="nrEd"></div>';
+  const chats=cur.data.chats.map(c=>c.chat), senders=[...new Set(cur.data.chats.flatMap(c=>c.senders.map(s=>s.sender)))];
+  mountEditor($('nrEd'),cur.newRule,{chats,senders,
+    onCancel:()=>{cur.newRule=null;renderNewRule();},
+    onSaved:async()=>{cur.newRule=null;renderNewRule();await showSource(cur.src,true);}});
+}
+function renderRules(){
+  const rs=cur.data.rules,box=$('rules');
+  $('rulesN').textContent=rs.length||'';
+  const g=cur.data.global_rules?`<p class="hint" style="margin-top:8px">${esc(t('Ещё действуют {n} для всех источников —',{n:tp(cur.data.global_rules,...W.rule)}))} <button class="link" type="button" id="toGlobal">${esc(t('посмотреть'))}</button>.</p>`:'';
+  box.innerHTML=(rs.length?rulesListHtml(rs):`<div class="empty-note">${esc(t('Правил пока нет. Создай первое кнопкой «Новое правило» или из списка «Кто писал».'))}</div>`)+g;
+  bindRulesList(box,rs,()=>showSource(cur.src,true));
+  if($('toGlobal'))$('toGlobal').onclick=()=>{location.hash='#rules';};
+}
+// варианты условия для строки «кто писал»
+function condsFor(row){
+  const c=row.chat;
+  if(row.kind==='chat'&&row.personal)return[
+    {chat:c.chat,sender:'',label:t('из личного чата с {x}',{x:q(c.chat)})},
+    {chat:'',sender:c.chat,label:t('от {x} в любом чате',{x:q(c.chat)})}];
+  if(row.kind==='chat')return[{chat:c.chat,sender:'',label:t('из чата {x}',{x:q(c.chat)})}];
+  const s=row.sender.sender;
+  return[{chat:'',sender:s,label:t('от {x} в любом чате',{x:q(s)})},
+         {chat:c.chat,sender:s,label:t('от {x} только в чате {y}',{x:q(s),y:q(c.chat)})}];
+}
+const rowKey=row=>row.kind+'\u0000'+row.chat.chat+'\u0000'+(row.sender?row.sender.sender:'');
+function rowHtml(row,i){
+  const x=row.sender||row.chat,kid=!!row.sender,c=row.chat;
+  let tags='';
+  if(!kid)tags=c.personal?`<span class="tag">${esc(t('личный чат'))}</span>`:`<span class="tag">${esc(t('группа'))}</span>`;
+  // «бот» — у отправителя-бота или у лички с ботом; группа, где писал бот, ботом не считается
+  if(x.bot&&(kid||c.personal))tags+=`<span class="tag bot">${esc(t('бот'))}</span>`;
+  const who=!kid&&!c.personal&&c.senders.length>1?' '+t('от {x}',{x:tp(c.senders.length,...W.senderFrom)}):'';
+  const sub=`${tp(x.n,...W.msg)}${who}, ${t('последнее {w}',{w:when(x.last)})}`;
+  const why=whyText(x.rule);
+  const tw=!kid&&!c.personal&&c.senders.length?`<button class="tw" type="button" data-tw="${i}" aria-expanded="${!!row.open}" aria-label="${attr(t('Показать отправителей'))}">${I.chev}</button>`:'<span></span>';
+  return `<div class="row${kid?' kid':''}">${tw}
+    <div><div class="nm">${esc(kid?row.sender.sender:c.chat)||`<span class="why">${esc(t('без названия'))}</span>`}${tags}</div>
+      <div class="sub">${esc(sub)}</div>${why?`<div class="why">${why}</div>`:''}</div>
+    ${visPill(x.show,x.rule)}
+    <button class="btn ghost" type="button" data-ed="${i}">${esc(t('Создать правило'))}</button></div>`;
+}
+function renderWho(){
+  const box=$('whoBox'),chats=cur.data.chats,needle=cur.q.trim().toLowerCase();
+  if(!chats.length){box.innerHTML=`<div class="empty-note">${esc(t('Из этого источника ещё не было уведомлений.'))}</div>`;return;}
+  rowsIdx=[];
+  const hit=s=>!needle||(s||'').toLowerCase().includes(needle);
+  for(const c of chats){
+    const kids=c.personal?[]:c.senders, kidHits=kids.filter(s=>hit(s.sender));
+    if(!hit(c.chat)&&!kidHits.length)continue;
+    // при поиске сами раскрываем чаты, где нашёлся отправитель
+    const open=cur.open.has(c.chat)||(!!needle&&kidHits.length>0);
+    rowsIdx.push({kind:'chat',chat:c,personal:c.personal,open});
+    if(open)for(const s of (needle&&!hit(c.chat)?kidHits:kids))rowsIdx.push({kind:'sender',chat:c,sender:s});
+  }
+  if(!rowsIdx.length){box.innerHTML=`<div class="empty-note">${t('Никого не нашлось по запросу {q}.',{q:q(cur.q.trim())})}</div>`;return;}
+  box.innerHTML=`<div class="who">${rowsIdx.map((row,i)=>rowHtml(row,i)+
+    (cur.edit&&cur.edit.key===rowKey(row)?'<div class="editor" id="rowEd"></div>':'')).join('')}</div>`;
+  box.querySelectorAll('[data-tw]').forEach(b=>b.onclick=()=>{
+    const row=rowsIdx[+b.dataset.tw],ch=row.chat.chat;
+    if(row.open){cur.open.delete(ch);if(cur.q.trim()){cur.q='';$('search').value='';}}
+    else cur.open.add(ch);
+    renderWho();});
+  box.querySelectorAll('[data-ed]').forEach(b=>b.onclick=()=>{
+    const row=rowsIdx[+b.dataset.ed],key=rowKey(row);
+    if(cur.edit&&cur.edit.key===key){cur.edit=null;renderWho();return;}
+    const x=row.sender||row.chat;
+    // по умолчанию предлагаем обратное тому, что сейчас: видно → скрыть, скрыто → показать
+    cur.edit={key,ed:{...newEd(cur.src,x.show?'hide':'show'),conds:condsFor(row)}};
+    renderWho();
+    const e=$('rowEd');if(e)e.scrollIntoView({block:'nearest'});
+  });
+  if(cur.edit&&$('rowEd'))mountEditor($('rowEd'),cur.edit.ed,{
+    onCancel:()=>{cur.edit=null;renderWho();},
+    onSaved:async()=>{cur.edit=null;await showSource(cur.src,true);}});
+}
+
+// ── Правила для всех источников ──
+let gEd=null;
+async function showGlobalRules(){
+  page.innerHTML=`<div class="state">${esc(t('Загружаю…'))}</div>`;
+  let d;try{d=await api('/api/settings/rules');PREFS.profiles=d.profiles;}catch(e){failed(showGlobalRules);return;}
+  page.innerHTML=`<h1>${esc(t('Правила для всех источников'))}</h1>
+    <p class="lead">${esc(t('Срабатывают в любом приложении и на любом сайте. Удобно для слов и фраз: скрывать всё про обед, подсвечивать «срочно», закреплять «дедлайн». Правило конкретного источника с тем же условием главнее.'))}</p>
+    <h3>${esc(t('Правила'))} <span class="n">${d.rules.length||''}</span><span class="sp"></span><button class="btn" type="button" id="addG">${esc(t('Новое правило'))}</button></h3>
+    <div id="gSlot"></div><div id="gList"></div>`;
+  const box=$('gList');
+  box.innerHTML=d.rules.length?rulesListHtml(d.rules):`<div class="empty-note">${esc(t('Правил для всех источников пока нет.'))}</div>`;
+  bindRulesList(box,d.rules,showGlobalRules);
+  const drawEd=()=>{
+    const slot=$('gSlot');
+    if(!gEd){slot.innerHTML='';return;}
+    slot.innerHTML='<div class="editor standalone" id="gEd"></div>';
+    mountEditor($('gEd'),gEd,{chats:[],senders:[],onCancel:()=>{gEd=null;drawEd();},onSaved:()=>{gEd=null;showGlobalRules();}});
+  };
+  $('addG').onclick=()=>{gEd=gEd?null:newEd('*','highlight');drawEd();};
+  drawEd();
+}
+
+// ── Профили ──
+async function showProfiles(){
+  page.innerHTML=`<div class="state">${esc(t('Загружаю…'))}</div>`;
+  let p, d;
+  try{p=await refreshPrefs();d=await api('/api/settings/rules');}catch(e){failed(showProfiles);return;}
+  let profs=JSON.parse(JSON.stringify(p.profiles||[]));
+  const counts=d.profile_counts||{};   // сколько правил в каждом профиле — по всем источникам
+  const curSel=()=>`<select class="inp" id="pfCur" aria-label="${attr(t('Сейчас'))}">
+      <option value=""${!p.profile?' selected':''}>${esc(t('Без профиля'))}</option>
+      <option value="auto"${p.profile==='auto'?' selected':''}>${esc(t('Авто — по расписанию'))}</option>
+      ${profs.map(x=>`<option value="${attr(x.id)}"${p.profile===x.id?' selected':''}>${esc(x.name)}</option>`).join('')}</select>`;
+  function draw(){
+    page.innerHTML=`<h1>${esc(t('Профили'))}</h1>
+      <p class="lead">${esc(t('Профили — это наборы правил: «Работа», «Дом», «Созвон». Правило можно привязать к профилю — тогда оно действует, только пока профиль включён. Включить профиль можно вручную (в шапке виджета) или «авто» — по расписанию.'))}</p>
+      <div class="erow"><span class="lbl">${esc(t('Сейчас'))}</span>${curSel()}</div>
+      <h3>${esc(t('Профили'))}<span class="sp"></span><button class="btn" type="button" id="pfAdd">${esc(t('Новый профиль'))}</button></h3>
+      <div id="pfList">${profs.length?'':`<div class="empty-note">${esc(t('Профилей пока нет.'))}</div>`}</div>
+      <p class="hint">${esc(t('Правила профиля создаются в редакторе правила: поле «Профиль».'))}</p>`;
+    const list=$('pfList');
+    profs.forEach((pr,i)=>{
+      const card=document.createElement('div');card.className='card';
+      card.innerHTML=`<div class="ch"><input class="inp" data-name value="${attr(pr.name)}" placeholder="${attr(t('Например: Работа'))}" maxlength="40" style="width:220px" aria-label="${attr(t('Название'))}">
+          <span class="tag">${esc(t('правил: {n}',{n:counts[pr.id]||0}))}</span><span style="flex:1"></span>
+          <button class="btn primary" type="button" data-save>${esc(t('Сохранить'))}</button>
+          <button class="btn danger" type="button" data-del>${esc(t('Удалить'))}</button></div>
+        <div class="muted">${esc(t('Расписание'))}${pr.schedule.length?'':' — '+esc(t('без расписания — только вручную'))}</div>
+        <div data-slots></div>
+        <button class="btn ghost" type="button" data-addslot>${esc(t('Добавить время'))}</button>`;
+      const slots=card.querySelector('[data-slots]');
+      pr.schedule.forEach((s,k)=>{
+        const el=document.createElement('div');el.className='slot';
+        el.innerHTML=`<span class="days">${DOW.map((d,di)=>`<label><input type="checkbox" data-d="${di}"${s.days.includes(di)?' checked':''}><span>${esc(t(d))}</span></label>`).join('')}</span>
+          <span class="muted">${esc(t('с'))}</span><input class="inp" type="time" data-from value="${attr(s.from)}">
+          <span class="muted">${esc(t('до'))}</span><input class="inp" type="time" data-to value="${attr(s.to==='24:00'?'23:59':s.to)}">
+          <button class="btn ghost" type="button" data-rmslot aria-label="${attr(t('Удалить'))}">✕</button>`;
+        el.querySelectorAll('[data-d]').forEach(cb=>cb.onchange=()=>{const di=+cb.dataset.d;
+          s.days=cb.checked?[...new Set([...s.days,di])].sort():s.days.filter(x=>x!==di);});
+        el.querySelector('[data-from]').onchange=e=>{s.from=e.target.value;};
+        el.querySelector('[data-to]').onchange=e=>{s.to=e.target.value==='23:59'?'24:00':e.target.value;};
+        el.querySelector('[data-rmslot]').onclick=()=>{pr.schedule.splice(k,1);draw();};
+        slots.appendChild(el);
+      });
+      card.querySelector('[data-name]').oninput=e=>{pr.name=e.target.value;};
+      card.querySelector('[data-addslot]').onclick=()=>{pr.schedule.push({days:[0,1,2,3,4],from:'09:00',to:'18:00'});draw();};
+      card.querySelector('[data-save]').onclick=()=>save(t('Профиль сохранён'));
+      confirmBtn(card.querySelector('[data-del]'),t('Нажми ещё раз — удалить'),async()=>{profs.splice(i,1);await save(t('Профиль удалён'));});
+      list.appendChild(card);
+    });
+    $('pfAdd').onclick=()=>{profs.push({id:'p'+Date.now().toString(36),name:'',schedule:[]});draw();
+      const inp=list.querySelectorAll('[data-name]');if(inp.length)inp[inp.length-1].focus();};
+    $('pfCur').onchange=async e=>{try{p=await api('/api/prefs',{profile:e.target.value});PREFS=p;toast(t('Сохранено'));}catch(err){toast(err.message,true);}};
+  }
+  async function save(msg){
+    try{p=await api('/api/prefs',{profiles:profs.filter(x=>x.name.trim()).map(x=>({...x,name:x.name.trim()}))});
+      PREFS=p;profs=JSON.parse(JSON.stringify(p.profiles));toast(msg);draw();}
+    catch(e){toast(e.message,true);}
+  }
+  draw();
+}
+
+// ── Упоминания ──
+async function showMentions(){
+  page.innerHTML=`<div class="state">${esc(t('Загружаю…'))}</div>`;
+  let p;try{p=await api('/api/prefs');}catch(e){failed(showMentions);return;}
+  const list=[...p.mentions];
+  page.innerHTML=`<h1>${esc(t('Упоминания'))}</h1>
+    <p class="lead">${esc(t('Твоё имя, ник и слова, которые касаются тебя. Сообщение с таким словом получает значок @, слово подсвечивается, а в режиме фокуса такое сообщение видно всегда.'))}</p>
+    <div class="tags" id="mList"></div>
+    <div class="erow"><input class="inp" id="mInp" placeholder="${attr(t('Например: Максим'))}" maxlength="60" style="width:260px" aria-label="${attr(t('Новое слово'))}">
+      <button class="btn primary" type="button" id="mAdd">${esc(t('Добавить'))}</button></div>
+    <p class="hint">${esc(t('Совпадает начало слова без учёта регистра: «Максим» найдёт и «Максиму», и «максима», но не «Бромаксим». Короткое «Макс» найдёт и «максимально» — лучше вписывать полные формы.'))}</p>`;
+  const save=async(next,msg)=>{
+    try{const r=await api('/api/prefs',{mentions:next});list.splice(0,list.length,...r.mentions);draw();toast(msg);}
+    catch(e){toast(e.message,true);}
+  };
+  function draw(){
+    $('mList').innerHTML=list.length?list.map((m,i)=>`<span class="tagx">${esc(m)}<button type="button" data-rm="${i}" aria-label="${attr(t('Убрать {x}',{x:m}))}">✕</button></span>`).join('')
+      :`<span class="muted">${esc(t('Пока ничего не добавлено.'))}</span>`;
+    $('mList').querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>save(list.filter((_,i)=>i!==+b.dataset.rm),t('Убрано')));
+  }
+  const add=()=>{const v=$('mInp').value.trim();if(!v)return;$('mInp').value='';save([...list,v],t('Добавлено'));};
+  $('mAdd').onclick=add;$('mInp').onkeydown=e=>{if(e.key==='Enter')add();};
+  draw();
+}
+
+// ── Поиск: обычный (подстрока) и по смыслу (RAG) ──
+const sr={q:'',mode:'plain',src:'',status:'all',from:'',to:'',offset:0,rows:[],total:0,srcs:null};
+function hlText(s,needle){
+  if(!needle)return esc(s);
+  const low=s.toLowerCase(),n=needle.toLowerCase();let out='',i=0,j;
+  while((j=low.indexOf(n,i))>=0){out+=esc(s.slice(i,j))+'<mark>'+esc(s.slice(j,j+n.length))+'</mark>';i=j+n.length;}
+  return out+esc(s.slice(i));
+}
+function resHtml(r,i){
+  const st=r.pinned?`<span class="tag acc">${esc(t('Закреплено'))}</span>`:r.is_read?`<span class="tag">${esc(t('прочитано'))}</span>`:`<span class="tag on">${esc(t('не прочитано'))}</span>`;
+  const vis=r.visible?'':`<span class="tag off">${esc(t('скрыт в виджете'))}</span>`;
+  return `<div class="res" id="res-${r.id}" data-i="${i}"><div class="rh"><span>${esc(r.src_ico)}</span><b>${esc(r.chat||'—')}</b>
+      ${r.sender&&r.sender!==r.chat?`<span>· ${esc(r.sender)}</span>`:''}<span>${esc(when(r.received_at))}</span>${st}${vis}
+      ${r.score!=null?`<span class="tag">${esc(t('близость {s}',{s:r.score}))}</span>`:''}
+      <span class="sp"></span>
+      <button class="btn ghost" type="button" data-why>${esc(t('Почему так?'))}</button>
+      ${r.is_read||r.snooze_until?`<button class="btn" type="button" data-restore>${esc(t('Вернуть в виджет'))}</button>`:''}</div>
+    <div class="rt">${hlText(r.message||'',sr.mode==='plain'?sr.q:'')}</div><div class="rw" hidden></div></div>`;
+}
+function bindResults(box,rows){
+  box.querySelectorAll('.res').forEach(el=>{
+    const r=rows[+el.dataset.i];
+    const rb=el.querySelector('[data-restore]');
+    if(rb)rb.onclick=async()=>{try{await api('/api/restore',{ids:[r.id]});r.is_read=0;r.snooze_until=null;toast(t('Возвращено в виджет'));rb.remove();}catch(e){toast(e.message,true);}};
+    el.querySelector('[data-why]').onclick=async()=>{
+      const w=el.querySelector('.rw');if(!w.hidden){w.hidden=true;return;}
+      try{const x=await api('/api/why?id='+r.id);
+        const lines=[(x.visible?t('Видно в виджете'):t('Скрыто в виджете'))+' — '+(x.vis_rule?(isMode(x.vis_rule)?t('режимом источника'):t('правилом: {r}',{r:condText(x.vis_rule).replace(/<[^>]+>/g,'')})):t('по умолчанию'))];
+        if(x.highlight_rule)lines.push(t('Подсвечено правилом: {r}',{r:condText(x.highlight_rule).replace(/<[^>]+>/g,'')}));
+        for(const h of x.insert_hits)lines.push(t('При записи: {a} — правилом {r}',{a:t(ACT[h.action]),r:h.rule?condText(h.rule).replace(/<[^>]+>/g,''):t('правило уже удалено')}));
+        if(x.snooze_until)lines.push(t('Отложено до {t}.',{t:x.snooze_until.slice(0,16)}));
+        w.innerHTML=lines.map(l=>esc(l)).join('<br>');w.hidden=false;}catch(e){toast(e.message,true);}
+    };
+  });
+}
+async function showSearch(){
+  page.innerHTML=`<h1>${esc(t('Поиск'))}</h1>
+    <p class="lead">${esc(t('Поиск по всем сохранённым сообщениям, в том числе прочитанным и скрытым. Найденное можно вернуть в виджет.'))}</p>
+    <div class="filters">
+      <input class="inp" id="sQ" type="search" placeholder="${attr(t('Что ищем?'))}" style="width:280px" value="${attr(sr.q)}">
+      <span class="seg" id="sMode"><button type="button" data-m="plain" aria-pressed="${sr.mode==='plain'}">${esc(t('Обычный'))}</button><button type="button" data-m="rag" aria-pressed="${sr.mode==='rag'}">${esc(t('По смыслу'))}</button></span>
+      <button class="btn primary" type="button" id="sGo">${esc(t('Найти'))}</button></div>
+    <div class="filters" id="sFilt">
+      <select class="inp" id="sSrc" aria-label="${attr(t('Источник'))}"><option value="">${esc(t('Все источники'))}</option></select>
+      <select class="inp" id="sSt" aria-label="${attr(t('Любой статус'))}">
+        <option value="all">${esc(t('Любой статус'))}</option><option value="unread">${esc(t('Непрочитанные'))}</option>
+        <option value="read">${esc(t('Прочитанные'))}</option><option value="pinned">${esc(t('Закреплённые'))}</option></select>
+      <span class="muted">${esc(t('с даты'))}</span><input class="inp" type="date" id="sFrom" value="${attr(sr.from)}">
+      <span class="muted">${esc(t('по дату'))}</span><input class="inp" type="date" id="sTo" value="${attr(sr.to)}"></div>
+    <div id="sRes"></div>
+    <h3>${esc(t('Спросить по переписке'))}</h3>
+    <div id="askBox"></div>
+    <h3>${esc(t('Умный поиск (RAG)'))}</h3>
+    <p class="hint">${esc(t('Ищет по смыслу, а не по буквам, и отвечает на вопросы по переписке. Работает целиком на компьютере через Ollama: скачивает модель векторов и считает их для всех сообщений. Без него работает обычный поиск.'))}</p>
+    <div id="ragBox"></div>`;
+  try{if(!sr.srcs)sr.srcs=await api('/api/settings/sources');}catch(e){sr.srcs=[];}
+  $('sSrc').innerHTML=`<option value="">${esc(t('Все источники'))}</option>`+sr.srcs.map(s=>`<option value="${attr(s.key)}"${s.key===sr.src?' selected':''}>${esc(s.ico+' '+s.name)}</option>`).join('');
+  $('sSt').value=sr.status;
+  for(const id of ['sFrom','sTo']){const el=$(id),upd=()=>el.classList.toggle('empty',!el.value);upd();el.oninput=upd;el.onchange=upd;}
+  $('sMode').querySelectorAll('button').forEach(b=>b.onclick=()=>{sr.mode=b.dataset.m;
+    $('sMode').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));
+    $('sFilt').style.display=sr.mode==='plain'?'':'none';});
+  $('sFilt').style.display=sr.mode==='plain'?'':'none';
+  const go=()=>{sr.q=$('sQ').value.trim();sr.src=$('sSrc').value;sr.status=$('sSt').value;sr.from=$('sFrom').value;sr.to=$('sTo').value;sr.offset=0;runSearch(false);};
+  $('sGo').onclick=go;$('sQ').onkeydown=e=>{if(e.key==='Enter')go();};
+  renderRag();
+  if(sr.rows.length)drawResults();
+}
+async function runSearch(more){
+  const box=$('sRes');box.style.opacity=.55;
+  try{
+    if(sr.mode==='rag'){
+      if(!sr.q){box.style.opacity=1;return;}
+      const d=await api('/api/rag/search',{q:sr.q,k:30});sr.rows=d.rows;sr.total=d.rows.length;
+    }else{
+      const qs=new URLSearchParams({q:sr.q,src:sr.src,status:sr.status,from:sr.from,to:sr.to,limit:'50',offset:String(sr.offset)});
+      const d=await api('/api/search?'+qs);sr.total=d.total;sr.rows=more?sr.rows.concat(d.rows):d.rows;
+    }
+    drawResults();
+  }catch(e){box.innerHTML=`<div class="result err">${esc(e.message)}</div>`;}
+  box.style.opacity=1;
+}
+function drawResults(){
+  const box=$('sRes');
+  if(!sr.rows.length){box.innerHTML=`<div class="empty-note">${esc(t('Ничего не нашлось.'))}</div>`;return;}
+  box.innerHTML=`<p class="muted">${esc(t('Найдено: {n}',{n:sr.total}))}</p><div class="results">${sr.rows.map(resHtml).join('')}</div>
+    ${sr.mode==='plain'&&sr.rows.length<sr.total?`<p><button class="btn" type="button" id="sMore">${esc(t('Показать ещё'))}</button></p>`:''}`;
+  bindResults(box,sr.rows);
+  if($('sMore'))$('sMore').onclick=()=>{sr.offset=sr.rows.length;runSearch(true);};
+}
+let ragPoll=0;
+async function renderRag(){
+  const box=$('ragBox'),ask=$('askBox');if(!box)return;
+  let s;try{s=await api('/api/rag/status');}catch(e){box.innerHTML=`<div class="result err">${esc(e.message)}</div>`;return;}
+  clearTimeout(ragPoll);
+  ask.innerHTML=s.enabled?`<textarea class="inp" id="aQ" placeholder="${attr(t('Например: когда переносили релиз?'))}"></textarea>
+      <p><button class="btn primary" type="button" id="aGo">${esc(t('Спросить'))}</button></p><div id="aRes"></div>`
+    :`<p class="muted">${esc(t('Для поиска по смыслу включи умный поиск ниже.'))}</p>`;
+  if(s.enabled)$('aGo').onclick=doAsk;
+  let html='';
+  if(!s.ollama)html+=`<div class="warnbox">${esc(t('Ollama не отвечает на {h}. Установи её (см. «Справка → Умный поиск») и запусти.',{h:'127.0.0.1:11434'}))}</div>`;
+  if(s.installing)html+=`<p>${esc(t('Установка: {p}',{p:s.progress}))}</p>`;
+  if(s.error)html+=`<p class="result err">${esc(t('Ошибка: {e}',{e:s.error}))}</p>`;
+  html+=`<p class="${s.enabled?'':'muted'}">${esc(s.enabled?t('Включён: модель {m}, посчитано {a} из {b} сообщений.',{m:s.model,a:s.indexed,b:s.total}):t('Выключен.'))}</p>
+    <div class="field"><label for="rModel">${esc(t('Модель векторов'))}</label><div class="ctl"><input class="inp" id="rModel" value="${attr(s.model)}" list="dlEmb" style="width:220px">
+      <datalist id="dlEmb">${['bge-m3','nomic-embed-text','mxbai-embed-large',...s.embed_models].map(m=>`<option value="${attr(m)}">`).join('')}</datalist></div>
+      <label for="rChat">${esc(t('Модель для ответов'))}</label><div class="ctl"><select class="inp" id="rChat"><option value="">${esc(t('первая доступная'))}</option>
+        ${s.chat_models.map(m=>`<option value="${attr(m)}"${m===s.chat_model?' selected':''}>${esc(m)}</option>`).join('')}</select></div>
+      <span></span><div class="ctl">
+        <button class="btn primary" type="button" id="rInst"${s.installing||!s.ollama?' disabled':''}>${esc(t('Установить и включить'))}</button>
+        ${s.enabled?`<button class="btn" type="button" id="rOff">${esc(t('Выключить'))}</button><button class="btn danger" type="button" id="rDrop">${esc(t('Выключить и удалить векторы'))}</button>`:''}
+        ${s.model_installed&&!s.enabled?`<button class="btn danger" type="button" id="rRm">${esc(t('Удалить модель из Ollama'))}</button>`:''}</div></div>
+    <p class="hint">${esc(t('Скачивание — один раз, около 1,2 ГБ для bge-m3; дальше векторы считаются в фоне.'))}</p>`;
+  box.innerHTML=html;
+  $('rInst').onclick=async()=>{try{await api('/api/rag/install',{model:$('rModel').value.trim()||'bge-m3',chat_model:$('rChat').value});renderRag();}catch(e){toast(e.message,true);}};
+  if($('rOff'))$('rOff').onclick=async()=>{await api('/api/rag/disable',{drop:false});toast(t('Умный поиск выключен.'));renderRag();};
+  if($('rDrop'))confirmBtn($('rDrop'),t('Нажми ещё раз — удалить'),async()=>{await api('/api/rag/disable',{drop:true});toast(t('Умный поиск выключен.'));renderRag();});
+  if($('rRm'))confirmBtn($('rRm'),t('Нажми ещё раз — удалить'),async()=>{try{await api('/api/rag/remove-model',{model:s.model});toast(t('Модель удалена из Ollama'));}catch(e){toast(e.message,true);}renderRag();});
+  // пока ставится или считает векторы — обновляем раз в пару секунд
+  if(s.installing||(s.enabled&&s.indexed<s.total))ragPoll=setTimeout(()=>{if($('ragBox'))renderRag();},s.installing?1000:4000);
+}
+async function doAsk(){
+  const qv=$('aQ').value.trim();if(!qv)return;
+  const box=$('aRes');box.innerHTML=`<p class="muted">${esc(t('Думаю…'))}</p>`;$('aGo').disabled=true;
+  try{
+    const d=await api('/api/rag/ask',{q:qv});
+    const ids=new Set(d.rows.map(r=>r.id));
+    const ans=esc(d.answer).replace(/\[(\d+)\]/g,(m,id)=>ids.has(+id)?`<a data-go="${id}">[${id}]</a>`:m);
+    box.innerHTML=`<p class="muted">${esc(t('Ответ модели {m} по найденным сообщениям:',{m:d.model}))}</p><div class="answer">${ans}</div><div class="results">${d.rows.map(resHtml).join('')}</div>`;
+    bindResults(box,d.rows);
+    box.querySelectorAll('[data-go]').forEach(a=>a.onclick=()=>{const el=$('res-'+a.dataset.go);if(el){el.scrollIntoView({block:'center'});el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),1200);}});
+  }catch(e){box.innerHTML=`<div class="result err">${esc(e.message)}</div>`;}
+  $('aGo').disabled=false;
+}
+
+// ── Внешний вид ──
+async function showLook(){
+  page.innerHTML=`<div class="state">${esc(t('Загружаю…'))}</div>`;
+  let p, srcs=[];try{p=await api('/api/prefs');srcs=await api('/api/settings/sources');}catch(e){failed(showLook);return;}
+  const op=Math.round(p.opacity*100), nameOf=k=>{const s=srcs.find(x=>x.key===k);return s?s.ico+' '+s.name:k;};
+  const seg=(key,opts,val)=>`<span class="seg" data-key="${key}">${opts.map(([v,l])=>`<button type="button" data-v="${attr(v)}" aria-pressed="${String(val)===String(v)}">${esc(t(l))}</button>`).join('')}</span>`;
+  page.innerHTML=`<h1>${esc(t('Внешний вид'))}</h1>
+    <p class="lead">${esc(t('Виджет применяет изменения сам, примерно за секунду — можно смотреть на него и подбирать.'))}</p>
+    <div class="field">
+      <label>${esc(t('Язык'))}</label><div class="ctl">${seg('language',[['auto','Как в системе'],['ru','Русский'],['en','English']],p.language)}</div>
+      <label for="lOp">${esc(t('Непрозрачность'))}</label><div class="ctl"><input type="range" id="lOp" min="30" max="100" step="2" value="${op}"><span id="lOpV">${op}%</span></div>
+      <label for="lFs">${esc(t('Размер текста'))}</label><div class="ctl"><input type="range" id="lFs" min="11" max="18" step="1" value="${p.font_size}"><span id="lFsV">${p.font_size} px</span></div>
+      <label>${esc(t('Тема'))}</label><div class="ctl">${seg('theme',[['dark','Тёмная'],['light','Светлая']],p.theme)}</div>
+      <label>${esc(t('Плотность'))}</label><div class="ctl">${seg('compact',[['0','Обычная'],['1','Компактная']],p.compact?1:0)}</div>
+      <label>${esc(t('Сообщения одного чата'))}</label><div class="ctl">${seg('group_by_chat',[['1','Сворачивать в одну плашку'],['0','Показывать по отдельности']],p.group_by_chat?1:0)}</div>
+      <label>${esc(t('Аватары'))}</label><div class="ctl">${seg('avatars',[['1','Показывать'],['0','Не показывать']],p.avatars?1:0)}</div>
+    </div>
+    <h3>${esc(t('Колонки'))}</h3>
+    <p class="hint">${esc(t('Порядок колонок меняется перетаскиванием прямо в виджете. Скрытые колонки:'))}</p>
+    <div class="tags" id="hidCols">${p.hidden_cols.length?p.hidden_cols.map(k=>`<span class="tagx">${esc(nameOf(k))}<button type="button" data-show="${attr(k)}" aria-label="${attr(t('Показать'))}">↩</button></span>`).join(''):`<span class="muted">${esc(t('скрытых нет'))}</span>`}</div>
+    ${p.col_order.length?`<button class="btn" type="button" id="resetOrder">${esc(t('Сбросить порядок'))}</button>`:''}`;
+  let tm=0;
+  const save=(patch,reload)=>{clearTimeout(tm);tm=setTimeout(async()=>{try{PREFS=await api('/api/prefs',patch);toast(t('Сохранено'));
+    if(reload){setLang(PREFS._lang);translateDom();showLook();}}catch(e){toast(e.message,true);}},250);};
+  $('lOp').oninput=e=>{$('lOpV').textContent=e.target.value+'%';save({opacity:e.target.value/100});};
+  $('lFs').oninput=e=>{$('lFsV').textContent=e.target.value+' px';save({font_size:+e.target.value});};
+  page.querySelectorAll('.seg[data-key]').forEach(s=>s.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    s.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));
+    const k=s.dataset.key,v=b.dataset.v;
+    save({[k]:(k==='theme'||k==='language')?v:v==='1'},k==='language');
+  }));
+  page.querySelectorAll('[data-show]').forEach(b=>b.onclick=async()=>{
+    try{PREFS=await api('/api/prefs',{hidden_cols:p.hidden_cols.filter(k=>k!==b.dataset.show)});toast(t('Сохранено'));showLook();}catch(e){toast(e.message,true);}});
+  if($('resetOrder'))$('resetOrder').onclick=async()=>{await api('/api/prefs',{col_order:[]});toast(t('Порядок сброшен'));showLook();};
+}
+
+// ── Статистика ──
+const HEAT_STEPS=[18,34,50,68,86];   // один оттенок акцента: чем ярче, тем больше сообщений
+const heatColor=k=>k<0?'rgba(255,255,255,.05)':`color-mix(in srgb, #6aa2ff ${HEAT_STEPS[k]}%, #1c2029)`;
+const st={days:7,src:'',table:false};
+async function showStats(){
+  if(!$('statsBody')){
+    page.innerHTML=`<h1>${esc(t('Статистика'))}</h1>
+      <p class="lead">${esc(t('Кто пишет больше всех, какие чаты самые шумные и когда приходят сообщения. Шумный чат можно сразу скрыть из виджета.'))}</p>
+      <div class="filters"><span class="seg" id="stDays">
+        <button type="button" data-d="7">${esc(t('7 дней'))}</button><button type="button" data-d="30">${esc(t('30 дней'))}</button><button type="button" data-d="0">${esc(t('Всё время'))}</button></span>
+        <select class="inp" id="stSrc" aria-label="${attr(t('Источник'))}"><option value="">${esc(t('Все источники'))}</option></select></div>
+      <div id="statsBody"><div class="state">${esc(t('Считаю…'))}</div></div>`;
+    $('stDays').querySelectorAll('button').forEach(b=>b.onclick=()=>{st.days=+b.dataset.d;showStats();});
+    $('stSrc').onchange=e=>{st.src=e.target.value;showStats();};
+  }
+  $('stDays').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.d===st.days));
+  const body=$('statsBody'); body.style.opacity=.55;   // держим прошлую картинку, пока считаем
+  let d;try{d=await api(`/api/stats?days=${st.days}&src=${encodeURIComponent(st.src)}`);}
+  catch(e){body.style.opacity=1;body.innerHTML=`<div class="state">${esc(t('Сервер виджета не отвечает — статистику не посчитать.'))}</div>`;return;}
+  body.style.opacity=1;
+  $('stSrc').innerHTML=`<option value="">${esc(t('Все источники'))}</option>`+d.sources.map(s=>`<option value="${attr(s.key)}"${s.key===st.src?' selected':''}>${esc(s.ico+' '+s.name)}</option>`).join('');
+  if(!d.total){body.innerHTML=`<div class="empty-note">${esc(t('За этот период сообщений нет. Выбери период побольше.'))}</div>`;return;}
+  const maxS=Math.max(...d.top_senders.map(x=>x.n)), maxC=Math.max(...d.top_chats.map(x=>x.n));
+  const peak=d.busiest_hour==null?'—':`${String(d.busiest_hour).padStart(2,'0')}:00`;
+  const hmax=Math.max(...d.heat.flat());
+  const bin=n=>n<=0?-1:Math.min(4,Math.floor(n/hmax*5-1e-9));
+  const hh=h=>String(h).padStart(2,'0');
+  body.innerHTML=`<div class="tiles">
+      <div class="tile"><div class="v">${d.total}</div><div class="l">${esc(tpw(d.total,...W.msg))}</div></div>
+      <div class="tile"><div class="v">${d.chats}</div><div class="l">${esc(tpw(d.chats,...W.chat))}</div></div>
+      <div class="tile"><div class="v">${d.senders}</div><div class="l">${esc(tpw(d.senders,...W.sender))}</div></div>
+      <div class="tile"><div class="v">${peak}</div><div class="l">${esc(t('самый активный час, {n}',{n:tp(d.busiest_n,...W.msg)}))}</div></div></div>
+    <h3>${esc(t('Кто пишет больше всех'))}</h3>
+    <div class="bars">${d.top_senders.map(x=>`<div class="brow" data-tip="${attr((x.sender||'—')+': '+tp(x.n,...W.msg)+', '+x.src_name)}">
+      <span class="bl">${esc(x.ico)} ${esc(x.sender||'—')}</span><span class="bt"><span class="bf" style="width:${x.n/maxS*100}%"></span></span><span class="bv">${x.n}</span><span></span></div>`).join('')}</div>
+    <h3>${esc(t('Самые шумные чаты'))}</h3>
+    <div class="bars">${d.top_chats.map((x,i)=>`<div class="brow" data-tip="${attr((x.chat||'—')+': '+tp(x.n,...W.msg)+', '+x.src_name)}">
+      <span class="bl">${esc(x.ico)} ${esc(x.chat||'—')}</span><span class="bt"><span class="bf" style="width:${x.n/maxC*100}%"></span></span><span class="bv">${x.n}</span>
+      <span>${x.hidden?`<span class="vis off">${I.eyeOff}${esc(t('скрыт в виджете'))}</span>`:`<button class="btn ghost" type="button" data-hide="${i}">${esc(t('Скрыть в виджете'))}</button>`}</span></div>`).join('')}</div>
+    <h3>${esc(t('Когда приходят сообщения'))} <span class="sp"></span><button class="btn ghost" type="button" id="heatTbl">${esc(t(st.table?'Показать картой':'Показать таблицей'))}</button></h3>
+    ${st.table?`<div style="overflow-x:auto"><table class="tbl"><tr><th></th>${[...Array(24).keys()].map(h=>`<th>${h}</th>`).join('')}</tr>
+      ${d.heat.map((r,di)=>`<tr><th>${esc(t(DOW[di]))}</th>${r.map(n=>`<td>${n||''}</td>`).join('')}</tr>`).join('')}</table></div>`
+    :`<div class="heat" role="img" aria-label="${attr(t('Сообщения по дням недели и часам; числа — в виде таблицы'))}">
+      <span></span>${[...Array(24).keys()].map(h=>`<span class="hx">${h%3===0?h:''}</span>`).join('')}
+      ${d.heat.map((r,di)=>`<span class="hl">${esc(t(DOW[di]))}</span>`+r.map((n,h)=>`<span class="cell" style="background:${heatColor(bin(n))}" data-tip="${attr(t('{w}, {h}: {n}',{w:t(DOW[di]),h:hh(h)+':00–'+hh(h+1)+':00',n:tp(n,...W.msg)}))}"></span>`).join('')).join('')}
+    </div>
+    <div class="legend">${esc(t('меньше'))} ${HEAT_STEPS.map((_,k)=>`<i style="background:${heatColor(k)}"></i>`).join('')} ${esc(t('больше'))}
+      <span style="margin-left:10px">${esc(t('тусклые клетки — ни одного сообщения'))}</span></div>`}`;
+  $('heatTbl').onclick=()=>{st.table=!st.table;showStats();};
+  body.querySelectorAll('[data-hide]').forEach(b=>b.onclick=async()=>{
+    const x=d.top_chats[+b.dataset.hide];
+    try{await api('/api/rules',{src:x.src,chat:x.chat,sender:'',text:'',text_mode:'contains',action:'hide'});
+      toast(t('Чат «{c}» скрыт в виджете',{c:x.chat}));showStats();}catch(e){toast(e.message,true);}
+  });
+}
+// подсказка по наведению на столбики и клетки (значения видны и без неё — подписи и таблица)
+document.addEventListener('mouseover',e=>{const el=e.target.closest('[data-tip]'),tip=$('tip');
+  if(!el){tip.hidden=true;return;}tip.textContent=el.dataset.tip;tip.hidden=false;});
+document.addEventListener('mousemove',e=>{const tip=$('tip');if(tip.hidden)return;
+  tip.style.left=Math.min(e.clientX+14,innerWidth-tip.offsetWidth-8)+'px';tip.style.top=(e.clientY+16)+'px';});
+
+// ── Данные ──
+async function showData(){
+  page.innerHTML=`<div class="state">${esc(t('Загружаю…'))}</div>`;
+  let d;try{d=await api('/api/data');}catch(e){failed(showData);return;}
+  const mb=(d.bytes/1048576).toFixed(d.bytes<1048576?2:1);
+  const RET=[[0,'Хранить всё'],[30,'30 дней'],[90,'90 дней'],[180,'180 дней'],[365,'1 год']];
+  const kind={auto:'ежедневная',manual:'ручная','before-restore':'перед восстановлением',legacy:'старая'};
+  page.innerHTML=`<h1>${esc(t('Данные'))}</h1>
+    <p class="lead">${esc(t('В базе {n}, {mb} МБ вместе с журналом.',{n:tp(d.messages,...W.msg),mb}))} ${d.oldest?esc(t('Первое записано {a}, последнее — {b}.',{a:when(d.oldest),b:when(d.newest)})):''} ${d.pinned?esc(t('Закреплено: {n}.',{n:d.pinned})):''}</p>
+    <h3>${esc(t('Сколько хранить'))}</h3>
+    <p class="hint">${esc(t('Раз в час удаляются записи старше срока. Закреплённые не удаляются никогда.'))}</p>
+    <div class="erow"><select class="inp" id="dRet" aria-label="${attr(t('Сколько хранить'))}">${RET.map(([v,l])=>`<option value="${v}"${v===d.retention_days?' selected':''}>${esc(t(l))}</option>`).join('')}
+      ${RET.some(([v])=>v===d.retention_days)?'':`<option value="${d.retention_days}" selected>${esc(t('{n} дней',{n:d.retention_days}))}</option>`}</select></div>
+    <h3>${esc(t('Удалить старое сейчас'))}</h3>
+    <div class="erow"><span class="muted">${esc(t('старше'))}</span><select class="inp" id="dPurgeDays" aria-label="${attr(t('старше'))}"><option value="7">${esc(t('7 дней'))}</option><option value="30" selected>${esc(t('30 дней'))}</option><option value="90">${esc(t('90 дней'))}</option><option value="365">${esc(t('1 года'))}</option></select>
+      <button class="btn" type="button" id="dPurge">${esc(t('Удалить'))}</button></div>
+    <div id="dPurgeRes"></div>
+    <h3>${esc(t('Резервные копии'))}</h3>
+    <p class="hint">${esc(t('Раз в сутки делается копия базы. Хранятся последние {k} ежедневных; ручные остаются, пока не удалишь сам.',{k:d.backup.keep}))}</p>
+    <div class="erow"><label class="switch"><input type="checkbox" id="bOn"${d.backup.enabled?' checked':''}> ${esc(t('Делать ежедневные копии'))}</label>
+      <span class="muted">${esc(t('хранить'))}</span><input class="inp" type="number" id="bKeep" min="1" max="60" value="${d.backup.keep}" style="width:70px">
+      <button class="btn" type="button" id="bMake">${esc(t('Сделать копию сейчас'))}</button></div>
+    <div id="bList"></div>
+    <h3>${esc(t('Выгрузить'))}</h3>
+    <p class="hint">${esc(t('Файл сохранится в папку «Загрузки». CSV открывается в LibreOffice и Excel.'))}</p>
+    <div class="erow"><select class="inp" id="dExpDays" aria-label="${attr(t('Выгрузить'))}"><option value="0">${esc(t('Всё время'))}</option><option value="7">${esc(t('7 дней'))}</option><option value="30">${esc(t('30 дней'))}</option></select>
+      <button class="btn" type="button" data-fmt="csv">${esc(t('Выгрузить CSV'))}</button><button class="btn" type="button" data-fmt="json">${esc(t('Выгрузить JSON'))}</button></div>
+    <div id="dExpRes"></div>
+    <h3>${esc(t('Правила и настройки'))}</h3>
+    <p class="hint">${esc(t('Выгрузка в файл — чтобы перенести на другой компьютер или поделиться набором правил. Токены и ключи в файл не попадают.'))}</p>
+    <div class="erow"><button class="btn" type="button" id="cExp">${esc(t('Выгрузить правила и настройки'))}</button>
+      <label class="btn" style="cursor:pointer">${esc(t('Загрузить из файла…'))}<input type="file" id="cFile" accept=".json,application/json" hidden></label></div>
+    <div id="cRes"></div>
+    <h3>${esc(t('Где лежат данные'))}</h3>
+    <p class="muted"><code>${esc(d.paths.data)}</code></p>`;
+  $('dRet').onchange=async e=>{try{await api('/api/prefs',{retention_days:+e.target.value});toast(t('Срок хранения сохранён'));}catch(err){toast(err.message,true);}};
+  confirmBtn($('dPurge'),t('Точно удалить? Нажми ещё раз'),async()=>{
+    try{const r=await api('/api/purge',{days:+$('dPurgeDays').value});$('dPurgeRes').innerHTML=`<div class="result">${esc(t('Удалено: {n}',{n:r.deleted}))}</div>`;}
+    catch(e){$('dPurgeRes').innerHTML=`<div class="result err">${esc(e.message)}</div>`;}});
+  const saveB=async()=>{try{await api('/api/prefs',{backup:{enabled:$('bOn').checked,keep:+$('bKeep').value||7}});toast(t('Сохранено'));}catch(e){toast(e.message,true);}};
+  $('bOn').onchange=saveB;$('bKeep').onchange=saveB;
+  const drawB=list=>{
+    $('bList').innerHTML=list.length?list.map(b=>`<div class="rule"><span class="desc">${esc(b.at.slice(0,16))} <span class="tag">${esc(t(kind[b.kind]||b.kind))}</span> <span class="muted">${(b.bytes/1048576).toFixed(2)} MB</span></span>
+        <button class="btn" type="button" data-restore="${attr(b.name)}">${esc(t('Восстановить'))}</button></div>`).join('')
+      :`<div class="empty-note">${esc(t('Копий пока нет.'))}</div>`;
+    $('bList').querySelectorAll('[data-restore]').forEach(b=>confirmBtn(b,t('Восстановить эту копию? Нажми ещё раз'),async()=>{
+      try{const r=await api('/api/backups/restore',{name:b.dataset.restore});toast(t('Восстановлено. Текущая база сохранена как {n}.',{n:r.before}));showData();}
+      catch(e){toast(e.message,true);}}));
+  };
+  drawB(d.backups);
+  $('bMake').onclick=async()=>{try{const r=await api('/api/backups/make',{});toast(t('Копия сделана'));drawB(r.backups);}catch(e){toast(e.message,true);}};
+  page.querySelectorAll('[data-fmt]').forEach(b=>b.onclick=async()=>{
+    b.disabled=true;
+    try{const r=await api('/api/export',{format:b.dataset.fmt,days:+$('dExpDays').value});
+      $('dExpRes').innerHTML=`<div class="result">${esc(t('Сохранено {n}:',{n:tp(r.rows,...W.row)}))} <code>${esc(r.path)}</code></div>`;}
+    catch(e){$('dExpRes').innerHTML=`<div class="result err">${esc(e.message)}</div>`;}
+    b.disabled=false;
+  });
+  $('cExp').onclick=async()=>{try{const r=await api('/api/config/export',{});
+    $('cRes').innerHTML=`<div class="result">${esc(t('Сохранено {n}:',{n:tp(r.rules,...W.rule)}))} <code>${esc(r.path)}</code></div>`;}catch(e){toast(e.message,true);}};
+  $('cFile').onchange=async e=>{
+    const f=e.target.files[0];if(!f)return;
+    let data;try{data=JSON.parse(await f.text());}catch(err){$('cRes').innerHTML=`<div class="result err">${esc(t('Это не файл настроек'))}</div>`;return;}
+    $('cRes').innerHTML=`<div class="erow"><span>${esc(f.name)}: ${esc(tp((data.rules||[]).length,...W.rule))}</span>
+      <button class="btn" type="button" data-imp="0">${esc(t('Добавить к моим правилам'))}</button>
+      <button class="btn danger" type="button" data-imp="1">${esc(t('Заменить мои правила'))}</button></div>`;
+    $('cRes').querySelectorAll('[data-imp]').forEach(b=>b.onclick=async()=>{
+      try{const r=await api('/api/config/import',{data,replace:b.dataset.imp==='1'});
+        $('cRes').innerHTML=`<div class="result">${esc(t('Загружено правил: {n}.',{n:r.rules}))} ${r.errors.length?esc(t('Пропущено: {n}',{n:r.errors.length}))+' — '+esc(r.errors.join('; ')):''}</div>`;}
+      catch(err){$('cRes').innerHTML=`<div class="result err">${esc(err.message)}</div>`;}
+    });
+  };
+}
+
+// ── Пересылка в Telegram + недельный отчёт ──
+async function showForward(){
+  page.innerHTML=`<div class="state">${esc(t('Загружаю…'))}</div>`;
+  let f,p;try{f=await api('/api/forward');p=await api('/api/prefs');}catch(e){failed(showForward);return;}
+  fwdReady=f.configured;
+  const r=p.report;
+  page.innerHTML=`<h1>${esc(t('Пересылка в Telegram'))}</h1>
+    <p class="lead">${esc(t('Бот пересылает в твой чат или группу сообщения, попавшие под правило «Переслать в Telegram». Удобно, когда ты не за компьютером.'))}</p>
+    <div class="warnbox">${esc(t('Это единственное, что уходит с компьютера: текст таких сообщений идёт через серверы Telegram. Всё остальное остаётся локально.'))}</div>
+    <p class="${f.configured?'':'muted'}">${esc(f.configured?t('Настроено: бот с токеном {t}, чат {c}',{t:f.token_hint,c:f.chat_id})+(f.thread_id?t(', тема {n}',{n:f.thread_id}):'')+'.':t('Пока не настроено.'))}</p>
+    <div class="field">
+      <label for="fTok">${esc(t('Токен бота'))}</label><div class="ctl"><input class="inp" id="fTok" type="password" autocomplete="off" style="width:320px"
+        placeholder="${attr(f.configured?t('оставь пустым, чтобы не менять'):'123456:ABC…')}"></div>
+      <label for="fChat">${esc(t('ID чата или группы'))}</label><div class="ctl"><input class="inp" id="fChat" value="${attr(f.chat_id)}" placeholder="-100…" style="width:220px"></div>
+      <label for="fThr">${esc(t('Номер темы'))}</label><div class="ctl"><input class="inp" id="fThr" value="${attr(f.thread_id)}" placeholder="${attr(t('необязательно'))}" style="width:140px"></div>
+      <span></span><div class="ctl"><button class="btn primary" type="button" id="fSave">${esc(t('Сохранить'))}</button>
+        <button class="btn" type="button" id="fTest" ${f.configured?'':'disabled'}>${esc(t('Отправить проверку'))}</button></div></div>
+    <div id="fRes"></div>
+    <h3>${esc(t('Недельный отчёт'))}</h3>
+    <p class="hint">${esc(t('Раз в неделю бот присылает сводку цифр: сколько и откуда пришло, самые шумные чаты, кто больше писал, упоминания, что осталось непрочитанным.'))}</p>
+    <div class="erow"><label class="switch"><input type="checkbox" id="rOn"${r.enabled?' checked':''}${f.configured?'':' disabled'}> ${esc(t('Присылать отчёт'))}</label>
+      <select class="inp" id="rDay">${DOW_LONG.map((d,i)=>`<option value="${i}"${i===r.weekday?' selected':''}>${esc(t(d))}</option>`).join('')}</select>
+      <span class="muted">${esc(t('в {t}',{t:''}))}</span><input class="inp" type="time" id="rTime" value="${attr(r.time)}"></div>
+    <div class="erow"><button class="btn" type="button" id="rPrev">${esc(t('Показать, что придёт'))}</button>
+      <button class="btn" type="button" id="rSend"${f.configured?'':' disabled'}>${esc(t('Отправить сейчас'))}</button></div>
+    <div id="rRes"></div>
+    <p class="hint">${t('Токен выдаёт @BotFather.')} <code>api.telegram.org/bot&lt;token&gt;/getUpdates</code> → <code>chat.id</code>. <code>telegram-forward.json</code> (600).</p>`;
+  $('fSave').onclick=async()=>{
+    try{const x=await api('/api/forward',{token:$('fTok').value,chat_id:$('fChat').value,thread_id:$('fThr').value});
+      fwdReady=x.configured;toast(t('Сохранено'));showForward();}
+    catch(e){$('fRes').innerHTML=`<div class="result err">${esc(e.message)}</div>`;}
+  };
+  $('fTest').onclick=async()=>{
+    $('fTest').disabled=true;
+    try{const x=await api('/api/forward/test',{});
+      $('fRes').innerHTML=x.ok?`<div class="result">${esc(t('Проверка отправлена — загляни в Telegram.'))}</div>`:`<div class="result err">${esc(x.error)}</div>`;}
+    catch(e){$('fRes').innerHTML=`<div class="result err">${esc(e.message)}</div>`;}
+    $('fTest').disabled=false;
+  };
+  const saveR=async()=>{try{await api('/api/prefs',{report:{enabled:$('rOn').checked,weekday:+$('rDay').value,time:$('rTime').value||'09:00'}});toast(t('Сохранено'));}catch(e){toast(e.message,true);}};
+  $('rOn').onchange=saveR;$('rDay').onchange=saveR;$('rTime').onchange=saveR;
+  $('rPrev').onclick=async()=>{try{const x=await api('/api/report/preview');$('rRes').innerHTML=`<pre>${esc(x.text)}</pre>`;}catch(e){toast(e.message,true);}};
+  $('rSend').onclick=async()=>{try{const x=await api('/api/report/send',{});
+    $('rRes').innerHTML=x.ok?`<div class="result">${esc(t('Отчёт отправлен'))}</div><pre>${esc(x.text)}</pre>`:`<div class="result err">${esc(x.error)}</div>`;}catch(e){toast(e.message,true);}};
+}
+
+// ── Приём событий ──
+async function showIngest(){
+  page.innerHTML=`<div class="state">${esc(t('Загружаю…'))}</div>`;
+  let c;try{c=await api('/api/ingest/config');}catch(e){failed(showIngest);return;}
+  let shown=false;
+  const draw=()=>{
+    const tok=c.token?(shown?c.token:'•'.repeat(12)+c.token.slice(-4)):'';
+    const ex=`curl -X POST http://127.0.0.1:8765/api/ingest \\
+  -H "Authorization: Bearer ${shown&&c.token?c.token:'<key>'}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"source": "CI", "chat": "main", "text": "Build #413 passed"}'`;
+    page.innerHTML=`<h1>${esc(t('Приём событий'))}</h1>
+      <p class="lead">${esc(t('Скрипты, CI, Home Assistant или другой компьютер могут класть события в виджет напрямую — HTTP-запросом с ключом. Дальше на них работают обычные правила.'))}</p>
+      <div class="field"><label>${esc(t('Ключ'))}</label><div class="ctl">${c.token?`<code>${esc(tok)}</code><button class="btn ghost" type="button" id="iShow">${esc(t(shown?'Скрыть ключ':'Показать ключ'))}</button>`:`<span class="muted">${esc(t('Ключа ещё нет.'))}</span>`}
+        <button class="btn${c.token?'':' primary'}" type="button" id="iNew">${esc(t(c.token?'Заменить ключ':'Создать ключ'))}</button></div></div>
+      <h3>${esc(t('Пример'))}</h3><pre>${esc(ex)}</pre>
+      <p class="hint">${esc(t('Поля: source — колонка (обязательно), text — текст (обязательно), chat, sender, urgency (0–2).'))}</p>
+      <h3>${esc(t('Приём из сети'))}</h3>
+      <p class="hint">${esc(t('По умолчанию события принимаются только с этого компьютера. Чтобы присылать с других машин, укажи адрес и порт — поднимется отдельный сервер, который умеет только приём событий.'))}</p>
+      <div class="erow"><input class="inp" id="iBind" value="${attr(c.bind)}" placeholder="0.0.0.0:8766 — ${attr(t('выключен'))}" style="width:240px">
+        <button class="btn" type="button" id="iBindSave">${esc(t('Сохранить'))}</button>
+        <button class="btn ghost" type="button" id="iRestart">${esc(t('Перезапустить сбор'))}</button></div>
+      <p class="hint">${esc(t('Применится после перезапуска сбора.'))}</p>`;
+    if($('iShow'))$('iShow').onclick=()=>{shown=!shown;draw();};
+    const mk=async()=>{try{const r=await api('/api/ingest/token',{});c.token=r.token;shown=true;toast(t('Ключ создан'));draw();}catch(e){toast(e.message,true);}};
+    if(c.token)confirmBtn($('iNew'),t('Старый ключ перестанет работать. Нажми ещё раз'),mk);else $('iNew').onclick=mk;
+    $('iBindSave').onclick=async()=>{try{await api('/api/prefs',{ingest_bind:$('iBind').value.trim()});c.bind=$('iBind').value.trim();toast(t('Сохранено'));}catch(e){toast(e.message,true);}};
+    $('iRestart').onclick=async()=>{try{await api('/api/restart',{which:'collect'});toast(t('Сбор перезапускается…'));}catch(e){toast(e.message,true);}};
+  };
+  draw();
+}
+
+// ── Система: проверки и автозапуск ──
+async function showSystem(){
+  page.innerHTML=`<div class="state">${esc(t('Загружаю…'))}</div>`;
+  let d;try{d=await api('/api/diag');}catch(e){failed(showSystem);return;}
+  const mark={ok:'✓',warn:'!',bad:'✕',info:'·'};
+  const sw=(key,label)=>{const s=d.autostart[key];
+    return `<div class="erow"><label class="switch"><input type="checkbox" data-as="${key}"${s.enabled?' checked':''}${s.installed?'':' disabled'}> <b>${esc(t(label))}</b></label>
+      <span class="muted">${esc(s.installed?t('запускать при входе в систему')+' · '+t(s.active?'работает':'остановлен'):t('не установлен — запусти ./install.sh'))}</span>
+      ${s.installed?`<button class="btn ghost" type="button" data-rs="${key}">${esc(t('Перезапустить'))}</button>`:''}</div>`;};
+  page.innerHTML=`<h1>${esc(t('Система'))}</h1>
+    <p class="lead">${esc(t('Проверка системы и автозапуск.'))} <button class="link" type="button" id="reDiag">${esc(t('Проверить ещё раз'))}</button></p>
+    <div class="card">${d.checks.map(c=>`<div class="check"><span class="st ${c.state}">${mark[c.state]}</span><b>${esc(c.title)}</b>
+      <span class="hv">${esc(c.text)}${c.hint?`<br><span class="hn">${esc(c.hint)}</span>`:''}</span></div>`).join('')}</div>
+    <h3>${esc(t('Автозапуск'))}</h3>
+    ${sw('collect','Сбор уведомлений')}${sw('widget','Виджет на рабочем столе')}
+    <h3>${esc(t('Версия'))}</h3><p>${esc(d.version)} · Python ${esc(d.python)}</p>
+    <h3>${esc(t('Папки'))}</h3>
+    <p class="muted">${[['код',d.paths.code],['данные',d.paths.data],['настройки',d.paths.config],['кэш',d.paths.cache],['база',d.paths.db]].map(([k,v])=>`${esc(t(k))}: <code>${esc(v)}</code>`).join('<br>')}</p>`;
+  $('reDiag').onclick=showSystem;
+  page.querySelectorAll('[data-as]').forEach(cb=>cb.onchange=async()=>{
+    try{await api('/api/autostart',{which:cb.dataset.as,enabled:cb.checked});toast(t(cb.checked?'Автозапуск включён':'Автозапуск выключен'));}
+    catch(e){cb.checked=!cb.checked;toast(e.message,true);}});
+  page.querySelectorAll('[data-rs]').forEach(b=>b.onclick=async()=>{
+    try{await api('/api/restart',{which:b.dataset.rs});toast(t(b.dataset.rs==='collect'?'Сбор перезапускается…':'Перезапустить')+'');}catch(e){toast(e.message,true);}});
+}
+
+// ── Справка ──
+const HELP = {
+ru: [
+['Telegram: чтобы его сообщения попадали в виджет', `
+<p>Telegram Desktop на Linux по умолчанию рисует <b>свои</b> всплывающие окна, мимо системы уведомлений, — виджет их не видит. Причина: системные уведомления он включает сам, только если служба уведомлений умеет «ответ прямо из уведомления», а GNOME этого не умеет.</p>
+<ol><li>Telegram → <b>Настройки → Уведомления и звуки</b>.</li>
+<li>Внизу, в разделе <b>«Взаимодействие с системой»</b>, включи <b>«Использовать системные уведомления»</b>. Перезапуск не нужен.</li>
+<li>Там же оставь включёнными показ имени отправителя и текста сообщения — иначе в виджет придёт только «Новое сообщение».</li></ol>
+<p>Экспериментальную опцию «GNotification» не включай: с ней уведомления пойдут по каналу, который программа не слушает. Сообщения из открытого на экране чата уведомлений не дают — это нормально.</p>`],
+['Свои события: скрипты, сборки, бэкапы', `
+<p>Любая команда может положить событие в виджет — это обычное уведомление:</p>
+<pre>notify-send -a "Сборки" "CI: main" "Сборка #413 прошла"</pre>
+<p><code>-a</code> — колонка, заголовок — чат. Если текст начинается с «Кто: …», «Кто» станет отправителем. Колонку можно переименовать и дать ей значок в «Источники → … → Переименовать».</p>
+<p>Без notify-send (с других машин, из CI) — HTTP-запросом, см. раздел «Приём событий».</p>`],
+['Долгие команды в терминале', `
+<p>Когда команда в терминале шла дольше минуты, в виджет падает «готово» с кодом выхода — удобно для сборок и выгрузок.</p>
+<pre>./install.sh --terminal-hook</pre>
+<p>или вручную — добавь в <code>~/.bashrc</code> или <code>~/.zshrc</code> строку <code>source &lt;папка программы&gt;/hooks/long-command.sh</code>. Порог — переменная <code>EXPRESS_MSGS_LONG_CMD</code> (секунды, по умолчанию 60).</p>`],
+['Второй виджет с отдельными колонками', `
+<p>Например, отдельное окно только для рабочего мессенджера на втором мониторе:</p>
+<pre>python3 widget.py --only express --state ~/.config/express-msgs/widget-work.json</pre>
+<p>Ключи колонок видны в адресе источника в настройках (например <code>express</code>, <code>telegram</code>, <code>max</code>). У каждого окна свой файл места и размера.</p>`],
+['Умный поиск (RAG)', `
+<p>Нужна локальная <b>Ollama</b> — это программа, которая запускает модели прямо на компьютере:</p>
+<pre>curl -fsSL https://ollama.com/install.sh | sh</pre>
+<p>Потом «Поиск → Умный поиск → Установить и включить»: скачается модель векторов (bge-m3, около 1,2 ГБ), и сообщения начнут индексироваться в фоне. Для ответов на вопросы нужна любая чат-модель в Ollama (<code>ollama pull …</code>). Данные с компьютера не уходят.</p>`],
+['Wayland', `
+<p>Программа полностью работает в сеансе X11 («GNOME on Xorg»). В Wayland приложение не может само ставить своё окно на место, держать его под другими окнами и переключать на чужие окна. Поэтому там: окно двигается и тянется мышкой, но место после перезапуска не восстанавливается; замок только фиксирует размер; «перейти в приложение» запускает его по ярлыку.</p>`],
+['Клавиши и приёмы в виджете', `
+<ul><li><b>B</b> — размыть содержимое (для показа экрана), <b>F</b> — фокус: только важное, <b>Esc</b> — закрыть виджет.</li>
+<li>Двойной клик по тексту — скопировать сообщение, клик по имени — перейти в приложение.</li>
+<li>Колонки перетаскиваются за шапку; скрыть колонку — значок глаза в её шапке.</li>
+<li>После «прочитать» внизу 5 секунд есть кнопка «Вернуть».</li></ul>`],
+['Где данные и как удалить программу', `
+<p>База, копии и настройки лежат отдельно от кода: <code>~/.local/share/express-msgs</code> и <code>~/.config/express-msgs</code> (см. «Система → Папки»). Сервисы автозапуска включаются и выключаются в «Система».</p>
+<pre>./uninstall.sh           # убрать автозапуск, данные оставить
+./uninstall.sh --purge   # и удалить все данные</pre>`],
+['Что уходит с компьютера', `
+<p>Ничего, кроме того, что ты сам настроишь: пересылка в Telegram по правилу и недельный отчёт идут через серверы Telegram. Всё остальное — база, поиск, умный поиск через Ollama — работает локально.</p>`],
+],
+en: [
+['Telegram: getting its messages into the widget', `
+<p>On Linux, Telegram Desktop shows <b>its own</b> pop-ups by default, bypassing the system notification service, so the widget can't see them. It only switches to system notifications by itself if the service supports inline replies, and GNOME doesn't.</p>
+<ol><li>Telegram → <b>Settings → Notifications and Sounds</b>.</li>
+<li>At the bottom, under <b>System integration</b>, turn on <b>Use native notifications</b>. No restart needed.</li>
+<li>Keep sender name and message preview on, otherwise only “New message” arrives.</li></ol>
+<p>Don't enable the experimental “GNotification” option: notifications would go through a channel this app doesn't listen to.</p>`],
+['Your own events: scripts, builds, backups', `
+<p>Any command can post an event to the widget — it is a normal notification:</p>
+<pre>notify-send -a "Builds" "CI: main" "Build #413 passed"</pre>
+<p><code>-a</code> is the column, the title is the chat. Rename the column and give it an icon under “Sources → … → Rename”. Without notify-send (from other machines, CI) — use an HTTP request, see “Event intake”.</p>`],
+['Long terminal commands', `
+<p>When a terminal command runs longer than a minute, a “done” card with the exit code lands in the widget.</p>
+<pre>./install.sh --terminal-hook</pre>
+<p>or add <code>source &lt;app folder&gt;/hooks/long-command.sh</code> to <code>~/.bashrc</code> or <code>~/.zshrc</code>. Threshold: <code>EXPRESS_MSGS_LONG_CMD</code> (seconds, default 60).</p>`],
+['A second widget with its own columns', `
+<pre>python3 widget.py --only express --state ~/.config/express-msgs/widget-work.json</pre>
+<p>Column keys: <code>express</code>, <code>telegram</code>, <code>max</code>, … Each window keeps its own position file.</p>`],
+['Smart search (RAG)', `
+<p>You need a local <b>Ollama</b>:</p>
+<pre>curl -fsSL https://ollama.com/install.sh | sh</pre>
+<p>Then “Search → Smart search → Install and enable”: an embedding model is downloaded (bge-m3, about 1.2 GB) and messages are indexed in the background. Answers need any chat model in Ollama (<code>ollama pull …</code>). Nothing leaves the computer.</p>`],
+['Wayland', `
+<p>The app fully works in an X11 session. On Wayland an app cannot place its own window, keep it below others or switch to other apps' windows. There the widget can be moved and resized by mouse, but its position isn't restored; the lock only fixes the size; “go to app” launches it via its launcher.</p>`],
+['Keys and tricks in the widget', `
+<ul><li><b>B</b> — blur contents, <b>F</b> — focus mode, <b>Esc</b> — close the widget.</li>
+<li>Double-click text to copy it, click a name to go to the app.</li>
+<li>Drag columns by their header; hide one with the eye icon in its header.</li>
+<li>After marking read, an “Undo” button stays for 5 seconds.</li></ul>`],
+['Where data lives and how to uninstall', `
+<p>Database, backups and settings are kept apart from the code: <code>~/.local/share/express-msgs</code> and <code>~/.config/express-msgs</code>.</p>
+<pre>./uninstall.sh           # remove autostart, keep data
+./uninstall.sh --purge   # and delete all data</pre>`],
+['What leaves the computer', `
+<p>Nothing except what you set up: rule-based forwarding and the weekly report go through Telegram servers. Everything else — the database, search, smart search via Ollama — stays local.</p>`],
+]};
+function showHelp(){
+  page.innerHTML=`<h1>${esc(t('Справка'))}</h1>
+    <p class="lead">${esc(t('Инструкции по настройке. Если что-то не ловится — начни с раздела «Система»: он сам подскажет известные случаи.'))}</p>
+    ${(HELP[LANG]||HELP.ru).map(([title,body],i)=>`<details class="help"${i===0?' open':''}><summary>${esc(title)}</summary><div class="hb">${body}</div></details>`).join('')}`;
+}
+
+// ── старт: язык и версия, потом раздел из адреса ──
+(async()=>{
+  try{PREFS=await api('/api/prefs');setLang(PREFS._lang);}catch(e){}
+  translateDom();
+  try{const v=await api('/api/version');$('appVer').textContent=`${v.name} ${v.version}`;document.title=`${v.name} — ${t('Настройки').toLowerCase()}`;}catch(e){}
+  try{fwdReady=(await api('/api/forward')).configured;}catch(e){}
+  route();
+})();
+</script>
+</body>
+</html>

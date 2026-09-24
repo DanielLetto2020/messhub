@@ -1,0 +1,15 @@
+# Собирается install.sh — не править вручную (поставится заново при следующей установке).
+[Unit]
+Description=@APP_NAME@ — сбор desktop-уведомлений и страница виджета
+After=graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=@DIR@
+ExecStart=@PYTHON@ @DIR@/collect.py --quiet
+Environment=PYTHONUNBUFFERED=1
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

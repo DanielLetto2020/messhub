@@ -1,0 +1,35 @@
+# локальная БД сообщений — приватные данные, в репозиторий не кладём
+messages.db
+messages.db-wal
+messages.db-shm
+*.db
+*.db-wal
+*.db-shm
+
+# сырые захваты dbus-monitor (тоже приватные)
+*.log
+
+__pycache__/
+*.pyc
+
+# запомненное положение/размер десктоп-виджета (своё для каждой машины)
+widget-state.json
+
+# настройки пересылки в Telegram — там токен бота
+telegram-forward.json
+
+# личный стоп-лист проверки публикации (tools/check_public.py) и локальные переменные
+.public-deny
+.env
+.env.*
+
+# данные программы теперь в ~/.local/share и ~/.config, но на всякий случай — старые места
+widget-state.json
+widget-*.json
+ingest.json
+mail.json
+messages-backup*.db
+# номер версии, который вписывает сборка пакетов (tools/build.py); в git не храним — он из числа коммитов
+/VERSION
+# собранные пакеты (tools/build.py)
+dist/
