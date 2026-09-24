@@ -82,13 +82,21 @@ def _write(accounts):
     paths.write_private(CFG, json.dumps({"accounts": accounts}, ensure_ascii=False, indent=1))
 
 
-def public_accounts():
+def public_accounts(conn=None):
+    """Ящики без паролей + когда проверялся и чем кончилось (из памяти процесса,
+    а время последней проверки после перезапуска — из mail_state)."""
+    seen = {}
+    if conn is not None:
+        try:
+            seen = dict(conn.execute("SELECT account, checked_at FROM mail_state").fetchall())
+        except sqlite3.Error:
+            pass
     out = []
     for a in load_accounts():
         p = {k: a.get(k) for k in ("id", "label", "host", "port", "security", "user", "folder",
                                    "interval", "enabled", "insecure")}
         p["has_password"] = bool(a.get("password"))
-        p.update(state.get(a["id"], {}))
+        p.update({"checked": seen.get(a["id"]) or "", "error": "", "new": 0}, **state.get(a["id"], {}))
         out.append(p)
     return out
 
@@ -130,19 +138,34 @@ def clean_account(d, old=None):
     return a
 
 
-def save_account(d):
+def save_account(conn, d):
     accounts = load_accounts()
     old = next((a for a in accounts if a["id"] == d.get("id")), None)
     a = clean_account(d, old)
     accounts = [a if x["id"] == a["id"] else x for x in accounts] if old else accounts + [a]
     _write(accounts)
+    # другой ящик или папка — номера писем уже чужие; снова включили — пропущенное
+    # за время выключения не тащим. В обоих случаях начинаем с «последнего письма сейчас».
+    if old and (any(old.get(k) != a[k] for k in ("host", "port", "user", "folder"))
+                or (a["enabled"] and not old.get("enabled", True))):
+        forget(conn, a["id"])
     return a
+
+
+def forget(conn, acc_id=None):
+    """Забыть, до какого письма дочитан ящик (или все ящики): следующая проверка
+    запомнит последнее письмо и не принесёт старых."""
+    if acc_id:
+        conn.execute("DELETE FROM mail_state WHERE account = ?", (acc_id,))
+        state.pop(acc_id, None)
+    else:
+        conn.execute("DELETE FROM mail_state")
+        state.clear()
 
 
 def delete_account(conn, acc_id):
     _write([a for a in load_accounts() if a["id"] != acc_id])
-    conn.execute("DELETE FROM mail_state WHERE account = ?", (acc_id,))
-    state.pop(acc_id, None)
+    forget(conn, acc_id)
 
 
 def channel(conn):
@@ -160,9 +183,16 @@ def _connect(a, timeout=20):
         m = imaplib.IMAP4_SSL(a["host"], a["port"], ssl_context=ctx, timeout=timeout)
     else:
         m = imaplib.IMAP4(a["host"], a["port"], timeout=timeout)
+    try:
         if a["security"] == "starttls":
             m.starttls(ssl_context=ctx)
-    m.login(a["user"], a["password"])
+        m.login(a["user"], a["password"])
+    except Exception:
+        try:                  # иначе при неверном пароле сокет висел бы до сборки мусора
+            m.shutdown()
+        except OSError:
+            pass
+        raise
     return m
 
 

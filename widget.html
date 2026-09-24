@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>eXpress-msgs</title>
+<title>messhub</title>
 <style>
   :root {
     --glass: 18,21,28; --op: .72; --fs: 13px;
@@ -68,8 +68,9 @@
   .col-head .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .col-head .c { margin-left: auto; color: var(--muted); font-size: 11px;
     background: var(--card-hover); border-radius: 999px; padding: 0 7px; }
-  .col-head .hideb { opacity: 0; }
-  .col-head:hover .hideb { opacity: .6; }
+  .col-head .closeb { opacity: 0; }
+  .col-head:hover .closeb { opacity: .6; }
+  .col-head .closeb:hover { opacity: 1; color: var(--bad); }
   .col-body { overflow-y: auto; padding: 7px; min-height: 0; }
   /* всё в колонке прочитано — колонка остаётся и ждёт новых */
   .col-body:empty::before { content: attr(data-empty); display: block; text-align: center;
@@ -94,8 +95,8 @@
   /* имя чата/отправителя обрезается, а время и кнопки всегда в той же строке */
   .who { flex: 1 1 auto; min-width: 48px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .who .badge { margin-right: 4px; vertical-align: 1px; }
-  .msg .who { cursor: pointer; }
-  .msg .who:hover .chat, .msg .who:hover .sender { text-decoration: underline; text-underline-offset: 2px; }
+  .msg .who:not(.nogo) { cursor: pointer; }
+  .msg .who:not(.nogo):hover .chat, .msg .who:not(.nogo):hover .sender { text-decoration: underline; text-underline-offset: 2px; }
   .av { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; vertical-align: -4px; margin-right: 5px; }
   .chat { font-weight: 600; }
   .sender { color: var(--accent); }
@@ -148,7 +149,8 @@
     font: inherit; padding: 6px 8px; border-radius: 7px; cursor: pointer; text-align: left; }
   .menu button:hover { background: var(--card-hover); }
   .menu button.cur { color: var(--accent); }
-  .menu button span:last-child { margin-left: auto; color: var(--muted); }
+  .menu button span + span { margin-left: auto; color: var(--muted); }
+  .menu button.go { color: var(--accent); font-weight: 600; }
   .menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
 
   #empty { color: var(--muted); text-align: center; padding: 30px 0; width: 100%; font-size: 12px; }
@@ -199,7 +201,7 @@
 <div class="wrap">
   <div class="bar">
     <span class="dot on" id="dot"></span>
-    <span class="title" id="appName">eXpress-msgs</span><span class="ver" id="ver"></span>
+    <span class="title" id="appName">messhub</span><span class="ver" id="ver"></span>
     <span class="count" id="count">0</span>
     <span class="ib prof" id="profBtn" hidden data-t-title="Профиль">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span id="profName"></span>
@@ -248,7 +250,7 @@ const ICON = {
   why: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
   clock: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
   chev: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>',
-  hide: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>',
+  close: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
 };
 
 // ── состояние ──
@@ -259,6 +261,7 @@ const cols = new Map();     // ключ источника → {meta, col, body,
 const open = new Set();     // раскрытые группы: ключ источника + \u0001 + чат
 const fresh = new Set();    // только что пришедшие — мигнуть при отрисовке
 const gids = new Map(), gkeys = new Map();   // группа ↔ короткий номер для data-атрибута
+const skipped = new Set();  // пришли, но их колонка скрыта или вне ?only= — сверка их не возвращает
 let focus = false; try { focus = localStorage.getItem('focus') === '1'; } catch (e) {}
 
 function esc(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
@@ -290,7 +293,7 @@ async function post(path, body){
 function buildMentionRe(list){
   const n=[...new Set((list||[]).map(s=>s.trim()).filter(Boolean))].sort((a,b)=>b.length-a.length);
   if(!n.length) return null;
-  // с начала слова: «Максим» найдёт и «Максиму» (так же считает сервер — rules.mention_re)
+  // с начала слова: «Иван» найдёт и «Ивану» (так же считает сервер — rules.mention_re)
   return new RegExp('(?<![\\p{L}\\p{N}_])(?:'+n.map(escRe).join('|')+')','giu');
 }
 function marks(s){
@@ -327,8 +330,8 @@ function ensureCol(meta){
   const col=document.createElement('div');col.className='col';col.dataset.key=meta.key;
   col.innerHTML=`<div class="col-head" draggable="true" title="${attr(t('Перетащи, чтобы поменять порядок колонок'))}">
     <span class="ico">${esc(meta.ico)}</span><span class="nm">${esc(meta.name)}</span>
-    <span class="c">0</span><span class="ab hideb" data-act="hide-col" title="${attr(t('Скрыть колонку'))}">${ICON.hide}</span>
-    <span class="ab read" data-act="read-col" title="${attr(t('Прочитать всё в колонке, кроме закреплённого'))}">${ICON.check2}</span></div>
+    <span class="c">0</span><span class="ab read" data-act="read-col" title="${attr(t('Прочитать всё в колонке, кроме закреплённого'))}">${ICON.check2}</span>
+    <span class="ab closeb" data-act="close-col" title="${attr(t('Закрыть колонку'))}">${ICON.close}</span></div>
     <div class="col-body" data-empty="${attr(t(focus?'важного нет':'нет новых'))}"></div>`;
   const key=colSort(meta);
   const pos=[...cols.values()].map(c=>c.col).find(c=>before(key,colSort(cols.get(c.dataset.key).meta)));
@@ -352,9 +355,11 @@ function cardHtml(m, withChat){
     ? `<span class="chat">${esc(m.chat)}</span>`+(m.sender&&m.sender!==m.chat?` · <span class="sender">${esc(m.sender)}</span>`:'')
     : `<span class="sender">${esc(m.sender||m.chat)}</span>`;
   const cls='msg'+(fresh.has(m.id)?' flash':'')+(m.highlight?' hl hl-'+m.highlight:'')+(m.pinned?' pinned':'');
-  const go=m.site?t('Открыть {site}',{site:m.site}):t('Перейти в {app}',{app:m.src_name});
-  return `<div class="${cls}" data-id="${m.id}"><div class="top"><span class="who" data-act="open" title="${attr(go)}">${avatar(m)}${b}${who}</span><span class="time">${esc(fmtTime(m.event_iso))}</span>
-    <span class="acts"><span class="ab" data-act="open" title="${attr(go)}">${ICON.go}</span><span class="ab" data-act="why" title="${attr(t('Почему так?'))}">${ICON.why}</span>
+  // письма из ящиков (mail.py) приходят не из окна приложения — переходить некуда
+  const go=m.app==='mail-imap'?'':m.site?t('Открыть {site}',{site:m.site}):t('Перейти в {app}',{app:m.src_name});
+  const goAttr=go?` data-act="open" title="${attr(go)}"`:'';
+  return `<div class="${cls}" data-id="${m.id}"><div class="top"><span class="who${go?'':' nogo'}"${goAttr}>${avatar(m)}${b}${who}</span><span class="time">${esc(fmtTime(m.event_iso))}</span>
+    <span class="acts">${go?`<span class="ab" data-act="open" title="${attr(go)}">${ICON.go}</span>`:''}<span class="ab" data-act="why" title="${attr(t('Почему так?'))}">${ICON.why}</span>
     <span class="ab" data-act="snooze" title="${attr(t('Отложить'))}">${ICON.clock}</span>
     <span class="ab${m.pinned?' on':''}" data-act="pin" title="${attr(m.pinned?t('Открепить'):t('Закрепить — не прочитается само через 24 ч'))}">${ICON.pin}</span></span>
     <span class="ab read" data-act="read" title="${attr(t('Прочитано — скрыть'))}">${ICON.check}</span></div>
@@ -473,13 +478,56 @@ board.addEventListener('click',e=>{
     readIds(colItems(key).filter(m=>!m.pinned&&(m.chat||'')===chat).map(m=>m.id));}
   else if(act==='read-col'){const ids=readable(col.dataset.key);
     if(ids.length)readIds(ids,t('Прочитано: {n}',{n:ids.length}));}
-  else if(act==='hide-col') hideCol(col.dataset.key);
+  else if(act==='close-col') openClose(a,col.dataset.key);
 });
+function dropCol(key){
+  const c=cols.get(key); if(!c) return null;
+  for(const [id,m] of msgs) if(m.src===key) msgs.delete(id);
+  c.col.remove(); cols.delete(key); updateCount();
+  return c;
+}
+// закрыть колонку: её сообщения становятся прочитанными, колонка вернётся с новым сообщением.
+// Закреплённое и отложенное молча не читаем — с ними закрыть нельзя (сервер ответит 409).
+async function openClose(btn,key){
+  const c=cols.get(key); if(!c) return;
+  let st; try{st=await(await fetch('/api/column?src='+encodeURIComponent(key))).json();}
+  catch(e){toast(t('Не удалось обновить — сервер не отвечает'),{err:true});return;}
+  const name=c.meta.name;
+  if(st.pinned||st.snoozed){showMenu(btn,blockedHtml(st),'close',key);return;}
+  showMenu(btn,`<div class="h">${esc(t('Закрыть колонку «{name}»?',{name}))}</div>
+    <div class="p">${st.unread?esc(t('Будет прочитано {n}.',{n:tp(st.unread,...W.msg)}))+' ':''}${esc(t('Колонка вернётся, когда придёт новое сообщение.'))}</div>
+    <button type="button" class="go" data-close="1"><span>${esc(t('Закрыть колонку'))}</span></button>
+    <button type="button" data-hide="1"><span>${esc(t('Скрыть насовсем'))}</span><span>${esc(t('вернуть — в настройках'))}</span></button>
+    <button type="button" data-cancel="1"><span>${esc(t('Отмена'))}</span></button>`,'close',key);
+}
+function blockedHtml(st){
+  const what=[st.pinned?tp(st.pinned,...W.pinnedMsg):'',st.snoozed?tp(st.snoozed,...W.snoozedMsg):''].filter(Boolean).join(t(' и '));
+  const hint=st.pinned&&st.snoozed?'Открепи закреплённое и дождись отложенного — тогда колонку можно закрыть.'
+    :st.pinned?'Открепи закреплённое — тогда колонку можно закрыть.':'Дождись, пока отложенное вернётся, — тогда колонку можно закрыть.';
+  return `<div class="h">${esc(t('Колонку нельзя закрыть'))}</div>
+    <div class="p">${esc(t('В колонке {what}.',{what}))} ${esc(t(hint))}</div>
+    <button type="button" data-cancel="1"><span>${esc(t('Понятно'))}</span></button>`;
+}
+async function closeCol(key){
+  const c=cols.get(key); if(!c) return;
+  let r, res;
+  try{res=await fetch('/api/close-column',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({src:key})});
+    r=await res.json();}
+  catch(e){toast(t('Не удалось закрыть — сервер не отвечает'),{err:true});return;}
+  if(res.status===409){const b=c.col.querySelector('[data-act="close-col"]');showMenu(b,blockedHtml(r),'close',key);return;}
+  if(!res.ok){toast(r.error||t('Сервер ответил {c}',{c:res.status}),{err:true});return;}
+  prefsVer=r._ver; prefs.closed_cols=[...new Set([...(prefs.closed_cols||[]),key])];
+  dropCol(key);
+  toast(r.read?t('Колонка «{name}» закрыта, прочитано: {n}',{name:c.meta.name,n:r.read}):t('Колонка «{name}» закрыта',{name:c.meta.name}),
+    {action:{label:t('Вернуть'),run:async()=>{
+      try{await post('/api/reopen-column',{src:key,ids:r.ids});await initial();toast(t('Возвращено'));}
+      catch(e){toast(t('Не удалось вернуть — сервер не отвечает'),{err:true});}}}});
+}
 async function hideCol(key){
   const c=cols.get(key); if(!c) return;
   const p=await savePrefs({hidden_cols:[...new Set([...(prefs.hidden_cols||[]),key])]});
   if(!p) return;
-  c.col.remove(); cols.delete(key); updateCount();
+  dropCol(key);
   toast(t('Колонка «{name}» скрыта. Вернуть — в настройках, «Внешний вид»',{name:c.meta.name}));
 }
 // двойной клик по тексту — скопировать сообщение целиком
@@ -504,7 +552,8 @@ function openSource(m){
   if(m.site) window.open('https://'+m.site,'_blank');
   else toast(t('Переходить в приложение умеет только окно виджета'));
 }
-window.hostToast=(s,err)=>toast(s,{err});
+// сообщения от окна (widget.py): ключ перевода + подстановки
+window.hostToast=(k,p,err)=>toast(t(k,p),{err});
 async function togglePin(id){
   const m=msgs.get(id); if(!m) return;
   try{await post('/api/pin',{ids:[id],pinned:!m.pinned});}
@@ -513,7 +562,7 @@ async function togglePin(id){
   toast(m.pinned?t('Закреплено: не прочитается само'):t('Откреплено'));
 }
 
-// ── всплывающее меню (отложить, профиль, почему) ──
+// ── всплывающее меню (отложить, профиль, почему, закрыть колонку) ──
 let menuFor=null, menuKind=null;
 function showMenu(anchor, html, kind, forId){
   menuFor=forId; menuKind=kind; menu.innerHTML=html; menu.hidden=false;
@@ -522,7 +571,7 @@ function showMenu(anchor, html, kind, forId){
   menu.style.top=(r.bottom+mh+6<innerHeight?r.bottom+4:Math.max(6,r.top-mh-4))+'px';
 }
 function hideMenu(){menu.hidden=true;menuFor=null;menuKind=null;}
-document.addEventListener('mousedown',e=>{if(!menu.hidden&&!menu.contains(e.target)&&!e.target.closest('[data-act="snooze"],[data-act="why"],#profBtn'))hideMenu();});
+document.addEventListener('mousedown',e=>{if(!menu.hidden&&!menu.contains(e.target)&&!e.target.closest('[data-act="snooze"],[data-act="why"],[data-act="close-col"],#profBtn'))hideMenu();});
 
 function snoozeOptions(){
   const now=new Date(), hm=d=>d.toTimeString().slice(0,5);
@@ -593,6 +642,9 @@ menu.addEventListener('click',async e=>{
     try{await post('/api/prefs',{profile:b.dataset.prof});await initial();
       toast(t('Профиль: {name}',{name:profLabel()}));}
     catch(e){toast(t('Не удалось сменить профиль'),{err:true});}
+  } else if(menuKind==='close'){
+    const key=menuFor; hideMenu();
+    if(b.dataset.close) closeCol(key); else if(b.dataset.hide) hideCol(key);
   }
 });
 
@@ -651,6 +703,7 @@ function applyPriv(){
 eye.addEventListener('click',()=>{priv=!priv;applyPriv();});
 $('gear').addEventListener('click',()=>{if(host)host.postMessage('settings');else window.open('/settings','_blank');});
 document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){if(!menu.hidden)hideMenu();return;}    // окно виджета по Esc не закрывается
   if(e.ctrlKey||e.metaKey||e.altKey)return;
   if(e.key==='b'||e.key==='B'||e.key==='и'||e.key==='И'){priv=!priv;applyPriv();}
   if(e.key==='f'||e.key==='F'||e.key==='а'||e.key==='А')setFocus(!focus);
@@ -670,8 +723,8 @@ function applyPrefs(p){
 
 // ── загрузка, опрос новых и сверка ──
 function addMsg(m){
-  if(!ensureCol(metaOf(m))) return false;     // колонка скрыта или вне отбора ?only=
-  msgs.set(m.id,m); if(m.id>lastId)lastId=m.id; return true;
+  if(!ensureCol(metaOf(m))){skipped.add(m.id);return false;}   // колонка скрыта или вне отбора ?only=
+  msgs.set(m.id,m); return true;
 }
 async function initial(){
   loading=true;
@@ -684,11 +737,12 @@ async function initial(){
     const rows=await r.json();
     rulesVer=r.headers.get('X-Rules-Ver'); prefsVer=r.headers.get('X-Prefs-Ver');
     // новое состояние целиком — и только потом перерисовка (без мигания пустой доской)
-    applyPrefs(p); msgs.clear(); fresh.clear(); lastId=0;
+    applyPrefs(p); msgs.clear(); fresh.clear(); skipped.clear(); lastId=0;
     for(const c of cols.values()) c.col.remove(); cols.clear();
     // колонки — по всем источникам из БД, даже если в них всё прочитано;
-    // источник, скрытый правилами целиком, колонки не получает
-    for(const s of srcs) if(!s.hidden) ensureCol(s);
+    // источник, скрытый правилами целиком, колонки не получает; закрытая колонка
+    // появится сама, если в ней есть что показать
+    for(const s of srcs) if(!s.hidden&&!s.closed) ensureCol(s);
     rows.forEach(m=>{addMsg(m);if(m.id>lastId)lastId=m.id;});
     renderAll(); setOnline(true);
   }catch(e){setOnline(false);updateCount();}
@@ -715,7 +769,7 @@ async function sync(){
   try{
     const r=await(await fetch('/api/visible')).json(), want=new Set(r.ids);
     const gone=[...msgs.keys()].filter(id=>id<=r.max_id&&!want.has(id));
-    const back=r.ids.filter(id=>!msgs.has(id)&&id<=lastId);
+    const back=r.ids.filter(id=>!msgs.has(id)&&!skipped.has(id)&&id<=lastId);
     if(gone.length) dropIds(gone);
     if(back.length) await fetchBack(back);
   }catch(e){}

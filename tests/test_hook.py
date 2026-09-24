@@ -22,9 +22,12 @@ class HookTest(unittest.TestCase):
         os.chmod(fake, os.stat(fake).st_mode | stat.S_IEXEC)
         if os.path.exists(log):
             os.remove(log)
-        env = dict(os.environ, PATH=bindir + ":" + os.environ["PATH"], LANG=lang, EXPRESS_MSGS_LONG_CMD="0")
+        env = dict(os.environ, PATH=bindir + ":" + os.environ["PATH"], LANG=lang, MESSHUB_LONG_CMD="0")
         subprocess.run(["bash", "-c", f'source "{HOOK}"; {script}'], env=env, check=False)
-        return open(log).read() if os.path.exists(log) else ""
+        if not os.path.exists(log):
+            return ""
+        with open(log) as f:
+            return f.read()
 
     def test_failed_command(self):
         out = self.run_hook('__em_preexec "make build"; false; __em_precmd')

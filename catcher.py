@@ -39,7 +39,6 @@ import re
 import signal
 import sqlite3
 import subprocess
-import sys
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -264,7 +263,10 @@ def split_sender(summary, body):
     # префикс "Имя: " — только в первой строке и разумной длины
     first_line = body.split("\n", 1)[0]
     m = re.match(r"^(.{1,60}?): (.*)$", first_line)
-    if m and not m.group(1).endswith((" ", ",")):
+    # «Прошлая версия: ссылка», «Итог? да: …» — это текст, а не имя: в именах нет ?!;«» и ссылок,
+    # и они короткие (до 5 слов)
+    if m and not m.group(1).endswith((" ", ",")) and not re.search(r"[?!;«»]|https?://", m.group(1)) \
+            and len(m.group(1).split()) <= 5:
         sender = m.group(1).strip()
         rest = m.group(2)
         tail = body.split("\n", 1)

@@ -32,7 +32,7 @@ say() { printf '%s\n' "$*"; }
 PY=/usr/bin/python3
 [ -x "$PY" ] || PY="$(command -v python3 || true)"
 [ -n "$PY" ] || { say "Нужен python3 (3.9+)."; exit 1; }
-read -r APP_ID APP_NAME VER < <("$PY" -c "import sys; sys.path.insert(0, '$DIR'); import version as v; print(v.APP_ID, v.APP_NAME, v.__version__)")
+read -r APP_ID APP_NAME VER LEGACY < <("$PY" -c "import sys; sys.path.insert(0, '$DIR'); import version as v; print(v.APP_ID, v.APP_NAME, v.__version__, ','.join(v.LEGACY_IDS))")
 say "== $APP_NAME $VER — установка из $DIR"
 
 # ── зависимости ──
@@ -72,8 +72,28 @@ if [ ${#missing_req[@]} -gt 0 ]; then
 fi
 [ ${#missing_opt[@]} -gt 0 ] && { say "Поставить всё разом:"; pkg_hint; }
 
-# ── юниты systemd --user ──
 UNIT_DIR="$HOME/.config/systemd/user"
+
+# ── переезд с прежнего имени (eXpress-msgs → messhub) ──
+# Старые сервисы останавливаем ДО переноса папок: база не должна быть открыта при переезде.
+for old in ${LEGACY//,/ }; do
+  for u in "$old-widget.service" "$old.service"; do
+    [ -f "$UNIT_DIR/$u" ] || continue
+    run systemctl --user disable --now "$u" || true
+    run rm -f "$UNIT_DIR/$u"
+    say "Прежний сервис убран: $u"
+  done
+  for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+    [ -f "$rc" ] && grep -qF "# >>> $old terminal hook >>>" "$rc" || continue
+    run sed -i "/# >>> $old terminal hook >>>/,/# <<< $old terminal hook <<</d" "$rc"
+    say "Прежний хук терминала убран из $rc — ставлю новый"
+    HOOK=1
+  done
+done
+if [ "$DRY" = 1 ]; then say "  [dry-run] перенести папки данных прежних имён ($LEGACY) в ~/.local/share/$APP_ID, ~/.config/$APP_ID"
+else "$PY" -c "import sys; sys.path.insert(0, '$DIR'); import paths; paths.migrate_old_app_dirs()"; fi
+
+# ── юниты systemd --user ──
 run mkdir -p "$UNIT_DIR"
 render() {   # шаблон → юнит с путями этой установки
   sed -e "s|@DIR@|$DIR|g" -e "s|@PYTHON@|$PY|g" -e "s|@APP_ID@|$APP_ID|g" -e "s|@APP_NAME@|$APP_NAME|g" "$1"

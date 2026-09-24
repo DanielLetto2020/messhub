@@ -30,7 +30,6 @@ import urllib.request
 from array import array
 from operator import mul
 
-import catcher
 import rules
 from i18n import L
 

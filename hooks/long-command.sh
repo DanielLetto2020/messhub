@@ -4,8 +4,8 @@
 # Подключение — одна строка в ~/.bashrc или ~/.zshrc (или ./install.sh --terminal-hook):
 #     source /путь/к/программе/hooks/long-command.sh
 #
-# EXPRESS_MSGS_LONG_CMD       — порог в секундах (по умолчанию 60)
-# EXPRESS_MSGS_LONG_CMD_SKIP  — программы, о которых не сообщать (редакторы, пейджеры, ssh…)
+# MESSHUB_LONG_CMD       — порог в секундах (по умолчанию 60)
+# MESSHUB_LONG_CMD_SKIP  — программы, о которых не сообщать (редакторы, пейджеры, ssh…)
 #
 # Работает через обычный notify-send, так что дальше действуют правила виджета
 # (колонка «Терминал» / «Terminal»). В bash, если подключён bash-preexec, хук
@@ -13,8 +13,8 @@
 
 [ -n "${__EM_HOOK_LOADED:-}" ] && return 0
 __EM_HOOK_LOADED=1
-: "${EXPRESS_MSGS_LONG_CMD:=60}"
-: "${EXPRESS_MSGS_LONG_CMD_SKIP:=vim nvim vi nano emacs less more man top htop btop ssh mc tmux screen watch tail journalctl}"
+: "${MESSHUB_LONG_CMD:=60}"
+: "${MESSHUB_LONG_CMD_SKIP:=vim nvim vi nano emacs less more man top htop btop ssh mc tmux screen watch tail journalctl}"
 
 __em_start=""
 __em_cmd=""
@@ -28,9 +28,9 @@ __em_precmd() {
   local code=$? now dur first took status app
   [ -z "$__em_start" ] && return $code
   now=$(date +%s); dur=$(( now - __em_start )); __em_start=""
-  [ "$dur" -lt "$EXPRESS_MSGS_LONG_CMD" ] && return $code
+  [ "$dur" -lt "$MESSHUB_LONG_CMD" ] && return $code
   first=${__em_cmd%% *}; first=${first##*/}
-  case " $EXPRESS_MSGS_LONG_CMD_SKIP " in *" $first "*) return $code ;; esac
+  case " $MESSHUB_LONG_CMD_SKIP " in *" $first "*) return $code ;; esac
   command -v notify-send >/dev/null 2>&1 || return $code
   case "${LANG:-}" in
     ru*|uk*|be*)

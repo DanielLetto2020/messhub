@@ -30,7 +30,21 @@ const EN = {
   'Открепить: снова можно двигать и менять размер': 'Unlock: move and resize again',
   'Прочитать всё в колонке, кроме закреплённого': 'Mark column read, except pinned',
   'Прочитать весь чат': 'Mark the whole chat read',
-  'Скрыть колонку': 'Hide column', 'Перетащи, чтобы поменять порядок колонок': 'Drag to reorder columns',
+  'Перетащи, чтобы поменять порядок колонок': 'Drag to reorder columns',
+  'Закрыть колонку': 'Close column', 'Закрыть колонку «{name}»?': 'Close the “{name}” column?',
+  'Будет прочитано {n}.': '{n} will be marked read.',
+  'Колонка вернётся, когда придёт новое сообщение.': 'The column comes back with the next new message.',
+  'Скрыть насовсем': 'Hide for good', 'вернуть — в настройках': 'undo in Settings',
+  'Колонку нельзя закрыть': 'This column can’t be closed', 'В колонке {what}.': 'The column has {what}.', ' и ': ' and ',
+  'Открепи закреплённое и дождись отложенного — тогда колонку можно закрыть.':
+    'Unpin the pinned ones and wait for the snoozed ones to return, then close the column.',
+  'Открепи закреплённое — тогда колонку можно закрыть.': 'Unpin them first, then close the column.',
+  'Дождись, пока отложенное вернётся, — тогда колонку можно закрыть.': 'Wait for the snoozed ones to return, then close the column.',
+  'Понятно': 'OK', 'Не удалось закрыть — сервер не отвечает': 'Could not close — the server is not responding',
+  'Колонка «{name}» закрыта, прочитано: {n}': 'Column “{name}” closed, {n} marked read',
+  'Колонка «{name}» закрыта': 'Column “{name}” closed',
+  'Не удалось открыть {site}: {e}': 'Could not open {site}: {e}', 'Не удалось запустить: {e}': 'Could not launch: {e}',
+  'Не нашёл окно «{app}» — приложение закрыто?': 'No “{app}” window found — is the app closed?',
   'Колонка «{name}» скрыта. Вернуть — в настройках, «Внешний вид»': 'Column “{name}” hidden. Bring it back in Settings → Appearance',
   'Закреплено': 'Pinned', 'Упоминание': 'Mention', 'Есть упоминание': 'Has a mention', 'бот': 'bot',
   'Отложить': 'Snooze', 'Открепить': 'Unpin', 'Закрепить — не прочитается само через 24 ч': 'Pin — won’t be auto-read after 24 h',
@@ -142,10 +156,10 @@ const EN = {
   // ── упоминания ──
   'Твоё имя, ник и слова, которые касаются тебя. Сообщение с таким словом получает значок @, слово подсвечивается, а в режиме фокуса такое сообщение видно всегда.':
     'Your name, nickname and words that concern you. A message with such a word gets an @ badge, the word is highlighted, and it stays visible in focus mode.',
-  'Например: Максим': 'For example: Alex', 'Добавить': 'Add', 'Добавлено': 'Added', 'Убрано': 'Removed', 'Убрать {x}': 'Remove {x}',
+  'Например: Иван': 'For example: Ivan', 'Добавить': 'Add', 'Добавлено': 'Added', 'Убрано': 'Removed', 'Убрать {x}': 'Remove {x}',
   'Пока ничего не добавлено.': 'Nothing added yet.', 'Новое слово': 'New word',
-  'Совпадает начало слова без учёта регистра: «Максим» найдёт и «Максиму», и «максима», но не «Бромаксим». Короткое «Макс» найдёт и «максимально» — лучше вписывать полные формы.':
-    'The start of a word matches, case-insensitive: “Alex” also finds “Alexa” but not “Malex”. Short words match more than you might want — prefer full forms.',
+  'Совпадает начало слова без учёта регистра: «Иван» найдёт и «Ивану», и «ивана», но не «Диван». Короткое «Ив» найдёт и «ива» — лучше вписывать полные формы.':
+    'Matches the start of a word, ignoring case: “Ivan” finds “Ivan’s” and “ivan”, but not “Divan”. A short “Iv” also finds “ivy” — better to add full forms.',
 
   // ── поиск ──
   'Поиск по всем сохранённым сообщениям, в том числе прочитанным и скрытым. Найденное можно вернуть в виджет.':
@@ -175,7 +189,7 @@ const EN = {
   'Язык': 'Language', 'Как в системе': 'System', 'Русский': 'Русский', 'Непрозрачность': 'Opacity', 'Размер текста': 'Text size',
   'Тема': 'Theme', 'Тёмная': 'Dark', 'Светлая': 'Light', 'Плотность': 'Density', 'Обычная': 'Normal', 'Компактная': 'Compact',
   'Сообщения одного чата': 'Messages from one chat', 'Сворачивать в одну плашку': 'Collapse into one card', 'Показывать по отдельности': 'Show separately',
-  'Аватары': 'Avatars', 'Показывать': 'Show', 'Не показывать': 'Hide',
+  'Аватары': 'Avatars',
   'Колонки': 'Columns', 'Порядок колонок меняется перетаскиванием прямо в виджете. Скрытые колонки:': 'Reorder columns by dragging them in the widget. Hidden columns:',
   'скрытых нет': 'none hidden', 'Показать': 'Show', 'Сбросить порядок': 'Reset the order', 'Порядок сброшен': 'Order reset',
 
@@ -255,6 +269,39 @@ const EN = {
   'Автозапуск выключен': 'Autostart disabled', 'Перезапустить': 'Restart', 'Версия': 'Version', 'Папки': 'Folders',
   'код': 'code', 'данные': 'data', 'настройки': 'settings', 'кэш': 'cache', 'база': 'database',
 
+  'Виджет перезапускается…': 'Widget is restarting…',
+
+  // ── почта ──
+  'Почта': 'Mail', 'Ящики': 'Mailboxes', 'Откуда брать почту': 'Where mail comes from',
+  'Письма попадают в колонку «Почта» одним из двух способов. Работает только один, чтобы письма не приходили дважды.':
+    'Mail reaches the Mail column in one of two ways. Only one works at a time, so no message arrives twice.',
+  'Уведомления почтовых программ': 'Mail app notifications',
+  'Thunderbird, Evolution, Geary и почта в браузере: что они показывают уведомлением, то и попадает в колонку. Настраивать ничего не нужно.':
+    'Thunderbird, Evolution, Geary and webmail: whatever they show as a notification lands in the column. Nothing to set up.',
+  'Напрямую из ящиков (IMAP)': 'Straight from mailboxes (IMAP)',
+  'Программа сама проверяет подключённые ящики, даже когда почтовая программа закрыта. Уведомления почтовых программ тогда не записываются.':
+    'The app checks the connected mailboxes itself, even when no mail app is open. Mail app notifications are not recorded then.',
+  'Ящики проверяются, только когда выбран способ «Напрямую из ящиков».': 'Mailboxes are only checked when “Straight from mailboxes” is selected.',
+  'Ящиков пока нет.': 'No mailboxes yet.', 'Подключи хотя бы один, иначе почта в виджет не попадёт.': 'Connect at least one, or no mail reaches the widget.',
+  'Подключить ящик': 'Connect a mailbox', 'Подключить': 'Connect', 'Изменить': 'Edit', 'Проверить сейчас': 'Check now',
+  'Письма забираются по IMAP; SMTP нужен только для отправки, и здесь он не используется. На сервере письмо не становится прочитанным. Когда ящик подключён, старые письма не подтягиваются — приходят только новые. Пароли лежат в mail.json с правами 600, на страницу они не отдаются.':
+    'Mail is fetched over IMAP; SMTP is only for sending and isn’t used here. Messages stay unread on the server. Old mail isn’t pulled in when a mailbox is connected — only new mail arrives. Passwords are kept in mail.json (mode 600) and never sent to the page.',
+  'Почта берётся из ящиков': 'Mail now comes from mailboxes', 'Почта берётся из уведомлений': 'Mail now comes from notifications',
+  'проверено {w}': 'checked {w}', 'новых: {n}': '{n} new', 'ещё не проверялся': 'not checked yet',
+  'Новых писем: {n}': 'New messages: {n}', 'Новых писем нет': 'No new messages',
+  'Удалить? Нажми ещё раз': 'Delete? Click again', 'Ящик удалён; письма, что уже пришли, остались': 'Mailbox removed; messages already received are kept',
+  'Почтовая служба': 'Mail provider', 'Яндекс Почта': 'Yandex Mail', 'Почта Mail.ru': 'Mail.ru', 'Другой сервер': 'Other server',
+  'Адрес или логин': 'Address or login', 'Пароль': 'Password',
+  'Яндекс, Gmail, Mail.ru и iCloud пускают сторонние программы только по паролю приложения. Его создают в настройках безопасности почты; обычный пароль не подойдёт.':
+    'Yandex, Gmail, Mail.ru and iCloud only let third-party apps in with an app password, created in the account’s security settings; the regular password won’t work.',
+  'например, Работа': 'e.g. Work', 'так ящик подписан в колонке «Почта»': 'how the mailbox is labelled in the Mail column',
+  'Сервер IMAP': 'IMAP server', 'Порт': 'Port', 'Защита': 'Security', 'без шифрования': 'no encryption',
+  'Не проверять сертификат — для локальных мостов вроде Proton Bridge': 'Skip certificate check — for local bridges such as Proton Bridge',
+  'Папка': 'Folder', 'Проверять каждые': 'Check every', 'мин': 'min', 'Проверять этот ящик': 'Check this mailbox',
+  'Проверить подключение': 'Test connection', 'Подключаюсь…': 'Connecting…', 'Подключение есть: в папке {n}.': 'Connected: {n} in the folder.',
+  'Ящик сохранён': 'Mailbox saved',
+  'Ящик сохранён. Чтобы письма шли из него, выбери «Напрямую из ящиков».': 'Mailbox saved. To get mail from it, choose “Straight from mailboxes”.',
+
   // ── справка ──
   'Инструкции по настройке. Если что-то не ловится — начни с раздела «Система»: он сам подскажет известные случаи.':
     'Setup instructions. If something is not captured, start with “System”: it points out known issues.',
@@ -283,7 +330,10 @@ const W = {
   senderFrom: [['отправителя', 'отправителей', 'отправителей'], ['sender', 'senders']],
   rule: [['правило', 'правила', 'правил'], ['rule', 'rules']],
   row: [['строка', 'строки', 'строк'], ['row', 'rows']],
+  letter: [['письмо', 'письма', 'писем'], ['message', 'messages']],
   newMsg: [['новое сообщение', 'новых сообщения', 'новых сообщений'], ['new message', 'new messages']],
+  pinnedMsg: [['закреплённое сообщение', 'закреплённых сообщения', 'закреплённых сообщений'], ['pinned message', 'pinned messages']],
+  snoozedMsg: [['отложенное сообщение', 'отложенных сообщения', 'отложенных сообщений'], ['snoozed message', 'snoozed messages']],
 };
 function translateDom(root) {
   (root || document).querySelectorAll('[data-t]').forEach(el => { el.textContent = t(el.dataset.t); });

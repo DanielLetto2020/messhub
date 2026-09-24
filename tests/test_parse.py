@@ -37,6 +37,12 @@ class ParseTest(unittest.TestCase):
         r = catcher.parse_message_block(*block("eXpress", "Анна", "Привет"))
         self.assertEqual((r["chat"], r["sender"], r["message"]), ("Анна", "Анна", "Привет"))
 
+    def test_colon_in_private_text_is_not_sender(self):
+        for body in ("Скинешь макет? Прошлая версия: https://example.com/v3", "Готово? Да: выкладываю",
+                     "Смотри https://example.com/a: там всё", "Длинная фраза из шести слов тут: и текст"):
+            self.assertEqual(catcher.split_sender("Марина", body)[1], "Марина", body)
+        self.assertEqual(catcher.split_sender("Команда", "Иван Петров (ИТ): готово")[1], "Иван Петров (ИТ)")
+
     def test_browser_site(self):
         chat, sender, msg, site = catcher.parse_fields("yandex-browser", "Чат двора", "web.max.ru\n\nСосед: Воды не будет")
         self.assertEqual((site, sender, msg), ("web.max.ru", "Сосед", "Воды не будет"))

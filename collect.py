@@ -36,11 +36,14 @@ def make_skip(db_path):
     сайтов не записываем — иначе каждое письмо было бы дважды. Режим перечитываем раз в 20 с."""
     def skip(rec):
         if time.time() - _mail_mode["t"] > 20:
-            conn = sqlite3.connect(db_path, timeout=5)
             try:
-                _mail_mode["imap"] = mail.channel(conn) == "imap"
-            finally:
-                conn.close()
+                conn = sqlite3.connect(db_path, timeout=5)
+                try:
+                    _mail_mode["imap"] = mail.channel(conn) == "imap"
+                finally:
+                    conn.close()
+            except sqlite3.Error:
+                pass                     # база занята — пока живём с прежним режимом
             _mail_mode["t"] = time.time()
         return _mail_mode["imap"] and rules.source_of(rec["app"], rec.get("site", ""))["key"] == "mail"
     return skip

@@ -12,7 +12,7 @@
 
 Так `git pull` в папке с кодом никогда не лежит рядом с перепиской и токенами.
 Уважаются XDG_DATA_HOME / XDG_CONFIG_HOME / XDG_CACHE_HOME; для тестов всё можно
-увести в одну папку переменной <APP_ID>_HOME (EXPRESS_MSGS_HOME).
+увести в одну папку переменной <APP_ID>_HOME (MESSHUB_HOME).
 
 migrate_legacy() переносит файлы версий до 1.1.0, лежавшие рядом с кодом.
 """
@@ -25,7 +25,7 @@ from datetime import datetime
 from version import APP_ID, LEGACY_IDS
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ENV_PREFIX = APP_ID.upper().replace("-", "_")          # EXPRESS_MSGS
+ENV_PREFIX = APP_ID.upper().replace("-", "_")          # MESSHUB
 
 
 def _xdg(var, default, app_id=APP_ID):

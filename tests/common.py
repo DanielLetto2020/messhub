@@ -6,11 +6,12 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-TMP = tempfile.mkdtemp(prefix="express-msgs-test-")
-os.environ["EXPRESS_MSGS_HOME"] = TMP
-os.environ["EXPRESS_MSGS_EXPORT_DIR"] = TMP
-os.environ["EXPRESS_MSGS_FORWARD_CFG"] = os.path.join(TMP, "fwd.json")
-os.environ["EXPRESS_MSGS_TG_API"] = "http://127.0.0.1:9"      # никуда не достучится
+TMP = tempfile.mkdtemp(prefix="messhub-test-")
+os.environ["MESSHUB_HOME"] = TMP
+os.environ["MESSHUB_EXPORT_DIR"] = TMP
+os.environ["MESSHUB_FORWARD_CFG"] = os.path.join(TMP, "fwd.json")
+os.environ["MESSHUB_TG_API"] = "http://127.0.0.1:9"      # никуда не достучится
+os.environ["MESSHUB_MAIL_CFG"] = os.path.join(TMP, "mail.json")
 
 import catcher  # noqa: E402
 

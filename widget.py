@@ -28,7 +28,7 @@ GTK + WebKit2:
     у веб-уведомлений (MAX и т.п.) открывает сайт в браузере;
   - кнопка-«галочка» на сообщении отмечает его прочитанным в БД и скрывает.
 
-Требует запущенный сбор+сервер (сервис express-msgs или `python3 collect.py`).
+Требует запущенный сбор+сервер (сервис messhub или `python3 collect.py`).
 Полностью работает на X11. На Wayland — упрощённый режим: окно двигается и
 растягивается мышкой (это делает композитор), но приложение не может само
 поставить окно на место, держать его под окнами и переключать на чужие окна —
@@ -41,7 +41,7 @@ GTK + WebKit2:
     python3 widget.py --reset                   # забыть сохранённое место и размер
     python3 widget.py --width 1200 --height 400 # размер для первого запуска / --reset
     python3 widget.py --below
-    python3 widget.py --only express --state ~/.config/express-msgs/widget-work.json
+    python3 widget.py --only express --state ~/.config/messhub/widget-work.json
 """
 
 import argparse

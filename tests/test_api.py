@@ -18,7 +18,7 @@ class ApiTest(unittest.TestCase):
     def setUpClass(cls):
         cls.db = common.new_db("api.db")
         conn = sqlite3.connect(cls.db)
-        common.put(conn, "eXpress", "Команда", "Иван Петров: Максим, созвон в 15:00")
+        common.put(conn, "eXpress", "Команда", "Иван Петров: Анна, созвон в 15:00")
         common.put(conn, "eXpress", "Флуд", "Олег: кто на обед?")
         common.put(conn, "yandex-browser", "Двор", "web.max.ru\n\nСосед: воды не будет")
         conn.close()
@@ -29,6 +29,7 @@ class ApiTest(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.httpd.shutdown()
+        cls.httpd.server_close()
 
     def req(self, path, body=None, ctype="application/json", headers=None):
         data = json.dumps(body).encode() if body is not None else None
@@ -61,7 +62,7 @@ class ApiTest(unittest.TestCase):
         self.assertTrue(h["X-Rules-Ver"])
         srcs = {m["src"] for m in rows}
         self.assertIn("max", srcs)                                           # сайт → своя колонка
-        _, res, _ = self.req("/api/search?q=%D0%9C%D0%90%D0%9A%D0%A1%D0%98%D0%9C")   # «МАКСИМ»
+        _, res, _ = self.req("/api/search?q=%D0%90%D0%9D%D0%9D%D0%90")   # «АННА»
         self.assertEqual(res["total"], 1)
         _, res, _ = self.req("/api/search?q=%D0%BE%D0%B1%D0%B5%D0%B4")               # «обед» — скрытое тоже ищется
         self.assertFalse(res["rows"][0]["visible"])

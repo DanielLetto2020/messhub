@@ -342,10 +342,24 @@ def close_column(db_path, src):
 def reopen_column(db_path, src, ids):
     def upd(conn):
         mark_read(conn, ids, unread=True)
-        closed = rules.get_prefs(conn)["closed_cols"]
-        rules.set_prefs(conn, {"closed_cols": [k for k in closed if k != src]})
+        _reopen(conn, {src})
     write(db_path, upd)
     return {"ok": True}
+
+
+def _reopen(conn, keys):
+    """Открыть закрытые колонки keys (если среди них есть закрытые)."""
+    closed = rules.get_prefs(conn)["closed_cols"]
+    if keys & set(closed):
+        rules.set_prefs(conn, {"closed_cols": [k for k in closed if k not in keys]})
+
+
+def _reopen_for(conn, ids):
+    """Сообщения вернули в виджет — их закрытые колонки снова открыты."""
+    prefs = rules.get_prefs(conn)
+    if prefs["closed_cols"] and ids:
+        rows = conn.execute(f"SELECT app, site FROM messages WHERE id IN ({_in(ids)})", ids).fetchall()
+        _reopen(conn, {rules.source_of(a, s or "", prefs["source_names"])["key"] for a, s in rows})
 
 
 def _in(ids):
@@ -357,6 +371,7 @@ def mark_read(conn, ids, unread=False):
     if not ids:
         return 0
     if unread:
+        _reopen_for(conn, ids)
         return conn.execute(f"UPDATE messages SET is_read = 0, read_at = NULL WHERE id IN ({_in(ids)})",
                             ids).rowcount
     return conn.execute(f"UPDATE messages SET is_read = 1, read_at = ?, pinned = 0 "
@@ -368,6 +383,7 @@ def restore(conn, ids):
     сдвигаем время записи на «почти сейчас», иначе авто-прочтение сразу заберёт его снова."""
     if not ids:
         return 0
+    _reopen_for(conn, ids)
     return conn.execute(f"""UPDATE messages SET is_read = 0, read_at = NULL, snooze_until = NULL,
                                received_at = MAX(received_at, ?) WHERE id IN ({_in(ids)})""",
                         [catcher.msk_time(AUTO_READ_HOURS - 1), *ids]).rowcount
@@ -631,8 +647,8 @@ def make_handler(db_path):
                     st.pop("ids")
                     self._json(st)
                 elif p == "/api/mail":
-                    self._json({"channel": read(db_path, mail.channel), "accounts": mail.public_accounts(),
-                                "presets": mail.PRESETS})
+                    self._json({"channel": read(db_path, mail.channel),
+                                "accounts": read(db_path, mail.public_accounts), "presets": mail.PRESETS})
                 elif p == "/api/search":
                     self._json(search(db_path, q=arg("q"), src=arg("src"), chat=arg("chat"),
                                       date_from=arg("from"), date_to=arg("to"), status=arg("status") or "all",
@@ -720,20 +736,26 @@ def make_handler(db_path):
                 ch = payload.get("channel")
                 if ch not in ("notify", "imap"):
                     raise BadRequest(L("Канал почты — notify или imap", "Mail channel must be notify or imap"))
-                write(db_path, rules.set_prefs, {"mail_channel": ch})
+
+                def upd(conn):
+                    # письма, пришедшие, пока почта шла уведомлениями, уже в базе — не дублируем
+                    if ch == "imap" and mail.channel(conn) != "imap":
+                        mail.forget(conn)
+                    rules.set_prefs(conn, {"mail_channel": ch})
+                write(db_path, upd)
                 return {"channel": ch}
             if p == "/api/mail/account":
-                mail.save_account(payload)
-                return {"accounts": mail.public_accounts()}
+                write(db_path, mail.save_account, payload)
+                return {"accounts": read(db_path, mail.public_accounts)}
             if p == "/api/mail/delete":
                 write(db_path, mail.delete_account, str(payload.get("id") or ""))
-                return {"accounts": mail.public_accounts()}
+                return {"accounts": read(db_path, mail.public_accounts)}
             if p == "/api/mail/test":
                 ok, err, n = mail.test(payload)
                 return {"ok": ok, "error": err, "count": n}
             if p == "/api/mail/check":
                 return {"new": mail.check_now(db_path, str(payload.get("id") or "")),
-                        "accounts": mail.public_accounts()}
+                        "accounts": read(db_path, mail.public_accounts)}
             if p == "/api/rules":
                 write(db_path, rules.save_rule, rules.clean_rule(payload))
                 return {"ok": True}

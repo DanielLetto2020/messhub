@@ -115,6 +115,7 @@ def checks(db_path):
                               WHERE received_at >= ? GROUP BY app ORDER BY 2 DESC""",
                            (catcher.msk_time(24 * 7),)).fetchall()
         prefs = rules.get_prefs(conn)
+        accs = mail.public_accounts(conn) if prefs.get("mail_channel") == "imap" else []
         tg_recent = conn.execute("SELECT COUNT(*) FROM messages WHERE lower(app) LIKE '%telegram%' "
                                  "AND received_at >= ?", (catcher.msk_time(24 * 3),)).fetchone()[0]
     finally:
@@ -158,24 +159,23 @@ def checks(db_path):
         os.path.basename(snd) if snd else L("нечем играть", "no player found"),
         "" if snd else L("Поставь пакет gnome-session-canberra или pipewire", "Install pipewire or libcanberra"))
 
-    du = shutil.disk_usage(paths.DATA_DIR)
+    du = shutil.disk_usage(os.path.dirname(os.path.abspath(db_path)))      # диск, где лежит база
     size = sum(os.path.getsize(p) for p in (db_path, db_path + "-wal") if os.path.exists(p))
     add("disk", "ok" if du.free > 500 * 1024 ** 2 else "warn", L("Место", "Storage"),
         L(f"база {size / 1048576:.1f} МБ, свободно {du.free / 1024 ** 3:.1f} ГБ",
           f"database {size / 1048576:.1f} MB, free {du.free / 1024 ** 3:.1f} GB"))
 
     if prefs.get("mail_channel") == "imap":
-        accs = mail.public_accounts()
         if not accs:
             add("mail", "warn", L("Почта", "Mail"), L("выбраны ящики, но ни одного не подключено",
                                                       "mailboxes chosen, but none connected"),
                 L("Подключи ящик в «Почта» или верни канал «уведомления»",
                   "Add a mailbox under “Mail” or switch back to notifications"))
         for a in accs:
-            st = "bad" if a.get("error") else ("ok" if a.get("enabled") else "info")
+            state = "bad" if a.get("error") else ("ok" if a.get("enabled") else "info")
             txt = a.get("error") or (L("проверено ", "checked ") + a["checked"] if a.get("checked")
                                      else L("ещё не проверялся", "not checked yet"))
-            add("mail-" + a["id"], st, L("Почта: ", "Mail: ") + a["label"], txt)
+            add("mail-" + a["id"], state, L("Почта: ", "Mail: ") + a["label"], txt)
 
     bks = backup.list_backups()
     add("backup", "ok" if bks else ("warn" if prefs["backup"]["enabled"] else "info"),

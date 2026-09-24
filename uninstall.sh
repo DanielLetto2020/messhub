@@ -18,10 +18,11 @@ for a in "$@"; do
   esac
 done
 PY=/usr/bin/python3; [ -x "$PY" ] || PY="$(command -v python3)"
-read -r APP_ID DATA CONFIG CACHE < <("$PY" -c "import sys; sys.path.insert(0, '$DIR'); import version, paths; print(version.APP_ID, paths.DATA_DIR, paths.CONFIG_DIR, paths.CACHE_DIR)")
+read -r APP_ID LEGACY DATA CONFIG CACHE < <("$PY" -c "import sys; sys.path.insert(0, '$DIR'); import version, paths; print(version.APP_ID, ','.join(version.LEGACY_IDS), paths.DATA_DIR, paths.CONFIG_DIR, paths.CACHE_DIR)")
+IDS="$APP_ID ${LEGACY//,/ }"     # и прежние имена — вдруг остались их сервисы
 
 UNIT_DIR="$HOME/.config/systemd/user"
-for u in "$APP_ID-widget.service" "$APP_ID.service"; do
+for u in $(for id in $IDS; do echo "$id-widget.service $id.service"; done); do
   if [ -f "$UNIT_DIR/$u" ]; then
     systemctl --user disable --now "$u" 2>/dev/null || true
     rm -f "$UNIT_DIR/$u"
@@ -30,10 +31,12 @@ for u in "$APP_ID-widget.service" "$APP_ID.service"; do
 done
 systemctl --user daemon-reload 2>/dev/null || true
 
-for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
-  [ -f "$rc" ] && grep -qF "# >>> $APP_ID terminal hook >>>" "$rc" || continue
-  sed -i "/# >>> $APP_ID terminal hook >>>/,/# <<< $APP_ID terminal hook <<</d" "$rc"
-  echo "Убран хук терминала из $rc"
+for id in $IDS; do
+  for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+    [ -f "$rc" ] && grep -qF "# >>> $id terminal hook >>>" "$rc" || continue
+    sed -i "/# >>> $id terminal hook >>>/,/# <<< $id terminal hook <<</d" "$rc"
+    echo "Убран хук терминала из $rc"
+  done
 done
 
 if [ "$PURGE" = 1 ]; then

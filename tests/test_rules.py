@@ -67,10 +67,10 @@ class ProfileTest(unittest.TestCase):
 
 class MentionTest(unittest.TestCase):
     def test_word_start(self):
-        rx = rules.mention_re(["Максим", " "])
-        self.assertTrue(rx.search("Максиму привет"))
-        self.assertTrue(rx.search("эй, максим!"))
-        self.assertFalse(rx.search("Бромаксим"))
+        rx = rules.mention_re(["Иван", " "])
+        self.assertTrue(rx.search("Ивану привет"))
+        self.assertTrue(rx.search("эй, иван!"))
+        self.assertFalse(rx.search("Диван"))
         self.assertIsNone(rules.mention_re([]))
 
 
@@ -101,7 +101,7 @@ class DbTest(unittest.TestCase):
         self.assertEqual([r["action"] for r in rules.all_rules(self.conn)], ["show"])
 
     def test_export_import_roundtrip(self):
-        rules.set_prefs(self.conn, {"profiles": [{"id": "home", "name": "Дом", "schedule": []}], "mentions": ["Макс"]})
+        rules.set_prefs(self.conn, {"profiles": [{"id": "home", "name": "Дом", "schedule": []}], "mentions": ["Аня"]})
         rules.save_rule(self.conn, rules.clean_rule({"src": "express", "chat": "Флуд", "action": "hide", "profile": "home"}))
         data = rules.export_config(self.conn)
         self.assertNotIn("backup_last", data["prefs"])
@@ -109,7 +109,7 @@ class DbTest(unittest.TestCase):
         rules.set_prefs(self.conn, {"profiles": [], "mentions": []})
         res = rules.import_config(self.conn, data, replace=True)
         self.assertEqual((res["rules"], res["errors"]), (1, []))
-        self.assertEqual(rules.get_prefs(self.conn)["mentions"], ["Макс"])
+        self.assertEqual(rules.get_prefs(self.conn)["mentions"], ["Аня"])
         self.assertEqual(rules.all_rules(self.conn)[0]["profile"], "home")
 
     def test_deleting_profile_drops_its_rules(self):

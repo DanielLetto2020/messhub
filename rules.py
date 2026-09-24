@@ -346,10 +346,6 @@ _RE_ID = re.compile(r"^[a-z0-9_-]{1,40}$")
 _RE_BIND = re.compile(r"^(\d{1,3}(\.\d{1,3}){3}|localhost|\[[0-9a-f:]+\]):\d{2,5}$")
 
 
-def _bool(v):
-    return bool(v)
-
-
 def _clean_pref(k, v):
     bad = ValueError(L(f"Неверное значение настройки «{k}»", f"Invalid value for setting “{k}”"))
     if k == "language":
@@ -453,8 +449,8 @@ def set_prefs(conn, patch):
 
 
 def mention_re(names):
-    """Упоминания: совпадение с НАЧАЛА слова, без учёта регистра — «Максим»
-    найдёт и «Максиму», но не «Бромаксим»."""
+    """Упоминания: совпадение с НАЧАЛА слова, без учёта регистра — «Иван»
+    найдёт и «Ивану», но не «Диван»."""
     names = sorted({n.strip() for n in names if n.strip()}, key=len, reverse=True)
     if not names:
         return None

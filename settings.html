@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>eXpress-msgs — настройки</title>
+<title>messhub — настройки</title>
 <style>
   /* тот же язык, что у виджета: тёмное стекло, синий акцент, системный шрифт
      (всё локально — никаких внешних шрифтов) */
@@ -86,6 +86,17 @@
   .mode span { color: var(--muted); font-size: 12px; }
   .mode[aria-checked="true"] { border-color: var(--accent); background: var(--accent-bg); }
   .mode[aria-checked="true"] .dot { border-color: var(--accent); box-shadow: inset 0 0 0 3px var(--bg); background: var(--accent); }
+
+  /* почтовые ящики */
+  .acc { display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 12px;
+    padding: 11px 14px; border-top: 1px solid var(--line); background: var(--surface); }
+  .acc:first-child { border-top: 0; }
+  .acc .st { font-weight: 700; text-align: center; }
+  .acc .nm { font-weight: 600; }
+  .acc.off .nm { color: var(--muted); }
+  .acc .sub { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  .acc .sub.err { color: var(--off); }
+  .acc .btns { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
 
   /* правило — читается как фраза почтового фильтра */
   .rules { display: flex; flex-direction: column; gap: 6px; }
@@ -315,6 +326,7 @@
       <button type="button" data-nav="stats"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span data-t="Статистика">Статистика</span></button>
       <button type="button" data-nav="data"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg><span data-t="Данные">Данные</span></button>
       <div class="gap"></div>
+      <button type="button" data-nav="mail"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg><span data-t="Почта">Почта</span></button>
       <button type="button" data-nav="forward"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg><span data-t="Пересылка в Telegram">Пересылка в Telegram</span></button>
       <button type="button" data-nav="ingest"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span data-t="Приём событий">Приём событий</span></button>
       <button type="button" data-nav="system"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg><span data-t="Система">Система</span></button>
@@ -374,7 +386,7 @@ async function api(path,body){
 }
 function failed(retry){
   page.innerHTML=`<div class="state">${esc(t('Сервер виджета не отвечает, поэтому настройки не загрузились.'))}<br>
-    ${esc(t('Проверь, что работает сбор:'))} <code>systemctl --user status express-msgs</code><br>
+    ${esc(t('Проверь, что работает сбор:'))} <code>systemctl --user status messhub</code><br>
     <button class="btn" type="button" id="retry">${esc(t('Загрузить ещё раз'))}</button></div>`;
   $('retry').onclick=retry;
 }
@@ -497,7 +509,7 @@ const newEd=(src,action)=>({src,conds:null,cond:0,chat:'',sender:'',text:'',text
 
 // ── маршрут ──
 const ROUTES={sources:showSources,rules:showGlobalRules,profiles:showProfiles,mentions:showMentions,search:showSearch,
-  look:showLook,stats:showStats,data:showData,forward:showForward,ingest:showIngest,system:showSystem,help:showHelp};
+  look:showLook,stats:showStats,data:showData,mail:showMail,forward:showForward,ingest:showIngest,system:showSystem,help:showHelp};
 function route(){
   const h=location.hash.slice(1);
   let sec='sources';
@@ -768,9 +780,9 @@ async function showMentions(){
   page.innerHTML=`<h1>${esc(t('Упоминания'))}</h1>
     <p class="lead">${esc(t('Твоё имя, ник и слова, которые касаются тебя. Сообщение с таким словом получает значок @, слово подсвечивается, а в режиме фокуса такое сообщение видно всегда.'))}</p>
     <div class="tags" id="mList"></div>
-    <div class="erow"><input class="inp" id="mInp" placeholder="${attr(t('Например: Максим'))}" maxlength="60" style="width:260px" aria-label="${attr(t('Новое слово'))}">
+    <div class="erow"><input class="inp" id="mInp" placeholder="${attr(t('Например: Иван'))}" maxlength="60" style="width:260px" aria-label="${attr(t('Новое слово'))}">
       <button class="btn primary" type="button" id="mAdd">${esc(t('Добавить'))}</button></div>
-    <p class="hint">${esc(t('Совпадает начало слова без учёта регистра: «Максим» найдёт и «Максиму», и «максима», но не «Бромаксим». Короткое «Макс» найдёт и «максимально» — лучше вписывать полные формы.'))}</p>`;
+    <p class="hint">${esc(t('Совпадает начало слова без учёта регистра: «Иван» найдёт и «Ивану», и «ивана», но не «Диван». Короткое «Ив» найдёт и «ива» — лучше вписывать полные формы.'))}</p>`;
   const save=async(next,msg)=>{
     try{const r=await api('/api/prefs',{mentions:next});list.splice(0,list.length,...r.mentions);draw();toast(msg);}
     catch(e){toast(e.message,true);}
@@ -1137,6 +1149,130 @@ async function showForward(){
     $('rRes').innerHTML=x.ok?`<div class="result">${esc(t('Отчёт отправлен'))}</div><pre>${esc(x.text)}</pre>`:`<div class="result err">${esc(x.error)}</div>`;}catch(e){toast(e.message,true);}};
 }
 
+// ── Почта: откуда брать письма и ящики IMAP ──
+const MAIL_PRESETS={yandex:'Яндекс Почта',mailru:'Почта Mail.ru',gmail:'Gmail',outlook:'Outlook',icloud:'iCloud'};
+const SEC_NAMES={ssl:'SSL/TLS',starttls:'STARTTLS',none:'без шифрования'};
+const isLocal=h=>['127.0.0.1','localhost','::1'].includes((h||'').trim().toLowerCase());
+async function showMail(){
+  page.innerHTML=`<div class="state">${esc(t('Загружаю…'))}</div>`;
+  let d;try{d=await api('/api/mail');}catch(e){failed(showMail);return;}
+  const imap=d.channel==='imap', mark={ok:'✓',bad:'✕',info:'·'};
+  const accRow=(a,i)=>{
+    const st=!a.enabled?'info':a.error?'bad':a.checked?'ok':'info';
+    const sub=!a.enabled?t('выключен'):a.error?a.error:a.checked
+      ?t('проверено {w}',{w:when(a.checked)})+(a.new?', '+t('новых: {n}',{n:a.new}):''):t('ещё не проверялся');
+    return `<div class="acc${a.enabled?'':' off'}" data-i="${i}"><span class="st ${st}">${mark[st]}</span>
+      <span class="ai"><span class="nm">${esc(a.label)}</span> <span class="muted">${esc(a.user)}</span><br>
+        <span class="sub${st==='bad'?' err':''}">${esc(sub)}</span></span>
+      <span class="btns"><button class="btn ghost" type="button" data-check${a.enabled&&imap?'':' disabled'}>${esc(t('Проверить сейчас'))}</button>
+        <button class="btn ghost" type="button" data-edit>${esc(t('Изменить'))}</button>
+        <button class="btn danger" type="button" data-del>${esc(t('Удалить'))}</button></span></div>`;
+  };
+  const mode=(v,title,sub)=>`<button class="mode" type="button" role="radio" aria-checked="${d.channel===v}" data-ch="${v}"><span class="dot"></span>
+    <span><b>${esc(t(title))}</b><span>${esc(t(sub))}</span></span></button>`;
+  page.innerHTML=`<h1>${esc(t('Почта'))}</h1>
+    <p class="lead">${esc(t('Письма попадают в колонку «Почта» одним из двух способов. Работает только один, чтобы письма не приходили дважды.'))}</p>
+    <div class="modes" role="radiogroup" aria-label="${attr(t('Откуда брать почту'))}" style="margin-bottom:22px">
+      ${mode('notify','Уведомления почтовых программ','Thunderbird, Evolution, Geary и почта в браузере: что они показывают уведомлением, то и попадает в колонку. Настраивать ничего не нужно.')}
+      ${mode('imap','Напрямую из ящиков (IMAP)','Программа сама проверяет подключённые ящики, даже когда почтовая программа закрыта. Уведомления почтовых программ тогда не записываются.')}</div>
+    <h3>${esc(t('Ящики'))}</h3>
+    ${imap?'':`<p class="hint">${esc(t('Ящики проверяются, только когда выбран способ «Напрямую из ящиков».'))}</p>`}
+    ${d.accounts.length?`<div class="list">${d.accounts.map(accRow).join('')}</div>`
+      :`<div class="empty-note">${esc(t('Ящиков пока нет.'))}${imap?' '+esc(t('Подключи хотя бы один, иначе почта в виджет не попадёт.')):''}</div>`}
+    <div id="mEd"></div>
+    <div class="erow" style="margin-top:12px"><button class="btn primary" type="button" id="mAdd">${esc(t('Подключить ящик'))}</button></div>
+    <p class="hint" style="margin-top:14px">${esc(t('Письма забираются по IMAP; SMTP нужен только для отправки, и здесь он не используется. На сервере письмо не становится прочитанным. Когда ящик подключён, старые письма не подтягиваются — приходят только новые. Пароли лежат в mail.json с правами 600, на страницу они не отдаются.'))}</p>`;
+  page.querySelectorAll('[data-ch]').forEach(b=>b.onclick=async()=>{
+    if(b.dataset.ch===d.channel)return;
+    try{await api('/api/mail/channel',{channel:b.dataset.ch});
+      toast(t(b.dataset.ch==='imap'?'Почта берётся из ящиков':'Почта берётся из уведомлений'));showMail();}
+    catch(e){toast(e.message,true);}
+  });
+  page.querySelectorAll('.acc').forEach(el=>{
+    const a=d.accounts[+el.dataset.i];
+    el.querySelector('[data-edit]').onclick=()=>mailEditor(d,a);
+    el.querySelector('[data-check]').onclick=async e=>{
+      e.target.disabled=true;
+      try{const r=await api('/api/mail/check',{id:a.id});toast(r.new?t('Новых писем: {n}',{n:r.new}):t('Новых писем нет'));}
+      catch(err){toast(err.message,true);}
+      showMail();
+    };
+    confirmBtn(el.querySelector('[data-del]'),t('Удалить? Нажми ещё раз'),async()=>{
+      try{await api('/api/mail/delete',{id:a.id});toast(t('Ящик удалён; письма, что уже пришли, остались'));showMail();}
+      catch(e){toast(e.message,true);}
+    });
+  });
+  $('mAdd').onclick=()=>mailEditor(d,null);
+}
+function mailEditor(d,a){
+  const slot=$('mEd'), isNew=!a;
+  const f=a?{...a,password:''}:{id:'',label:'',user:'',password:'',host:d.presets.yandex[0],port:d.presets.yandex[1],
+    security:d.presets.yandex[2],insecure:false,folder:'INBOX',interval:2,enabled:true};
+  const presetOf=()=>Object.keys(d.presets).find(k=>d.presets[k][0]===f.host&&d.presets[k][1]===+f.port&&d.presets[k][2]===f.security)||'other';
+  const draw=()=>{
+    const pr=presetOf(), local=isLocal(f.host);
+    slot.innerHTML=`<div class="editor standalone" style="margin-top:12px">
+      <div class="field">
+        <label for="mPre">${esc(t('Почтовая служба'))}</label><div class="ctl"><select class="inp" id="mPre">
+          ${Object.keys(MAIL_PRESETS).map(k=>`<option value="${k}"${pr===k?' selected':''}>${esc(t(MAIL_PRESETS[k]))}</option>`).join('')}
+          <option value="other"${pr==='other'?' selected':''}>${esc(t('Другой сервер'))}</option></select></div>
+        <label for="mUser">${esc(t('Адрес или логин'))}</label><div class="ctl"><input class="inp" id="mUser" value="${attr(f.user)}" placeholder="name@example.com" style="width:280px" autocomplete="off"></div>
+        <label for="mPass">${esc(t('Пароль'))}</label><div class="ctl"><input class="inp" id="mPass" type="password" autocomplete="new-password" style="width:280px"
+          placeholder="${attr(a&&a.has_password?t('оставь пустым, чтобы не менять'):'')}"></div>
+        <span></span><div class="ctl muted" style="font-size:12px;max-width:60ch">${esc(t('Яндекс, Gmail, Mail.ru и iCloud пускают сторонние программы только по паролю приложения. Его создают в настройках безопасности почты; обычный пароль не подойдёт.'))}</div>
+        <label for="mLabel">${esc(t('Название'))}</label><div class="ctl"><input class="inp" id="mLabel" value="${attr(f.label)}" placeholder="${attr(t('например, Работа'))}" style="width:200px">
+          <span class="muted" style="font-size:12px">${esc(t('так ящик подписан в колонке «Почта»'))}</span></div>
+        <label for="mHost">${esc(t('Сервер IMAP'))}</label><div class="ctl"><input class="inp" id="mHost" value="${attr(f.host)}" placeholder="imap.example.com" style="width:220px">
+          <input class="inp" id="mPort" value="${attr(f.port)}" inputmode="numeric" style="width:72px" aria-label="${attr(t('Порт'))}">
+          <select class="inp" id="mSec" aria-label="${attr(t('Защита'))}">${['ssl','starttls','none'].map(s=>`<option value="${s}"${f.security===s?' selected':''}${s==='none'&&!local?' disabled':''}>${esc(t(SEC_NAMES[s]))}</option>`).join('')}</select></div>
+        ${local&&f.security!=='none'?`<span></span><div class="ctl"><label class="muted"><input type="checkbox" id="mInsec"${f.insecure?' checked':''}> ${esc(t('Не проверять сертификат — для локальных мостов вроде Proton Bridge'))}</label></div>`:''}
+        <label for="mFolder">${esc(t('Папка'))}</label><div class="ctl"><input class="inp" id="mFolder" value="${attr(f.folder)}" style="width:160px"></div>
+        <label for="mInt">${esc(t('Проверять каждые'))}</label><div class="ctl"><input class="inp" id="mInt" value="${attr(f.interval)}" inputmode="numeric" style="width:60px"> <span class="muted">${esc(t('мин'))}</span></div>
+        <span></span><div class="ctl"><label class="switch"><input type="checkbox" id="mOn"${f.enabled?' checked':''}> ${esc(t('Проверять этот ящик'))}</label></div>
+      </div>
+      <div id="mRes"></div>
+      <div class="actions"><button class="btn primary" type="button" id="mSave">${esc(t(isNew?'Подключить':'Сохранить'))}</button>
+        <button class="btn" type="button" id="mTest">${esc(t('Проверить подключение'))}</button>
+        <button class="btn ghost" type="button" id="mCancel">${esc(t('Отмена'))}</button></div></div>`;
+    bind();
+  };
+  const read=()=>{
+    f.user=$('mUser').value.trim(); f.password=$('mPass').value; f.label=$('mLabel').value.trim();
+    f.host=$('mHost').value.trim(); f.port=$('mPort').value.trim(); f.security=$('mSec').value;
+    f.insecure=!!($('mInsec')&&$('mInsec').checked); f.folder=$('mFolder').value.trim()||'INBOX';
+    f.interval=$('mInt').value.trim(); f.enabled=$('mOn').checked;
+    return {id:f.id,label:f.label,user:f.user,password:f.password,host:f.host,port:+f.port||0,security:f.security,
+      insecure:f.insecure,folder:f.folder,interval:+f.interval||2,enabled:f.enabled};
+  };
+  const res=(ok,text)=>{$('mRes').innerHTML=`<div class="result${ok?'':' err'}">${esc(text)}</div>`;};
+  function bind(){
+    $('mPre').onchange=()=>{const pw=$('mPass').value;read();const p=d.presets[$('mPre').value];
+      if(p){f.host=p[0];f.port=p[1];f.security=p[2];f.insecure=false;}draw();$('mPass').value=pw;};
+    $('mHost').onchange=()=>{const pw=$('mPass').value;read();if(!isLocal(f.host)&&f.security==='none')f.security='ssl';draw();$('mPass').value=pw;};
+    $('mSec').onchange=()=>{const pw=$('mPass').value;read();
+      if(f.security==='ssl'&&f.port==='143')f.port='993';
+      if(f.security!=='ssl'&&f.port==='993')f.port='143';
+      draw();$('mPass').value=pw;};
+    $('mCancel').onclick=()=>{slot.innerHTML='';};
+    $('mTest').onclick=async()=>{
+      const b=$('mTest');b.disabled=true;res(true,t('Подключаюсь…'));
+      try{const r=await api('/api/mail/test',read());
+        r.ok?res(true,t('Подключение есть: в папке {n}.',{n:tp(r.count,...W.letter)})):res(false,r.error);}
+      catch(e){res(false,e.message);}
+      b.disabled=false;
+    };
+    $('mSave').onclick=async()=>{
+      try{await api('/api/mail/account',read());
+        toast(d.channel==='imap'?t('Ящик сохранён'):t('Ящик сохранён. Чтобы письма шли из него, выбери «Напрямую из ящиков».'));
+        showMail();}
+      catch(e){res(false,e.message);}
+    };
+  }
+  draw();
+  slot.scrollIntoView({block:'nearest'});
+  (isNew?$('mUser'):$('mPass')).focus();
+}
+
 // ── Приём событий ──
 async function showIngest(){
   page.innerHTML=`<div class="state">${esc(t('Загружаю…'))}</div>`;
@@ -1192,7 +1328,7 @@ async function showSystem(){
     try{await api('/api/autostart',{which:cb.dataset.as,enabled:cb.checked});toast(t(cb.checked?'Автозапуск включён':'Автозапуск выключен'));}
     catch(e){cb.checked=!cb.checked;toast(e.message,true);}});
   page.querySelectorAll('[data-rs]').forEach(b=>b.onclick=async()=>{
-    try{await api('/api/restart',{which:b.dataset.rs});toast(t(b.dataset.rs==='collect'?'Сбор перезапускается…':'Перезапустить')+'');}catch(e){toast(e.message,true);}});
+    try{await api('/api/restart',{which:b.dataset.rs});toast(t(b.dataset.rs==='collect'?'Сбор перезапускается…':'Виджет перезапускается…'));}catch(e){toast(e.message,true);}});
 }
 
 // ── Справка ──
@@ -1212,10 +1348,10 @@ ru: [
 ['Долгие команды в терминале', `
 <p>Когда команда в терминале шла дольше минуты, в виджет падает «готово» с кодом выхода — удобно для сборок и выгрузок.</p>
 <pre>./install.sh --terminal-hook</pre>
-<p>или вручную — добавь в <code>~/.bashrc</code> или <code>~/.zshrc</code> строку <code>source &lt;папка программы&gt;/hooks/long-command.sh</code>. Порог — переменная <code>EXPRESS_MSGS_LONG_CMD</code> (секунды, по умолчанию 60).</p>`],
+<p>или вручную — добавь в <code>~/.bashrc</code> или <code>~/.zshrc</code> строку <code>source &lt;папка программы&gt;/hooks/long-command.sh</code>. Порог — переменная <code>MESSHUB_LONG_CMD</code> (секунды, по умолчанию 60).</p>`],
 ['Второй виджет с отдельными колонками', `
 <p>Например, отдельное окно только для рабочего мессенджера на втором мониторе:</p>
-<pre>python3 widget.py --only express --state ~/.config/express-msgs/widget-work.json</pre>
+<pre>python3 widget.py --only express --state ~/.config/messhub/widget-work.json</pre>
 <p>Ключи колонок видны в адресе источника в настройках (например <code>express</code>, <code>telegram</code>, <code>max</code>). У каждого окна свой файл места и размера.</p>`],
 ['Умный поиск (RAG)', `
 <p>Нужна локальная <b>Ollama</b> — это программа, которая запускает модели прямо на компьютере:</p>
@@ -1224,16 +1360,21 @@ ru: [
 ['Wayland', `
 <p>Программа полностью работает в сеансе X11 («GNOME on Xorg»). В Wayland приложение не может само ставить своё окно на место, держать его под другими окнами и переключать на чужие окна. Поэтому там: окно двигается и тянется мышкой, но место после перезапуска не восстанавливается; замок только фиксирует размер; «перейти в приложение» запускает его по ярлыку.</p>`],
 ['Клавиши и приёмы в виджете', `
-<ul><li><b>B</b> — размыть содержимое (для показа экрана), <b>F</b> — фокус: только важное, <b>Esc</b> — закрыть виджет.</li>
+<ul><li><b>B</b> — размыть содержимое (для показа экрана), <b>F</b> — фокус: только важное, <b>Esc</b> — закрыть всплывающее меню.</li>
 <li>Двойной клик по тексту — скопировать сообщение, клик по имени — перейти в приложение.</li>
-<li>Колонки перетаскиваются за шапку; скрыть колонку — значок глаза в её шапке.</li>
+<li>Колонки перетаскиваются за шапку. Крестик в шапке закрывает колонку: её сообщения станут прочитанными, а сама она вернётся с новым сообщением. Там же — «Скрыть насовсем» (вернуть — в «Внешний вид»). Колонку с закреплёнными или отложенными сообщениями закрыть нельзя.</li>
 <li>После «прочитать» внизу 5 секунд есть кнопка «Вернуть».</li></ul>`],
 ['Где данные и как удалить программу', `
-<p>База, копии и настройки лежат отдельно от кода: <code>~/.local/share/express-msgs</code> и <code>~/.config/express-msgs</code> (см. «Система → Папки»). Сервисы автозапуска включаются и выключаются в «Система».</p>
+<p>База, копии и настройки лежат отдельно от кода: <code>~/.local/share/messhub</code> и <code>~/.config/messhub</code> (см. «Система → Папки»). Сервисы автозапуска включаются и выключаются в «Система».</p>
 <pre>./uninstall.sh           # убрать автозапуск, данные оставить
 ./uninstall.sh --purge   # и удалить все данные</pre>`],
 ['Что уходит с компьютера', `
-<p>Ничего, кроме того, что ты сам настроишь: пересылка в Telegram по правилу и недельный отчёт идут через серверы Telegram. Всё остальное — база, поиск, умный поиск через Ollama — работает локально.</p>`],
+<p>Ничего, кроме того, что ты сам настроишь: пересылка в Telegram по правилу и недельный отчёт идут через серверы Telegram. Всё остальное — база, поиск, умный поиск через Ollama — работает локально. Если подключены почтовые ящики, программа сама ходит на почтовый сервер за новыми письмами — это только чтение.</p>`],
+['Почта: уведомления или ящики', `
+<p>Способ выбирается в разделе «Почта», работает один из двух.</p>
+<ul><li><b>Уведомления почтовых программ</b> — Thunderbird, Evolution, Geary или почта в браузере показывают уведомление, и оно попадает в колонку «Почта». Ничего настраивать не нужно, но письмо придёт, только пока программа открыта.</li>
+<li><b>Напрямую из ящиков</b> — программа сама проверяет ящики по IMAP раз в несколько минут. Ящиков может быть сколько угодно; каждый — отдельный чат в колонке «Почта», так что к нему работают обычные правила.</li></ul>
+<p>Яндекс, Gmail, Mail.ru и iCloud пускают сторонние программы только по <b>паролю приложения</b>: его создают в настройках безопасности почты (для Gmail нужна двухэтапная проверка). В Яндексе ещё нужно разрешить доступ по IMAP в настройках почты → «Почтовые программы».</p>`],
 ],
 en: [
 ['Telegram: getting its messages into the widget', `
@@ -1249,9 +1390,9 @@ en: [
 ['Long terminal commands', `
 <p>When a terminal command runs longer than a minute, a “done” card with the exit code lands in the widget.</p>
 <pre>./install.sh --terminal-hook</pre>
-<p>or add <code>source &lt;app folder&gt;/hooks/long-command.sh</code> to <code>~/.bashrc</code> or <code>~/.zshrc</code>. Threshold: <code>EXPRESS_MSGS_LONG_CMD</code> (seconds, default 60).</p>`],
+<p>or add <code>source &lt;app folder&gt;/hooks/long-command.sh</code> to <code>~/.bashrc</code> or <code>~/.zshrc</code>. Threshold: <code>MESSHUB_LONG_CMD</code> (seconds, default 60).</p>`],
 ['A second widget with its own columns', `
-<pre>python3 widget.py --only express --state ~/.config/express-msgs/widget-work.json</pre>
+<pre>python3 widget.py --only express --state ~/.config/messhub/widget-work.json</pre>
 <p>Column keys: <code>express</code>, <code>telegram</code>, <code>max</code>, … Each window keeps its own position file.</p>`],
 ['Smart search (RAG)', `
 <p>You need a local <b>Ollama</b>:</p>
@@ -1260,16 +1401,21 @@ en: [
 ['Wayland', `
 <p>The app fully works in an X11 session. On Wayland an app cannot place its own window, keep it below others or switch to other apps' windows. There the widget can be moved and resized by mouse, but its position isn't restored; the lock only fixes the size; “go to app” launches it via its launcher.</p>`],
 ['Keys and tricks in the widget', `
-<ul><li><b>B</b> — blur contents, <b>F</b> — focus mode, <b>Esc</b> — close the widget.</li>
+<ul><li><b>B</b> — blur contents, <b>F</b> — focus mode, <b>Esc</b> — close a pop-up menu.</li>
 <li>Double-click text to copy it, click a name to go to the app.</li>
-<li>Drag columns by their header; hide one with the eye icon in its header.</li>
+<li>Drag columns by their header. The cross in a header closes the column: its messages are marked read and the column comes back with the next message. “Hide for good” is there too (undo in Appearance). A column with pinned or snoozed messages can't be closed.</li>
 <li>After marking read, an “Undo” button stays for 5 seconds.</li></ul>`],
 ['Where data lives and how to uninstall', `
-<p>Database, backups and settings are kept apart from the code: <code>~/.local/share/express-msgs</code> and <code>~/.config/express-msgs</code>.</p>
+<p>Database, backups and settings are kept apart from the code: <code>~/.local/share/messhub</code> and <code>~/.config/messhub</code>.</p>
 <pre>./uninstall.sh           # remove autostart, keep data
 ./uninstall.sh --purge   # and delete all data</pre>`],
 ['What leaves the computer', `
-<p>Nothing except what you set up: rule-based forwarding and the weekly report go through Telegram servers. Everything else — the database, search, smart search via Ollama — stays local.</p>`],
+<p>Nothing except what you set up: rule-based forwarding and the weekly report go through Telegram servers. Everything else — the database, search, smart search via Ollama — stays local. If mailboxes are connected, the app fetches new mail from the mail server — read-only.</p>`],
+['Mail: notifications or mailboxes', `
+<p>Pick the source under “Mail”; only one works at a time.</p>
+<ul><li><b>Mail app notifications</b> — Thunderbird, Evolution, Geary or webmail show a notification and it lands in the Mail column. Nothing to set up, but mail only arrives while the app is open.</li>
+<li><b>Straight from mailboxes</b> — the app checks mailboxes over IMAP every few minutes. Connect as many as you like; each one is a chat in the Mail column, so regular rules apply.</li></ul>
+<p>Yandex, Gmail, Mail.ru and iCloud only let third-party apps in with an <b>app password</b>, created in the account's security settings (Gmail needs 2-step verification). Yandex also needs IMAP access enabled under Mail settings → Email clients.</p>`],
 ]};
 function showHelp(){
   page.innerHTML=`<h1>${esc(t('Справка'))}</h1>
