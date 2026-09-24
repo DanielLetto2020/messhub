@@ -24,8 +24,11 @@ import services
 
 
 def prefs_on(db, **cols):
+    """Включить колонки. Язык — русский явно: при «авто» фоновые карточки пишутся на языке
+    системы, а у машин CI он английский."""
     conn = sqlite3.connect(db)
-    rules.set_prefs(conn, {"themed": {c: dict(v, enabled=True) if isinstance(v, dict) else {"enabled": v}
+    rules.set_prefs(conn, {"language": "ru",
+                           "themed": {c: dict(v, enabled=True) if isinstance(v, dict) else {"enabled": v}
                                       for c, v in cols.items()}})
     conn.commit()
     conn.close()
@@ -204,7 +207,7 @@ DOCKER_DIE = json.dumps({"Type": "container", "Action": "die", "Actor": {"ID": "
 
 class ContainersTest(unittest.TestCase):
     def setUp(self):
-        self.db = common.new_db("containers.db")
+        self.db = common.new_db(f"containers-{self._testMethodName}.db")
         prefs_on(self.db, containers={"log_lines": 10, "ignore": ["tmp-*"]})
         self.p1 = mock.patch.object(containers, "logs_tail", return_value="boom\nstack")
         self.p2 = mock.patch.object(containers, "oom_killed", return_value=False)
@@ -285,8 +288,13 @@ WIN_XML = """<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event
 
 class ServicesTest(unittest.TestCase):
     def setUp(self):
-        self.db = common.new_db("services.db")
+        self.db = common.new_db(f"services-{self._testMethodName}.db")
         prefs_on(self.db, services={"log_lines": 10, "user": False})
+
+    def conn(self):
+        c = sqlite3.connect(self.db)
+        self.addCleanup(c.close)            # и после упавшей проверки (на Windows открытый файл не удалить)
+        return c
 
     def test_parse_failed(self):
         out = "backup-nightly.service loaded failed failed Nightly backup\n● demo.timer loaded failed failed Demo\n"
@@ -294,7 +302,7 @@ class ServicesTest(unittest.TestCase):
         self.assertEqual(services.parse_failed(""), [])
 
     def test_linux_fail_once_then_resolve(self):
-        conn = sqlite3.connect(self.db)
+        conn = self.conn()
         cfg = rules.themed(rules.get_prefs(conn))["services"]
         with mock.patch.object(services, "failed_units", return_value=["backup-nightly.service"]), \
                 mock.patch.object(services, "unit_info", return_value=("Nightly backup", "exit-code", "23")), \
@@ -309,7 +317,6 @@ class ServicesTest(unittest.TestCase):
         self.assertEqual(r[0]["details"], "rsync error 23")
         with mock.patch.object(services, "failed_units", return_value=[]):
             services.linux_step(conn, cfg)
-        conn.close()
         self.assertTrue(rows(self.db)[0]["resolved_at"])
 
     def test_windows_events(self):
@@ -317,7 +324,7 @@ class ServicesTest(unittest.TestCase):
         self.assertEqual([(e["id"], e["event"], e["name"], e["service"]) for e in evs],
                          [(501, 7031, "Print Spooler", "Spooler"), (502, 7000, "Demo Agent", "")])
         self.assertEqual(services.parse_win_events("<!DOCTYPE x [<!ENTITY a 'b'>]>"), [])
-        conn = sqlite3.connect(self.db)
+        conn = self.conn()
         cfg = rules.themed(rules.get_prefs(conn))["services"]
         with mock.patch.object(services, "win_events", return_value=evs[:1]), \
                 mock.patch.object(services, "win_running", return_value=False):
@@ -329,7 +336,6 @@ class ServicesTest(unittest.TestCase):
         r = rows(self.db)
         self.assertEqual([x["chat"] for x in r], ["Demo Agent"])
         self.assertIn("не запустилась", r[0]["message"])
-        conn.close()
 
 
 class LogTest(ServerCase):
