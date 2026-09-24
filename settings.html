@@ -1310,7 +1310,8 @@ async function showSystem(){
   page.innerHTML=`<div class="state">${esc(t('Загружаю…'))}</div>`;
   let d;try{d=await api('/api/diag');}catch(e){failed(showSystem);return;}
   const mark={ok:'✓',warn:'!',bad:'✕',info:'·'};
-  const sw=(key,label)=>{const s=d.autostart[key];
+  const sw=(key,label)=>{const s=d.autostart[key]; if(!s) return '';   // на Windows один процесс — один переключатель
+    if(d.platform==='windows') label='Запускать вместе с Windows';
     return `<div class="erow"><label class="switch"><input type="checkbox" data-as="${key}"${s.enabled?' checked':''}${s.installed?'':' disabled'}> <b>${esc(t(label))}</b></label>
       <span class="muted">${esc(s.installed?t('запускать при входе в систему')+' · '+t(s.active?'работает':'остановлен'):t('не установлен — запусти ./install.sh'))}</span>
       ${s.installed?`<button class="btn ghost" type="button" data-rs="${key}">${esc(t('Перезапустить'))}</button>`:''}</div>`;};

@@ -1,0 +1,64 @@
+<!--
+  Установщик messhub для Windows 10/11 (WiX Toolset 5). Собирает tools/build_windows.py:
+    wix build messhub.wxs -arch x64 -d Version=1.0.N -d Icon=…\messhub.ico -bindpath app=…\dist\win\messhub
+  Ставится для текущего пользователя, без прав администратора: %LOCALAPPDATA%\Programs\messhub,
+  ярлык в меню «Пуск», запуск вместе с Windows (выключается в настройках → «Система»).
+  База и настройки лежат отдельно (%LOCALAPPDATA%\messhub, %APPDATA%\messhub) и при удалении остаются.
+  Строки — латиницей: у MSI однобайтовая кодовая страница.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="messhub" Manufacturer="messhub" Version="$(var.Version)" Language="1033"
+           UpgradeCode="6B7E0E1C-2F4B-4D3A-9A77-3C1E5F0A8D21" Scope="perUser" Compressed="yes">
+    <SummaryInformation Description="messhub - all desktop notifications in one window" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of messhub is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="messhub.ico" SourceFile="$(var.Icon)" />
+    <Property Id="ARPPRODUCTICON" Value="messhub.ico" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/DanielLetto2020/messhub" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="UserProgramsFolder" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="messhub" />
+      </Directory>
+    </StandardDirectory>
+
+    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
+      <Files Include="!(bindpath.app)\**" />
+    </ComponentGroup>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Component Id="StartMenuShortcut">
+        <Shortcut Id="AppShortcut" Name="messhub" Description="All desktop notifications in one window"
+                  Target="[INSTALLFOLDER]messhub.exe" WorkingDirectory="INSTALLFOLDER" Icon="messhub.ico" />
+        <RegistryValue Root="HKCU" Key="Software\messhub" Name="shortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+
+    <Component Id="Autostart" Directory="INSTALLFOLDER">
+      <RegistryValue Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="messhub"
+                     Type="string" Value="&quot;[INSTALLFOLDER]messhub.exe&quot;" KeyPath="yes" />
+    </Component>
+
+    <Component Id="Cleanup" Directory="INSTALLFOLDER">
+      <RemoveFolder Id="RemoveInstallFolder" Directory="INSTALLFOLDER" On="uninstall" />
+      <RemoveFolder Id="RemoveUserPrograms" Directory="UserProgramsFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" Key="Software\messhub" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <!-- после обычной (не тихой) установки — сразу запустить -->
+    <CustomAction Id="LaunchApp" Directory="INSTALLFOLDER" ExeCommand="&quot;[INSTALLFOLDER]messhub.exe&quot;"
+                  Return="asyncNoWait" Impersonate="yes" />
+    <InstallExecuteSequence>
+      <Custom Action="LaunchApp" After="InstallFinalize" Condition="NOT Installed AND NOT REMOVE AND UILevel &gt;= 5" />
+    </InstallExecuteSequence>
+
+    <Feature Id="Main">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="Autostart" />
+      <ComponentRef Id="Cleanup" />
+    </Feature>
+  </Package>
+</Wix>

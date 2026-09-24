@@ -16,6 +16,7 @@
 """
 
 import argparse
+import os
 import sqlite3
 import threading
 import time
@@ -94,10 +95,19 @@ def main():
     print(f"{version.version_line()} — сбор → {args.db}")
     print(f"Веб-страница: {url}   (Ctrl+C — остановить всё)")
 
-    # чтение уведомлений — в главном потоке (ставит обработчики сигналов, блокирует)
+    # чтение уведомлений — в главном потоке (ставит обработчики сигналов, блокирует);
+    # на Windows вместо D-Bus — центр уведомлений (wincatcher), а окно доски даёт messhub_win.py
     try:
-        catcher.run(args.db, verbose=not args.quiet, from_file=None,
-                    on_insert=on_insert, skip=make_skip(args.db))
+        if os.name == "nt":
+            import wincatcher
+            if wincatcher.access_status() == "unspecified":
+                wincatcher.request_access()
+            wincatcher.run(args.db, verbose=not args.quiet, on_insert=on_insert, skip=make_skip(args.db))
+        else:
+            catcher.run(args.db, verbose=not args.quiet, from_file=None,
+                        on_insert=on_insert, skip=make_skip(args.db))
+    except KeyboardInterrupt:
+        pass
     finally:
         httpd.shutdown()
 

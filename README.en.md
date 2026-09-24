@@ -148,25 +148,36 @@ over the network, with a key.
 ## Install
 
 You need Linux with the GNOME desktop (Ubuntu, Fedora, Debian and others). The app works best in a
-"GNOME on Xorg" session.
+"GNOME on Xorg" session. A Windows 10/11 version is in the works.
 
-1. Install the packages (Ubuntu / Debian):
-   ```bash
-   sudo apt install git python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 gir1.2-wnck-3.0 dbus-bin libnotify-bin
-   ```
-2. Download the app and run the installer:
-   ```bash
-   git clone https://github.com/DanielLetto2020/messhub.git
-   cd messhub
-   ./install.sh
-   ```
-3. The board appears at the bottom of the screen. Settings — the gear in its corner.
+### As a package (easiest)
+
+Download the package for your system from the [releases page](https://github.com/DanielLetto2020/messhub/releases/latest):
+
+| system | file | how to install |
+|---|---|---|
+| Ubuntu, Debian, Mint | `messhub_…_all.deb` | `sudo apt install ./messhub_*_all.deb` |
+| Fedora, openSUSE | `messhub-…noarch.rpm` | `sudo dnf install ./messhub-*.noarch.rpm` |
+| anything else | `messhub-….tar.gz` | unpack and run `./install.sh` |
+
+The package pulls in everything it needs. Then start **messhub** from the app menu: the board appears
+at the bottom of the screen and starts by itself when you log in. Settings — the gear in its corner.
+
+### From source
+
+```bash
+sudo apt install git python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 gir1.2-wnck-3.0 dbus-bin libnotify-bin
+git clone https://github.com/DanielLetto2020/messhub.git
+cd messhub
+./install.sh
+```
 
 The installer checks what's missing and tells you the command. It doesn't need admin rights: the
 app is installed just for you and starts by itself when you log in.
 
-**Update:** `git pull && ./install.sh` — the board reloads with the new version.
-**Uninstall:** `./uninstall.sh` (keeps the history) or `./uninstall.sh --purge` (deletes it too).
+**Update:** install the new package over the old one, or `git pull && ./install.sh` — the board reloads itself.
+**Uninstall:** `sudo apt remove messhub` / `sudo dnf remove messhub`; from source — `./uninstall.sh`
+(keeps the history) or `./uninstall.sh --purge` (deletes it too).
 
 ### If Telegram messages don't show up
 
@@ -196,7 +207,8 @@ you're already looking at, so there's nothing to remember.
 **Sometimes only the beginning of a long message arrives.** That's how the app itself showed it:
 notifications often carry just the start of the text and "photo" or "file" instead of attachments.
 
-**Does it work on Windows or macOS?** No, Linux only.
+**Does it work on Windows or macOS?** Linux only for now. A Windows 10/11 version is coming
+(not Windows 7: it has no system notification center an app could read). No macOS.
 
 **And on Wayland?** Yes, with Wayland's own limits: the board can't remember its position on screen
 or stay below other windows. See Help inside the app.

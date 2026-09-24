@@ -1,0 +1,55 @@
+@echo off
+rem messhub @VERSION@ - install for the current user, no admin rights needed (Windows 10/11).
+rem   messhub-@VERSION@-windows-setup.bat              install (downloads the portable zip if it is not next to this file)
+rem   messhub-@VERSION@-windows-setup.bat /quiet       install without starting messhub
+rem   messhub-@VERSION@-windows-setup.bat /uninstall   remove the program (history and settings stay)
+rem Program: %LOCALAPPDATA%\Programs\messhub   Data: %LOCALAPPDATA%\messhub, %APPDATA%\messhub
+setlocal EnableExtensions
+set "VER=@VERSION@"
+set "ZIPNAME=messhub-%VER%-windows-portable.zip"
+set "URL=@URL@/v%VER%/%ZIPNAME%"
+set "DEST=%LOCALAPPDATA%\Programs\messhub"
+set "UNPACK=%TEMP%\messhub-unpack-%RANDOM%"
+set "LNK=%APPDATA%\Microsoft\Windows\Start Menu\Programs\messhub.lnk"
+set "RUNKEY=HKCU\Software\Microsoft\Windows\CurrentVersion\Run"
+
+if /i "%~1"=="/uninstall" goto uninstall
+
+echo messhub %VER%: installing to %DEST%
+set "ZIP=%~dp0%ZIPNAME%"
+if exist "%ZIP%" goto unpack
+set "ZIP=%TEMP%\%ZIPNAME%"
+echo Downloading %URL%
+curl.exe -fsSL -o "%ZIP%" "%URL%"
+if errorlevel 1 powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -UseBasicParsing -Uri '%URL%' -OutFile '%ZIP%'"
+if not exist "%ZIP%" goto fail
+
+:unpack
+taskkill /im messhub.exe /f >nul 2>&1
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -LiteralPath '%ZIP%' -DestinationPath '%UNPACK%' -Force"
+if not exist "%UNPACK%\messhub\messhub.exe" goto fail
+if exist "%DEST%" rmdir /s /q "%DEST%"
+mkdir "%DEST%" >nul 2>&1
+robocopy "%UNPACK%\messhub" "%DEST%" /e /move /njh /njs /nfl /ndl /np >nul
+rmdir /s /q "%UNPACK%" >nul 2>&1
+rem installed copy keeps data in the user profile, not next to the exe
+del /q "%DEST%\portable.txt" >nul 2>&1
+if not exist "%DEST%\messhub.exe" goto fail
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$s=(New-Object -ComObject WScript.Shell).CreateShortcut('%LNK%'); $s.TargetPath='%DEST%\messhub.exe'; $s.WorkingDirectory='%DEST%'; $s.IconLocation='%DEST%\messhub.exe,0'; $s.Description='All desktop notifications in one window'; $s.Save()"
+reg add "%RUNKEY%" /v messhub /t REG_SZ /d "\"%DEST%\messhub.exe\"" /f >nul
+echo Done: Start menu shortcut, starts with Windows. On first start allow access to notifications.
+if /i not "%~1"=="/quiet" start "" "%DEST%\messhub.exe"
+exit /b 0
+
+:uninstall
+taskkill /im messhub.exe /f >nul 2>&1
+reg delete "%RUNKEY%" /v messhub /f >nul 2>&1
+del /q "%LNK%" >nul 2>&1
+if exist "%DEST%" rmdir /s /q "%DEST%"
+echo messhub removed. History and settings stay in %LOCALAPPDATA%\messhub and %APPDATA%\messhub.
+exit /b 0
+
+:fail
+echo Installation failed. Download the zip from @URL@ and run messhub.exe from it.
+exit /b 1

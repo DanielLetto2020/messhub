@@ -109,7 +109,8 @@ class MailTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             mail.clean_account(dict(self.acc, password=""))
         a = mail.save_account(self.conn, self.acc)
-        self.assertEqual(oct(os.stat(mail.CFG).st_mode & 0o777), "0o600")
+        if os.name != "nt":                         # на Windows прав «600» нет — там профиль пользователя
+            self.assertEqual(oct(os.stat(mail.CFG).st_mode & 0o777), "0o600")
         pub = mail.public_accounts(self.conn)[0]
         self.assertNotIn("password", pub)
         self.assertTrue(pub["has_password"])

@@ -151,25 +151,36 @@ Telegram.
 ## Установка
 
 Нужен Linux с рабочим столом GNOME (Ubuntu, Fedora, Debian и другие). Лучше всего программа
-работает в сеансе «GNOME on Xorg».
+работает в сеансе «GNOME on Xorg». Версия для Windows 10 и 11 — в работе.
 
-1. Поставь нужные пакеты (Ubuntu / Debian):
-   ```bash
-   sudo apt install git python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 gir1.2-wnck-3.0 dbus-bin libnotify-bin
-   ```
-2. Скачай программу и запусти установку:
-   ```bash
-   git clone https://github.com/DanielLetto2020/messhub.git
-   cd messhub
-   ./install.sh
-   ```
-3. Доска появится внизу экрана. Настройки — шестерёнка в её углу.
+### Готовым пакетом (проще всего)
+
+Скачай пакет для своей системы со страницы [выпусков](https://github.com/DanielLetto2020/messhub/releases/latest):
+
+| система | файл | как поставить |
+|---|---|---|
+| Ubuntu, Debian, Mint | `messhub_…_all.deb` | `sudo apt install ./messhub_*_all.deb` |
+| Fedora, openSUSE | `messhub-…noarch.rpm` | `sudo dnf install ./messhub-*.noarch.rpm` |
+| любая другая | `messhub-….tar.gz` | распаковать и `./install.sh` |
+
+Всё нужное пакет подтянет сам. Потом запусти **messhub** из меню приложений: доска появится внизу
+экрана и дальше будет запускаться сама при входе в систему. Настройки — шестерёнка в её углу.
+
+### Из исходников
+
+```bash
+sudo apt install git python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 gir1.2-wnck-3.0 dbus-bin libnotify-bin
+git clone https://github.com/DanielLetto2020/messhub.git
+cd messhub
+./install.sh
+```
 
 Установщик сам проверит, чего не хватает, и подскажет команду. Права администратора ему не нужны:
 программа ставится только для тебя и запускается сама при входе в систему.
 
-**Обновить:** `git pull && ./install.sh` — доска перезагрузится с новой версией.
-**Удалить:** `./uninstall.sh` (история останется) или `./uninstall.sh --purge` (удалить и её).
+**Обновить:** новый пакет поверх старого или `git pull && ./install.sh` — доска перезагрузится сама.
+**Удалить:** `sudo apt remove messhub` / `sudo dnf remove messhub`, из исходников — `./uninstall.sh`
+(история останется) или `./uninstall.sh --purge` (удалить и её).
 
 ### Если не видно сообщений из Telegram
 
@@ -200,7 +211,8 @@ Telegram Desktop на Linux по умолчанию показывает сво�
 **Иногда приходит только начало длинного сообщения.** Так его показало само приложение: в
 уведомление часто попадает лишь начало текста, а вместо вложений — «фото» или «файл».
 
-**Работает ли на Windows или macOS?** Нет, только Linux.
+**Работает ли на Windows или macOS?** Сейчас — только Linux. Версия для Windows 10 и 11 готовится
+(Windows 7 не будет: в ней нет системного центра уведомлений, который можно читать). macOS — нет.
 
 **А на Wayland?** Работает, но с ограничениями самого Wayland: доска не запоминает место на экране
 и не умеет держаться под другими окнами. Подробнее — в «Справке» внутри программы.

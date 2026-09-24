@@ -1,0 +1,12 @@
+messhub — переносная версия / portable version
+
+Пока этот файл лежит рядом с messhub.exe, программа хранит базу и настройки в папке data
+рядом с собой, а не в %LOCALAPPDATA%\messhub и %APPDATA%\messhub. Удалишь файл — будет
+работать как установленная.
+
+While this file sits next to messhub.exe, the app keeps its database and settings in the
+"data" folder next to it instead of %LOCALAPPDATA%\messhub and %APPDATA%\messhub.
+Delete this file to make it behave like an installed copy.
+
+При первом запуске Windows спросит, можно ли messhub читать уведомления — разреши.
+On first start Windows asks whether messhub may read notifications — allow it.

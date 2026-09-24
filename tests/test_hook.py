@@ -11,6 +11,7 @@ HOOK = os.path.join(common.ROOT, "hooks", "long-command.sh")
 
 
 @unittest.skipUnless(shutil.which("bash"), "нужен bash")
+@unittest.skipIf(os.name == "nt" or not shutil.which("bash"), "хук терминала — для bash/zsh на Linux")
 class HookTest(unittest.TestCase):
     def run_hook(self, script, lang="ru_RU.UTF-8"):
         bindir = os.path.join(common.TMP, "bin")

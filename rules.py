@@ -52,6 +52,7 @@ SOURCES = (
     ("thunderbird", "mail", ("Почта", "Mail"), "✉️", 3),
     ("geary", "mail", ("Почта", "Mail"), "✉️", 3),
     ("evolution", "mail", ("Почта", "Mail"), "✉️", 3),
+    ("outlook", "mail", ("Почта", "Mail"), "✉️", 3),          # Windows: Outlook и «Почта»
     ("yandex", "yandex", ("Яндекс", "Yandex"), "🌐", 6),
     ("chrome", "chrome", ("Chrome", "Chrome"), "🌐", 6),
     ("chromium", "chrome", ("Chrome", "Chrome"), "🌐", 6),

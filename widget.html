@@ -186,6 +186,10 @@
   .rz.sw { bottom: 0; left: 0;  width: 14px; height: 14px; cursor: sw-resize; }
   /* страница открыта в обычном браузере, а не в окне виджета — двигать нечего */
   .nohost .rz, .nohost .lock { display: none; }
+  /* окно Windows (winwidget.py): прозрачных окон там нет — подложка сплошная, без скруглений */
+  html.pyw, html.pyw body { background: rgb(var(--glass)); }
+  .pyw .wrap { background: rgb(var(--glass)); border-radius: 0; border: 0; box-shadow: none;
+    -webkit-backdrop-filter: none; backdrop-filter: none; }
   .nohost .bar { cursor: default; }
   /* закреплено замком: ни перетащить, ни растянуть */
   .locked .rz { display: none; }
@@ -236,10 +240,20 @@
 <script>
 const $ = id => document.getElementById(id);
 const board = $('board'), empty = $('empty'), dot = $('dot'), countEl = $('count'), menu = $('menu');
-const host = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.widget;
+const QS = new URLSearchParams(location.search);
+// окно-хозяин: GTK+WebKit (widget.py, Linux) или pywebview (winwidget.py, Windows, адрес с ?host=pywebview).
+// У pywebview мост window.pywebview.api появляется позже (событие pywebviewready) — до него копим
+const PYW = QS.get('host') === 'pywebview';
+const pywQueue = [];
+const host = (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.widget) ||
+  (PYW ? {postMessage: m => { if (window.pywebview && window.pywebview.api) window.pywebview.api.post(m); else pywQueue.push(m); }} : null);
+if (PYW) {
+  document.documentElement.classList.add('pyw'); document.body.classList.add('pyw');
+  window.addEventListener('pywebviewready', () => { while (pywQueue.length) window.pywebview.api.post(pywQueue.shift()); });
+}
 if (!host) document.body.classList.add('nohost');
 // второй виджет с отбором: widget.py --only express,telegram → /widget?only=express,telegram
-const ONLY = (new URLSearchParams(location.search).get('only') || '').split(',').map(s => s.trim()).filter(Boolean);
+const ONLY = (QS.get('only') || '').split(',').map(s => s.trim()).filter(Boolean);
 
 const ICON = {
   check: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
@@ -679,9 +693,27 @@ function applyLock(){
 // состояние замка хранит widget.py (widget-state.json) и сообщает его после загрузки
 window.hostSetLocked=v=>{locked=!!v;applyLock();};
 lockBtn.addEventListener('click',()=>{locked=!locked;applyLock();if(host)host.postMessage(locked?'lock:1':'lock:0');});
-function dragStart(cmd,e){if(!host||locked||e.button!==0)return;dragCmd=cmd;dragX=e.clientX;dragY=e.clientY;e.preventDefault();}
-document.querySelector('.bar').addEventListener('mousedown',e=>{if(!e.target.closest('.ib'))dragStart('move',e);});
-document.querySelectorAll('.rz').forEach(h=>h.addEventListener('mousedown',e=>dragStart('resize:'+h.dataset.edge,e)));
+function dragStart(cmd,e){if(!host||locked||e.button!==0)return;
+  if(PYW){geoStart(cmd,e);return;}
+  dragCmd=cmd;dragX=e.clientX;dragY=e.clientY;e.preventDefault();}
+// Windows (pywebview): у окна без рамки нет «системного» перетаскивания — страница сама шлёт
+// сдвиг указателя от начала жеста: geom-start:<move|край> → geom:<dx>,<dy> → geom-end
+let geo=null;
+function geoStart(cmd,e){
+  e.preventDefault();
+  geo={sx:e.screenX,sy:e.screenY,raf:0,d:[0,0]};
+  try{e.target.setPointerCapture(e.pointerId);}catch(_){}
+  host.postMessage('geom-start:'+(cmd==='move'?'move':cmd.split(':')[1]));
+}
+document.addEventListener('pointermove',e=>{
+  if(!geo)return;
+  geo.d=[e.screenX-geo.sx,e.screenY-geo.sy];
+  if(!geo.raf)geo.raf=requestAnimationFrame(()=>{if(geo){geo.raf=0;host.postMessage('geom:'+geo.d.join(','));}});
+});
+document.addEventListener('pointerup',()=>{if(geo){host.postMessage('geom:'+geo.d.join(','));host.postMessage('geom-end');geo=null;}});
+const DOWN=PYW?'pointerdown':'mousedown';
+document.querySelector('.bar').addEventListener(DOWN,e=>{if(!e.target.closest('.ib'))dragStart('move',e);});
+document.querySelectorAll('.rz').forEach(h=>h.addEventListener(DOWN,e=>dragStart('resize:'+h.dataset.edge,e)));
 document.addEventListener('mousemove',e=>{
   if(!dragCmd)return;
   if(!(e.buttons&1)){dragCmd=null;return;}

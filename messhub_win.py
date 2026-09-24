@@ -1,0 +1,185 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+messhub для Windows 10/11 — одним процессом (так собирается messhub.exe):
+сбор уведомлений (wincatcher), страница и API (serve) и окно доски (winwidget).
+
+    messhub.exe                 запустить; второй запуск ничего не ломает — окно уже открыто
+    messhub.exe --no-widget     только сбор и страница http://127.0.0.1:8765
+    messhub.exe --selftest      проверить сборку без окна и выйти (так её проверяет CI)
+    messhub.exe --capture-test  подождать своё тестовое уведомление Windows и выйти (CI)
+
+Переносная версия: файл portable.txt рядом с messhub.exe — данные в папке data рядом с ним
+(а не в %LOCALAPPDATA%\\\\messhub), так что всё помещается на флешку.
+"""
+
+import argparse
+import json
+import os
+import socket
+import sys
+import threading
+import time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+EXE_DIR = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else HERE
+
+
+def _portable():
+    if os.path.exists(os.path.join(EXE_DIR, "portable.txt")) and not os.environ.get("MESSHUB_HOME"):
+        os.environ["MESSHUB_HOME"] = os.path.join(EXE_DIR, "data")
+
+
+def _streams():
+    """В оконной сборке нет консоли (sys.stdout is None) — print пишет в журнал в папке данных.
+    В консоли — UTF-8 с заменой непечатного, чтобы русский текст не ронял программу."""
+    import paths
+    if sys.stdout is None or sys.stderr is None:
+        os.makedirs(paths.DATA_DIR, exist_ok=True)
+        log = open(os.path.join(paths.DATA_DIR, "messhub.log"), "a", encoding="utf-8", buffering=1)
+        sys.stdout = sys.stderr = log
+    else:
+        for s in (sys.stdout, sys.stderr):
+            try:
+                s.reconfigure(encoding="utf-8", errors="replace")
+            except (AttributeError, ValueError):
+                pass
+
+
+def _port_busy(host, port):
+    with socket.socket() as s:
+        return s.connect_ex((host, port)) == 0
+
+
+def _already_running(port):
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/version", timeout=2) as r:
+            return json.load(r).get("id") == "messhub"
+    except (OSError, ValueError):
+        return False
+
+
+def _message(text):
+    try:
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(None, text, "messhub", 0x40)
+    except Exception:  # noqa: BLE001 — не Windows (запуск для проверки)
+        print(text)
+
+
+def selftest(port):
+    """Без окна: сервер отвечает, страницы отдаются, WinRT и pywebview на месте. → код выхода."""
+    import urllib.request
+    import version
+    import wincatcher
+    out = {"version": version.__version__, "frozen": bool(getattr(sys, "frozen", False))}
+    base = f"http://127.0.0.1:{port}"
+    try:
+        out["api"] = json.load(urllib.request.urlopen(base + "/api/version", timeout=5))
+        out["widget_bytes"] = len(urllib.request.urlopen(base + "/widget?host=pywebview", timeout=5).read())
+        out["settings_bytes"] = len(urllib.request.urlopen(base + "/settings", timeout=5).read())
+        out["diag"] = {c["id"]: c["state"] for c in
+                       json.load(urllib.request.urlopen(base + "/api/diag", timeout=15))["checks"]}
+    except Exception as e:  # noqa: BLE001
+        out["error"] = repr(e)
+    try:
+        import webview
+        out["pywebview"] = getattr(webview, "__version__", "?")
+    except Exception as e:  # noqa: BLE001
+        out["pywebview_error"] = repr(e)
+    out["winrt"] = wincatcher._winrt() is not None
+    out["access"] = wincatcher.access_status()
+    print(json.dumps(out, ensure_ascii=False, indent=1), flush=True)
+    ok = "error" not in out and out["api"].get("id") == "messhub" and out["widget_bytes"] > 1000
+    return 0 if ok else 1
+
+
+def capture_test(db, marker, timeout=30):
+    """Дождаться, пока тестовое уведомление с текстом marker окажется в базе. → код выхода."""
+    import sqlite3
+    t = time.time()
+    while time.time() - t < timeout:
+        try:
+            c = sqlite3.connect(db)
+            row = c.execute("SELECT app, chat, message FROM messages WHERE message LIKE ? OR chat LIKE ?",
+                            (f"%{marker}%", f"%{marker}%")).fetchone()
+            c.close()
+            if row:
+                print(json.dumps({"captured": row}, ensure_ascii=False), flush=True)
+                return 0
+        except sqlite3.Error:
+            pass
+        time.sleep(1)
+    import wincatcher
+    print(json.dumps({"captured": None, "status": wincatcher.status}, ensure_ascii=False), flush=True)
+    return 2
+
+
+def main():
+    _portable()
+    _streams()
+    import paths
+    import version
+    ap = argparse.ArgumentParser(description="messhub для Windows")
+    ap.add_argument("--db", default=paths.DB_PATH)
+    ap.add_argument("--port", type=int, default=8765)
+    ap.add_argument("--no-widget", action="store_true", help="без окна доски")
+    ap.add_argument("--selftest", action="store_true", help=argparse.SUPPRESS)
+    ap.add_argument("--capture-test", metavar="ТЕКСТ", help=argparse.SUPPRESS)
+    ap.add_argument("--wait-port", action="store_true", help=argparse.SUPPRESS)   # перезапуск из настроек
+    ap.add_argument("--version", action="version", version=version.version_line())
+    a = ap.parse_args()
+    host = "127.0.0.1"
+
+    if a.wait_port:                       # прежний процесс ещё отпускает порт
+        for _ in range(60):
+            if not _port_busy(host, a.port):
+                break
+            time.sleep(0.25)
+    if not (a.selftest or a.capture_test) and _port_busy(host, a.port):
+        if _already_running(a.port):
+            _message("messhub уже работает — доска открыта.\nmesshub is already running.")
+            return 0
+        _message(f"Порт {a.port} занят другой программой — messhub не запустился.")
+        return 1
+    if a.selftest or a.capture_test:      # проверки — на свободном порту, чтобы не мешать настоящему
+        with socket.socket() as s:
+            s.bind((host, 0))
+            a.port = s.getsockname()[1]
+
+    from http.server import ThreadingHTTPServer
+    import collect
+    import mail
+    import serve
+    import wincatcher
+    print(f"{version.version_line()} — сбор → {a.db}", flush=True)
+    serve.prepare(a.db)
+    serve.start_background(a.db)
+    mail.start(a.db)
+    httpd = ThreadingHTTPServer((host, a.port), serve.make_handler(a.db))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    if a.selftest:
+        return selftest(a.port)
+
+    if wincatcher.access_status() == "unspecified":       # первый запуск — Windows спросит разрешение
+        wincatcher.request_access()
+    stop = wincatcher.start(a.db, on_insert=collect.on_insert, skip=collect.make_skip(a.db))
+    try:
+        if a.capture_test:
+            return capture_test(a.db, a.capture_test)
+        if a.no_widget:
+            while True:
+                time.sleep(3600)
+        import winwidget
+        winwidget.run(f"http://{host}:{a.port}")
+    except KeyboardInterrupt:
+        pass
+    finally:
+        stop.set()
+        httpd.shutdown()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

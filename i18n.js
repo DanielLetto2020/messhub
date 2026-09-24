@@ -269,7 +269,7 @@ const EN = {
   'Автозапуск выключен': 'Autostart disabled', 'Перезапустить': 'Restart', 'Версия': 'Version', 'Папки': 'Folders',
   'код': 'code', 'данные': 'data', 'настройки': 'settings', 'кэш': 'cache', 'база': 'database',
 
-  'Виджет перезапускается…': 'Widget is restarting…',
+  'Виджет перезапускается…': 'Widget is restarting…', 'Запускать вместе с Windows': 'Start with Windows',
 
   // ── почта ──
   'Почта': 'Mail', 'Ящики': 'Mailboxes', 'Откуда брать почту': 'Where mail comes from',

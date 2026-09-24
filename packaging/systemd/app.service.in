@@ -1,4 +1,4 @@
-# Собирается install.sh — не править вручную (поставится заново при следующей установке).
+# Собран из packaging/systemd/*.in (./install.sh или пакетом .deb/.rpm) — не править вручную.
 [Unit]
 Description=@APP_NAME@ — сбор desktop-уведомлений и страница виджета
 After=graphical-session.target

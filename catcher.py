@@ -200,7 +200,7 @@ def parse_message_block(header, body_lines):
 
 # ── разбор по типу приложения: браузер (сайт в теле), почта (От/Тема), остальное ──
 BROWSER_MARKS = ("yandex", "chrome", "chromium", "firefox", "brave", "opera", "vivaldi", "edge")
-MAIL_MARKS = ("thunderbird", "geary", "evolution")
+MAIL_MARKS = ("thunderbird", "geary", "evolution", "outlook")
 CALENDAR_MARKS = ("alarm-notify", "reminder", "calendar")   # evolution-alarm-notify — календарь
 _RE_DOMAIN = re.compile(r"^(?:https?://)?((?:[a-z0-9-]+\.)+[a-z]{2,})(?::\d+)?/?$", re.I)
 _RE_MAIL_FROM = re.compile(r"^(?:From|От|Отправитель)\s*:\s*(.+)$", re.I | re.M)
@@ -388,28 +388,35 @@ def blocks_from_stream(lines):
         yield header, body
 
 
-def run(db_path, verbose, from_file, on_insert=None, skip=None):
-    """on_insert(conn, rec) — вызывается после записи (rec["id"] уже есть): так
+def record(app, summary, body, event_ts=None, urgency=1, has_media=0, notification_id=0, avatar=None):
+    """Уведомление из любого источника (dbus-monitor, Windows, приём событий) → запись для insert."""
+    event_ts = event_ts or time.time()
+    chat, sender, message, site = parse_fields(app, summary, body)
+    return {"app": app, "chat": chat, "sender": sender, "is_bot": guess_is_bot(sender), "message": message,
+            "notification_id": notification_id, "urgency": urgency, "has_media": has_media,
+            "event_ts": event_ts, "event_iso": datetime.fromtimestamp(event_ts).isoformat(timespec="seconds"),
+            "raw_summary": summary, "raw_body": body, "site": site, "avatar": avatar}
+
+
+def make_handler(conn, verbose=False, on_insert=None, skip=None):
+    """Конвейер записи: пропуск (skip), Telegram без ботов и каналов, дедуп, запись, правила.
+    on_insert(conn, rec) — вызывается после записи (rec["id"] уже есть): так
     collect.py применяет действия правил (сразу прочитано, закрепить, звук, пересылка).
     skip(rec) → True — не записывать (так collect.py отбрасывает уведомления почтовых
     программ, когда почта берётся напрямую из ящиков по IMAP)."""
-    conn = init_db(db_path)
-
     # дедуп «эхо» и мгновенных повторов: (app, summary, body) в окне 2 сек
-    last_key = None
-    last_t = 0.0
+    last = {"key": None, "t": 0.0}
 
     def handle(rec):
-        nonlocal last_key, last_t
         if skip and skip(rec):
-            return
+            return None
         if telegram_should_skip(rec):        # Telegram: только чаты, без ботов/каналов
-            return
+            return None
         key = (rec["app"], rec["raw_summary"], rec["raw_body"])
         now = rec["event_ts"]
-        if key == last_key and (now - last_t) < 2.0:
-            return
-        last_key, last_t = key, now
+        if key == last["key"] and (now - last["t"]) < 2.0:
+            return None
+        last["key"], last["t"] = key, now
         rec["id"] = insert(conn, rec)
         if on_insert:
             try:
@@ -420,6 +427,14 @@ def run(db_path, verbose, from_file, on_insert=None, skip=None):
             bot = " [бот]" if rec["is_bot"] else ""
             print(f'[{rec["event_iso"]}] {rec["app"]} | {rec["chat"]} | '
                   f'{rec["sender"]}{bot}: {rec["message"]!r}', flush=True)
+        return rec["id"]
+    return handle
+
+
+def run(db_path, verbose, from_file, on_insert=None, skip=None):
+    """Слушать D-Bus (dbus-monitor) и записывать уведомления; на Windows — wincatcher.run."""
+    conn = init_db(db_path)
+    handle = make_handler(conn, verbose, on_insert, skip)
 
     if from_file:
         with open(from_file, "r", encoding="utf-8", errors="replace") as f:

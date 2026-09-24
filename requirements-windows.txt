@@ -1,0 +1,10 @@
+# messhub на Windows 10/11 (messhub_win.py, сборка messhub.exe). На Linux не нужно — там только stdlib + GTK.
+# Окно доски: pywebview на движке WebView2 (он уже есть в Windows 11 и в обновлённой Windows 10)
+pywebview>=5.3,<7
+# Чтение уведомлений: официальный API Windows.UI.Notifications.Management (UserNotificationListener)
+winrt-runtime>=2.3
+winrt-Windows.Foundation>=2.3
+winrt-Windows.Foundation.Collections>=2.3
+winrt-Windows.UI.Notifications>=2.3
+winrt-Windows.UI.Notifications.Management>=2.3
+winrt-Windows.ApplicationModel>=2.3

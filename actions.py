@@ -42,6 +42,10 @@ def play_sound():
     if time.time() - _last_sound < 1.0:
         return
     _last_sound = time.time()
+    if os.name == "nt":                     # Windows: системный звук уведомления
+        import winsound
+        winsound.PlaySound("SystemNotification", winsound.SND_ALIAS | winsound.SND_ASYNC)
+        return
     for cmd in (["canberra-gtk-play", "-i", SOUND_NAME], ["pw-play", SOUND_FILE],
                 ["paplay", SOUND_FILE]):
         try:

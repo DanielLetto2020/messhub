@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=messhub
+GenericName=Notification board
+GenericName[ru]=Доска уведомлений
+Comment=All desktop notifications in one window, kept on your computer
+Comment[ru]=Все уведомления рабочего стола в одном окне, хранятся на твоём компьютере
+Exec=messhub
+Icon=messhub
+Terminal=false
+Categories=Utility;
+Keywords=notifications;messages;board;уведомления;сообщения;
+StartupWMClass=messhub

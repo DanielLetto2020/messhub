@@ -488,6 +488,14 @@ def main():
     if args.state == DEFAULT_STATE and paths.move_legacy_file("widget-state.json", DEFAULT_STATE):
         log(f"перенёс widget-state.json → {DEFAULT_STATE}")
 
+    # имя и значок приложения: окна группируются с ярлыком messhub.desktop в панели задач
+    GLib.set_prgname(version.APP_ID)
+    GLib.set_application_name(version.APP_NAME)
+    icon = os.path.join(paths.HERE, "packaging", "icons", "messhub-128.png")
+    if os.path.exists(icon):
+        Gtk.Window.set_default_icon_from_file(icon)
+    else:
+        Gtk.Window.set_default_icon_name(version.APP_ID)          # из темы значков (пакет .deb/.rpm)
     # тёмная рамка у окна настроек — под тёмные страницы
     Gtk.Settings.get_default().set_property("gtk-application-prefer-dark-theme", True)
     url = args.url
