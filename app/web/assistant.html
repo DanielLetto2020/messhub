@@ -95,6 +95,13 @@
   .msg.ai .bub a.lnk { color: var(--accent); }
   .msg.ai .bub .caret { display: inline-block; width: 7px; height: 14px; background: var(--muted); vertical-align: -2px; animation: blink 1s steps(2) infinite; }
   @keyframes blink { 50% { opacity: 0; } }
+  details.thk { margin: 0 0 8px; border-left: 2px solid var(--line2); padding: 2px 0 2px 10px; color: var(--muted); }
+  details.thk summary { cursor: pointer; font-size: 12px; list-style: none; user-select: none; }
+  details.thk summary::-webkit-details-marker { display: none; }
+  details.thk summary::before { content: '›'; display: inline-block; margin-right: 6px; transition: transform .15s; }
+  details.thk[open] summary::before { transform: rotate(90deg); }
+  details.thk .tt { white-space: pre-wrap; font-size: 12px; line-height: 1.5; margin-top: 4px; max-height: 320px; overflow-y: auto; }
+  .note { color: var(--warn); background: var(--warn-bg); border-radius: 8px; padding: 6px 10px; margin: 4px 0 0; font-size: 12.5px; }
   .meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--faint); font-size: 11.5px; margin-top: 2px; }
   .meta .sp { flex: 1; }
   .srcs { margin-top: 6px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
@@ -377,10 +384,17 @@ function msgHtml(m,live){
   if(m.role==='user') return `<div class="msg me"><div class="bub">${esc(m.content)}</div></div>`;
   const meta=m.meta||{}, n=(meta.ids||[]).length;
   const secs=meta.ms?(meta.ms/1000).toFixed(1).replace('.',LANG==='en'?'.':',')+' '+t('с'):'';
-  return `<div class="msg ai" data-mid="${m.id||''}"><div class="bub">${md(m.content)}${live?'<span class="caret"></span>':''}</div>
+  const thk=meta.thinking?thinkHtml(meta.thinking,false):'';
+  return `<div class="msg ai" data-mid="${m.id||''}">${thk}<div class="bub">${md(m.content)}${live?'<span class="caret"></span>':''}</div>
+    ${meta.note?`<div class="note">${esc(meta.note)}</div>`:''}
     ${live?'':`<div class="meta">${n?`<button class="btn ghost sm" type="button" data-srcs="${attr((meta.ids||[]).join(','))}">${esc(t('опирался на {n}',{n:tp(n,...W.msg)}))} ▸</button>`:`<span>${esc(t('сообщений в выборке не было'))}</span>`}
       <span>${esc([meta.model,secs,meta.tokens?t('{n} токенов',{n:meta.tokens}):'',meta.stopped?t('остановлено'):''].filter(Boolean).join(' · '))}</span>
       <span class="sp"></span><button class="btn ghost sm" type="button" data-copy="1">${esc(t('Скопировать'))}</button></div><div class="srcsbox"></div>`}</div>`;
+}
+// размышления «думающей» модели: свёрнуты (или раскрыты — режим «показывать»), во время ответа — «думает…»
+function thinkHtml(text, live){
+  const open=CUR&&CUR.settings.think==='show';
+  return `<details class="thk"${open?' open':''}><summary>${esc(live?t('Думает…'):t('Размышления модели'))} · ${esc(t('{n} символов',{n:text.length.toLocaleString()}))}</summary><div class="tt">${esc(text)}</div></details>`;
 }
 function drawMessages(){
   const box=$('msgs'); if(!box) return;
@@ -428,11 +442,16 @@ async function send(){
   if(CUR.messages.length===1) box.innerHTML='';
   box.insertAdjacentHTML('beforeend',msgHtml({role:'user',content:text}));
   box.insertAdjacentHTML('beforeend',`<div class="ctx" id="ctxLine">${esc(t('Собираю сообщения…'))}</div>`+msgHtml({role:'assistant',content:''},true));
-  const live=box.lastElementChild.querySelector('.bub');
+  const liveMsg=box.lastElementChild, live=liveMsg.querySelector('.bub');
   $('chat').scrollTop=$('chat').scrollHeight;
   const ctl=new AbortController(); streaming=ctl; setSendState();
-  let acc='', meta=null, err='', drawT=0;
-  const redraw=()=>{live.innerHTML=md(acc)+'<span class="caret"></span>';bindMsgs(live);
+  let acc='', thinkAcc='', meta=null, err='', drawT=0;
+  const redraw=()=>{
+    if(thinkAcc){let d=liveMsg.querySelector('details.thk');const wasOpen=d?d.open:CUR.settings.think==='show';
+      if(!d){live.insertAdjacentHTML('beforebegin',thinkHtml(thinkAcc,true));d=liveMsg.querySelector('details.thk');}
+      d.open=wasOpen;d.querySelector('summary').textContent=(acc?t('Размышления модели'):t('Думает…'))+' · '+t('{n} символов',{n:thinkAcc.length.toLocaleString()});
+      const tt=d.querySelector('.tt');tt.textContent=thinkAcc;if(d.open)tt.scrollTop=tt.scrollHeight;}
+    live.innerHTML=md(acc)+'<span class="caret"></span>';bindMsgs(live);
     const c=$('chat');if(c.scrollHeight-c.scrollTop-c.clientHeight<160)c.scrollTop=c.scrollHeight;};
   try{
     const r=await fetch('/api/ai/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session:CUR.id,text}),signal:ctl.signal});
@@ -447,7 +466,8 @@ async function send(){
         if(!line.trim()) continue;
         let ev; try{ev=JSON.parse(line);}catch(e){continue;}
         if(ev.type==='context') $('ctxLine').textContent=t('Выборка: {s}',{s:ev.summary});
-        else if(ev.type==='token'){acc+=ev.t;if(!drawT)drawT=setTimeout(()=>{drawT=0;redraw();},60);}
+        else if(ev.type==='token'||ev.type==='think'){if(ev.type==='think')thinkAcc+=ev.t;else acc+=ev.t;
+          if(!drawT)drawT=setTimeout(()=>{drawT=0;redraw();},60);}
         else if(ev.type==='done') meta=ev;
         else if(ev.type==='error') err=ev.error;
       }
@@ -480,6 +500,9 @@ async function openDrawer(){
           <div class="hint">${esc(t('Ниже — точнее и повторяемее (для сводок и поиска), выше — свободнее.'))}</div></div>
         <div class="fld"><label>${esc(t('Размер контекста'))}</label><select class="inp" id="dCtx">${ST.ctx_sizes.map(n=>`<option value="${n}"${s.num_ctx===n?' selected':''}>${n.toLocaleString()} ${esc(t('токенов'))}</option>`).join('')}</select>
           <div class="hint">${esc(s.provider==='lmstudio'?t('У LM Studio размер контекста задаётся при загрузке модели в самой программе; здесь он лишь решает, сколько сообщений отдать.'):t('Больше — больше сообщений влезет в выборку, но нужно больше видеопамяти и ответ медленнее.'))}</div></div>
+        <div class="fld"><label>${esc(t('Размышления модели'))}</label><select class="inp" id="dThink">
+            ${[['hide','Скрывать — свёрнуты над ответом'],['show','Показывать сразу'],['off','Не просить размышлять — быстрее']].map(([v,l])=>`<option value="${v}"${s.think===v?' selected':''}>${esc(t(l))}</option>`).join('')}</select>
+          <div class="hint">${esc(info.thinking?t('Модель «думающая» (qwen3, deepseek-r1 и подобные): сначала рассуждает, потом отвечает. «Не просить» ускоряет гибридные модели, но модели, которые думают всегда, будут рассуждать прямо в ответе.'):t('Эта модель не размышляет — настройка на неё не влияет.'))}</div></div>
         <div class="fld"><label>${esc(t('Длина ответа, не больше'))}</label><select class="inp" id="dMax">${[256,512,1024,2048,4096,8192].map(n=>`<option value="${n}"${s.max_tokens===n?' selected':''}>${n} ${esc(t('токенов'))}</option>`).join('')}</select></div>
         <h3 class="sec">${esc(t('Какие сообщения давать модели'))}</h3>
         <div class="fld"><label>${esc(t('Период'))}</label><select class="inp" id="dPer">${Object.keys(PERIOD_NAMES).map(k=>`<option value="${k}"${s.period===k?' selected':''}>${esc(t(PERIOD_NAMES[k]))}</option>`).join('')}</select></div>
@@ -500,6 +523,7 @@ async function openDrawer(){
     $('dTemp').oninput=e=>{s.temperature=+e.target.value;$('dTv').textContent=s.temperature;};
     $('dCtx').onchange=e=>{s.num_ctx=+e.target.value;};
     $('dMax').onchange=e=>{s.max_tokens=+e.target.value;};
+    $('dThink').onchange=e=>{s.think=e.target.value;};
     $('dPer').onchange=e=>{s.period=e.target.value;};
     $('dSrc').querySelectorAll('input').forEach(cb=>cb.onchange=()=>{s.sources=[...$('dSrc').querySelectorAll('input:checked')].map(x=>x.value);});
     $('dMsgs').onchange=e=>{s.max_msgs=+e.target.value;};

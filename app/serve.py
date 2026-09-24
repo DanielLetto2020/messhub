@@ -7,6 +7,7 @@
     / и /widget → widget.html (в браузере — та же доска)     /settings → settings.html
     /message?id=N → message.html — отдельное окно: сообщение и лог целиком
     /assistant → assistant.html — ассистент на локальной модели (ai.py; API /api/ai/…)
+    /find?q=… → find.html — результаты поиска из шапки доски (окно выпадает над панелью)
     /i18n.js — переводы страниц     /avatar/<файл> — аватары из уведомлений
 
   Сообщения:
@@ -111,6 +112,7 @@ PAGES = {
     "/settings": ("settings.html", "text/html; charset=utf-8"),
     "/message": ("message.html", "text/html; charset=utf-8"),     # окно одного сообщения: /message?id=N
     "/assistant": ("assistant.html", "text/html; charset=utf-8"), # окно ассистента на локальной модели
+    "/find": ("find.html", "text/html; charset=utf-8"),           # результаты поиска из шапки доски
     "/i18n.js": ("i18n.js", "text/javascript; charset=utf-8"),
 }
 

@@ -508,6 +508,19 @@ const EN = {
     'Model: {m} ({p}). It and other settings — temperature, context size, which messages to use — can be changed in any conversation with the settings button at the top.',
   'Начать беседу': 'Start a conversation', 'Сервер виджета не отвечает — ассистент не загрузился.': 'The widget server is not responding — the assistant could not load.',
 
+  // ── ассистент: размышления моделей ──
+  'Думает…': 'Thinking…', 'Размышления модели': 'Model thinking', '{n} символов': '{n} characters',
+  'Скрывать — свёрнуты над ответом': 'Hide — collapsed above the answer', 'Показывать сразу': 'Show right away',
+  'Не просить размышлять — быстрее': 'Do not ask it to think — faster',
+  'Модель «думающая» (qwen3, deepseek-r1 и подобные): сначала рассуждает, потом отвечает. «Не просить» ускоряет гибридные модели, но модели, которые думают всегда, будут рассуждать прямо в ответе.':
+    'A “thinking” model (qwen3, deepseek-r1 and similar) reasons first and answers after. “Do not ask” speeds up hybrid models, but always-thinking models will reason right in the answer.',
+  'Эта модель не размышляет — настройка на неё не влияет.': 'This model does not think — the setting has no effect.',
+
+  // ── поиск в шапке доски ──
+  'Поиск…': 'Search…', 'Поиск по всем сообщениям · клавиша /': 'Search all messages · key /', 'Найдено': 'Found',
+  'Все результаты в «Поиске»': 'All results in Search', 'Ничего не нашлось по «{q}»': 'Nothing found for “{q}”',
+  'Сервер виджета не отвечает': 'The widget server is not responding', 'на доске': 'on the board',
+
   // ── логи ──
   'Логи': 'Logs',
   'Журнал работы самой программы: запуск, ошибки, фоновые задачи, что сделали правила. Тексты твоих сообщений сюда не пишутся. Журнал лежит только на этом компьютере.':

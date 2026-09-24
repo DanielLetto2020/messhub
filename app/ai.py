@@ -220,23 +220,47 @@ def status(conn):
             "default_system": default_system()}
 
 
+_caps = {}                   # (провайдер, модель) → умеет ли «размышлять» (qwen3, deepseek-r1, gpt-oss…)
+
+
 def model_info(conn, provider, model):
-    """Сколько контекста умеет модель (если провайдер это говорит)."""
+    """Сколько контекста умеет модель и «думающая» ли она (если провайдер это говорит)."""
     ai = rules.get_prefs(conn)["ai"]
     if os.environ.get("MESSHUB_THEMED_DEMO") == "1":
-        return {"ctx": 40960, "params": "8.2B"}
+        return {"ctx": 40960, "params": "8.2B", "thinking": True}
     try:
         if provider == "ollama":
             d = _json(ai["ollama_url"], "/api/show", {"model": model}, timeout=10, allow_lan=ai["allow_lan"])
             mi = d.get("model_info") or {}
             ctx = next((v for k, v in mi.items() if k.endswith(".context_length")), 0)
-            return {"ctx": int(ctx or 0), "params": (d.get("details") or {}).get("parameter_size", "")}
+            thinking = "thinking" in (d.get("capabilities") or [])
+            _caps[(provider, model)] = thinking
+            return {"ctx": int(ctx or 0), "params": (d.get("details") or {}).get("parameter_size", ""), "thinking": thinking}
         for m in lmstudio_status(ai["lmstudio_url"])["models"]:
             if m["name"] == model:
-                return {"ctx": int(m.get("ctx") or 0), "params": ""}
+                return {"ctx": int(m.get("ctx") or 0), "params": "", "thinking": _guess_thinking(model)}
     except (OSError, ValueError, urllib.error.URLError):
         pass
-    return {"ctx": 0, "params": ""}
+    return {"ctx": 0, "params": "", "thinking": _guess_thinking(model)}
+
+
+def _guess_thinking(model):
+    return bool(re.search(r"qwen3|deepseek-r1|qwq|gpt-oss|magistral|phi4-reasoning|thinking|reason", model.lower()))
+
+
+def thinks(ai_prefs, provider, model):
+    """Умеет ли модель размышлять (у Ollama — по её описанию, спрашиваем один раз)."""
+    key = (provider, model)
+    if key not in _caps:
+        if provider == "ollama":
+            try:
+                d = _json(ai_prefs["ollama_url"], "/api/show", {"model": model}, timeout=10, allow_lan=ai_prefs["allow_lan"])
+                _caps[key] = "thinking" in (d.get("capabilities") or [])
+            except (OSError, ValueError, urllib.error.URLError):
+                return _guess_thinking(model)
+        else:
+            _caps[key] = _guess_thinking(model)
+    return _caps[key]
 
 
 # ── скачивание в Ollama ─────────────────────────────────────────────────────
@@ -297,7 +321,13 @@ def delete_model(conn, model):
 # ── беседы ──────────────────────────────────────────────────────────────────
 
 SESSION_KEYS = ("provider", "model", "temperature", "num_ctx", "max_tokens", "system", "period", "max_msgs",
-                "include_logs", "include_read")
+                "include_logs", "include_read", "think")
+THINK_BUDGET = 4096          # сколько токенов «думающей» модели даём на размышления сверх длины ответа
+
+
+def think_budget(st):
+    """Токены на размышления: не больше THINK_BUDGET и не больше 40% контекста (он делится с выборкой)."""
+    return min(THINK_BUDGET, int(st["num_ctx"] * 0.4))
 
 
 def session_defaults(conn):
@@ -408,8 +438,9 @@ def _msk(dt):
     return local.astimezone(catcher.MSK).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def build_context(conn, st, question):
-    """Выборка сообщений: (строки для модели, id, сводка, с какого периода)."""
+def build_context(conn, st, question, thinking=False):
+    """Выборка сообщений: (строки для модели, id, сводка, с какого периода).
+    thinking — модель будет размышлять: сообщениям достаётся меньшая доля контекста."""
     prefs = rules.get_prefs(conn)
     names = prefs["source_names"]
     frm, to = question_period(question, st["period"])
@@ -454,7 +485,8 @@ def build_context(conn, st, question):
             sc += 2
         if sc:
             scored[it["id"]] = sc
-    budget = int(st["num_ctx"] * 0.55 * 3)          # символов на сообщения (≈3 символа на токен)
+    share = 0.35 if thinking else 0.55               # остальное — история беседы, размышления и ответ
+    budget = int(st["num_ctx"] * share * 3)          # символов на сообщения (≈3 символа на токен)
     chosen, used = [], 0
     ranked = sorted(items, key=lambda x: (-scored.get(x["id"], 0), -x["id"]))
     for it in ranked:
@@ -534,7 +566,8 @@ def chat(db_path, sid, question, emit, lang="ru"):
             conn.execute("UPDATE ai_sessions SET title = ? WHERE id = ?", (question.splitlines()[0][:80], sid))
         conn.execute("UPDATE ai_sessions SET updated = ? WHERE id = ?", (now, sid))
         conn.commit()
-        lines, ids, summary, period = build_context(conn, st, question)
+        will_think = st.get("think") != "off" and thinks(ai, st["provider"], st["model"])
+        lines, ids, summary, period = build_context(conn, st, question, will_think)
         emit({"type": "context", "count": len(ids), "ids": ids, "summary": summary, "period": period})
         system = (st["system"] or default_system()) + "\n\n" + L(
             "Сводка по выборке: ", "Selection summary: ") + summary + "\n" + L(
@@ -542,27 +575,43 @@ def chat(db_path, sid, question, emit, lang="ru"):
             "\n" + ("".join(lines) or L("(за этот период сообщений нет)\n", "(no messages in this period)\n"))
         hist = _history(s["messages"], int(st["num_ctx"] * 0.2 * 3))
         messages = [{"role": "system", "content": system}, *hist, {"role": "user", "content": question}]
-        t0, answer, tokens, stopped = time.time(), [], 0, False
+        t0, answer, thought, tokens, stopped, reason = time.time(), [], [], 0, False, ""
+        split = ThinkSplitter()             # <think>…</think> внутри текста (LM Studio, старые Ollama) — в размышления
         try:
-            for piece, n in _stream(ai, st, messages):
-                if piece:
-                    answer.append(piece)
-                    if not emit({"type": "token", "t": piece}):
+            for ev in _stream(ai, st, messages):
+                for kind, piece in split.feed(ev.get("t", ""), ev.get("think", "")):
+                    (thought if kind == "think" else answer).append(piece)
+                    if not emit({"type": "think" if kind == "think" else "token", "t": piece}):
                         stopped = True
                         break
-                if n:
-                    tokens = n
+                if stopped:
+                    break
+                tokens = ev.get("tokens") or tokens
+                reason = ev.get("done_reason") or reason
         except (OSError, ValueError, urllib.error.URLError) as e:
-            if not answer:
+            if not answer and not thought:
                 raise ValueError(L(f"Модель не ответила: {_human(e)}", f"The model did not answer: {_human(e)}"))
             stopped = True
+        for kind, piece in split.flush():
+            (thought if kind == "think" else answer).append(piece)
+            emit({"type": "think" if kind == "think" else "token", "t": piece})
         text = "".join(answer).strip()
-        text = re.sub(r"<think>.*?</think>\s*", "", text, flags=re.S).strip() or text   # «размышления» моделей
+        note = ""
+        if not text and not stopped:
+            note = (L("Модель не успела ответить: весь лимит ушёл на размышления. Увеличь «Размер контекста» и "
+                      "«Длину ответа» в настройках беседы или возьми модель без размышлений.",
+                      "The model ran out of room: the whole limit went into thinking. Raise “Context size” and “Answer "
+                      "length” in the conversation settings or use a model without thinking.") if thought else
+                    L("Модель ничего не ответила. Попробуй ещё раз, другую модель или меньше сообщений в выборке.",
+                      "The model returned nothing. Try again, another model or fewer messages in the selection."))
+        elif reason == "length" and text:
+            note = L("Ответ обрезан по «Длине ответа» — её можно увеличить в настройках беседы.",
+                     "The answer was cut at “Answer length” — raise it in the conversation settings.")
         meta = {"ids": ids, "model": f"{st['provider']}: {st['model']}", "ms": int((time.time() - t0) * 1000),
-                "tokens": tokens, "stopped": stopped, "summary": summary}
+                "tokens": tokens, "stopped": stopped, "summary": summary, "note": note,
+                "thinking": "".join(thought).strip()[-20000:]}
         conn.execute("INSERT INTO ai_messages (session_id, role, content, created, meta) VALUES (?,?,?,?,?)",
-                     (sid, "assistant", text or L("(пустой ответ)", "(empty answer)"), catcher.msk_time(),
-                      json.dumps(meta, ensure_ascii=False)))
+                     (sid, "assistant", text, catcher.msk_time(), json.dumps(meta, ensure_ascii=False)))
         conn.execute("UPDATE ai_sessions SET updated = ? WHERE id = ?", (catcher.msk_time(), sid))
         conn.commit()
         emit({"type": "done", **meta})
@@ -571,11 +620,46 @@ def chat(db_path, sid, question, emit, lang="ru"):
         conn.close()
 
 
+class ThinkSplitter:
+    """Делит поток на размышления и ответ: отдельное поле thinking/reasoning_content или теги <think>…</think>
+    в тексте (тег может прийти по кусочкам). → [(think|answer, текст)]."""
+
+    def __init__(self):
+        self.inside, self.buf = False, ""
+
+    def feed(self, text, think=""):
+        out = [("think", think)] if think else []
+        self.buf += text or ""
+        while self.buf:
+            tag = "</think>" if self.inside else "<think>"
+            i = self.buf.find(tag)
+            if i < 0:
+                keep = next((k for k in range(min(len(tag) - 1, len(self.buf)), 0, -1)
+                             if tag.startswith(self.buf[-k:])), 0)      # хвост может быть началом тега
+                piece, self.buf = self.buf[:len(self.buf) - keep], self.buf[len(self.buf) - keep:]
+                if piece:
+                    out.append(("think" if self.inside else "answer", piece))
+                break
+            if i:
+                out.append(("think" if self.inside else "answer", self.buf[:i]))
+            self.buf, self.inside = self.buf[i + len(tag):], not self.inside
+        return [(k, p) for k, p in out if p]
+
+    def flush(self):
+        piece, self.buf = self.buf, ""
+        return [("think" if self.inside else "answer", piece)] if piece else []
+
+
 def _stream(ai, st, messages):
-    """(кусок текста, число токенов ответа или 0) от Ollama или LM Studio."""
+    """События от Ollama или LM Studio: {t: текст ответа, think: размышления, tokens, done_reason}."""
+    can_think = thinks(ai, st["provider"], st["model"])
+    think = can_think and st.get("think") != "off"
+    budget = st["max_tokens"] + (think_budget(st) if think else 0)
     if st["provider"] == "ollama":
         body = {"model": st["model"], "messages": messages, "stream": True,
-                "options": {"temperature": st["temperature"], "num_ctx": st["num_ctx"], "num_predict": st["max_tokens"]}}
+                "options": {"temperature": st["temperature"], "num_ctx": st["num_ctx"], "num_predict": budget}}
+        if can_think:
+            body["think"] = think        # у «думающих» моделей: выключено — отвечает сразу
         with _req(ai["ollama_url"], "/api/chat", body, timeout=900, allow_lan=ai["allow_lan"]) as r:
             for line in r:
                 try:
@@ -584,12 +668,17 @@ def _stream(ai, st, messages):
                     continue
                 if ev.get("error"):
                     raise ValueError(str(ev["error"])[:300])
-                yield (ev.get("message") or {}).get("content", ""), (ev.get("eval_count") or 0) if ev.get("done") else 0
+                m = ev.get("message") or {}
+                yield {"t": m.get("content", ""), "think": m.get("thinking", ""),
+                       "tokens": ev.get("eval_count", 0) if ev.get("done") else 0,
+                       "done_reason": ev.get("done_reason", "") if ev.get("done") else ""}
                 if ev.get("done"):
                     return
     else:
+        if can_think and not think and "qwen3" in st["model"].lower():
+            messages = [dict(messages[0], content=messages[0]["content"] + "\n/no_think"), *messages[1:]]
         body = {"model": st["model"], "messages": messages, "stream": True, "temperature": st["temperature"],
-                "max_tokens": st["max_tokens"]}
+                "max_tokens": budget}
         with _req(ai["lmstudio_url"], "/v1/chat/completions", body, timeout=900, allow_lan=ai["allow_lan"]) as r:
             for raw in r:
                 line = raw.decode("utf-8", "replace").strip()
@@ -603,5 +692,7 @@ def _stream(ai, st, messages):
                 except ValueError:
                     continue
                 ch = (ev.get("choices") or [{}])[0]
-                usage = (ev.get("usage") or {}).get("completion_tokens", 0)
-                yield (ch.get("delta") or {}).get("content", "") or "", usage
+                d = ch.get("delta") or {}
+                yield {"t": d.get("content") or "", "think": d.get("reasoning_content") or d.get("reasoning") or "",
+                       "tokens": (ev.get("usage") or {}).get("completion_tokens", 0),
+                       "done_reason": ch.get("finish_reason") or ""}

@@ -58,6 +58,7 @@ class Api:
         self._win = self._settings = None
         self._pages = {}             # отдельные окна страниц: message, assistant
         self._share, self._share_thread = {"on": False}, None     # показ экрана → размыть доску
+        self._find = None            # окно результатов поиска из шапки (над панелью)
         self._g0 = None
         self._save_timer = None
 
@@ -71,6 +72,7 @@ class Api:
     def _handle(self, msg):
         w = self._win
         if msg.startswith("geom-start:"):
+            self._search_close()             # доску двигают — результаты поиска не висят в стороне
             if not self._state.get("locked"):
                 self._g0 = (msg.split(":", 1)[1], w.x, w.y, w.width, w.height)
         elif msg.startswith("geom:") and self._g0:
@@ -100,6 +102,12 @@ class Api:
             if self._share["on"] and not self._share_thread:
                 self._share_thread = threading.Thread(target=self._share_loop, name="share", daemon=True)
                 self._share_thread.start()
+        elif msg.startswith("search:"):
+            self._search(json.loads(msg[7:]))
+        elif msg.startswith("search-nav:") and self._find:
+            self._find.evaluate_js(f"window.hostNav && hostNav({json.dumps(msg[11:])})")
+        elif msg == "search-close":
+            self._search_close()
         elif msg.startswith("message:") and msg[8:].isdigit():
             self._open_page("message", f"/message?id={int(msg[8:])}&host=pywebview", 900, 640)
         elif msg == "assistant":
@@ -195,6 +203,39 @@ class Api:
         bridge._win = win
         self._pages[kind] = win
         win.events.closed += lambda: self._pages.pop(kind, None)
+
+    def _search(self, cfg):
+        """Окно результатов без рамки над полем поиска (сверху мало места — под доской), не забирает фокус."""
+        import webview
+        from urllib.parse import quote
+        q = str(cfg.get("q") or "").strip()[:200]
+        if not q:
+            return self._search_close()
+        w = self._win
+        width, height = 600, 420
+        x = max(0, w.x + int(cfg.get("x") or 0) - 10)
+        y = w.y - height - 6 if w.y - height - 6 >= 0 else w.y + w.height + 6
+        if self._find:
+            try:
+                self._find.evaluate_js(f"window.hostSearch && hostSearch({json.dumps(q)})")
+                self._find.move(x, y)
+                return
+            except Exception:  # noqa: BLE001 — окно уже закрыли
+                self._find = None
+        bridge = PageApi(self)
+        self._find = webview.create_window("messhub", f"{self._base}/find?host=pywebview&q={quote(q)}", js_api=bridge,
+                                           width=width, height=height, x=x, y=y, frameless=True, easy_drag=False,
+                                           on_top=True, focus=False, resizable=False, background_color="#12151c")
+        bridge._win = self._find
+        self._find.events.closed += lambda: setattr(self, "_find", None)
+
+    def _search_close(self):
+        if self._find:
+            try:
+                self._find.destroy()
+            except Exception:  # noqa: BLE001
+                pass
+            self._find = None
 
     def _share_loop(self):
         """Раз в 3 с: окна-индикаторы показа экрана (заголовки через EnumWindows) → hostSetShare."""

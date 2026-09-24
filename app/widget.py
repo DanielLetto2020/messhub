@@ -194,6 +194,7 @@ class Widget(Gtk.Window):
         self.base_url = f"{u.scheme}://{u.netloc}"   # тот же сервер отдаёт и /settings
         self.settings_win = None
         self.page_wins = {}          # отдельные окна страниц: message, assistant (по одному каждого)
+        self.find_win = None         # окно результатов поиска из шапки (над панелью)
         self.share = {"on": False, "patterns": [], "active": False, "tick": 0, "id": 0}
         self.saved = None if reset else load_state(state_path)   # что сейчас в файле
         self.locked = bool(self.saved and self.saved["locked"])  # --reset снимает и замок
@@ -319,6 +320,19 @@ class Widget(Gtk.Window):
             if self.share["on"] and not self.share["id"]:
                 self.share["id"] = GLib.timeout_add_seconds(3, self._check_share)
             return
+        if cmd.startswith("search:"):
+            try:
+                self._search(json.loads(cmd[7:]))
+            except ValueError:
+                pass
+            return
+        if cmd.startswith("search-nav:") and self.find_win is not None:
+            self.find_win.get_child().evaluate_javascript(
+                f"window.hostNav && hostNav({json.dumps(cmd[11:])})", -1, None, None, None, None)
+            return
+        if cmd == "search-close":
+            self._search_close()
+            return
         if self._page_cmd(cmd):
             return
         if cmd.startswith("open:"):
@@ -340,6 +354,7 @@ class Widget(Gtk.Window):
     def _on_configure(self, *_):
         if not self.placed:
             return False
+        self._search_close()                  # окно двигают или тянут — результаты поиска не висят в стороне
         if self.locked:
             # закреплено, но окно сдвинули в обход страницы — вернуть, когда утихнет
             if self._snap_id:
@@ -455,9 +470,10 @@ class Widget(Gtk.Window):
         если уже открыто — просто поднять (и перейти в раздел, если он указан)."""
         hash_ = ("#" + section) if re.match(r"^[a-z-]{1,20}$", section or "") else ""
         if self.settings_win is not None:
-            if hash_:
+            if hash_:                          # тот же раздел — перерисовать (например, новый запрос поиска)
+                h = json.dumps(hash_)
                 self.settings_win.get_child().evaluate_javascript(
-                    f"location.hash={json.dumps(hash_)}", -1, None, None, None, None)
+                    f"location.hash==={h}?route():location.hash={h}", -1, None, None, None, None)
             self.settings_win.present()
             return
         win = Gtk.Window(title=f"{version.version_line()} — настройки")
@@ -476,6 +492,68 @@ class Widget(Gtk.Window):
         win.show_all()
         self.settings_win = win
         log("открыл настройки")
+
+    # ── поиск из шапки: окно результатов над панелью ──
+    def _search(self, cfg):
+        """Окно без рамки прямо над полем поиска (не хватает места сверху — под панелью). Фокус не забирает:
+        ввод остаётся в шапке, стрелки и Enter приходят сюда командами search-nav."""
+        q = str(cfg.get("q") or "").strip()[:200]
+        if not q:
+            self._search_close()
+            return
+        if not self.x11:                       # Wayland: окно не поставить у панели — обычное окно
+            self._open_page("find", "/find?q=" + urllib.parse.quote(q), 640, 480)
+            return
+        wx, wy = self.get_position()
+        ww, wh = self.get_size()
+        geo = self.get_display().get_monitor_at_window(self.get_window()).get_geometry()
+        width = max(460, min(640, geo.width - 40))
+        x = min(max(wx + int(cfg.get("x") or 0) - 10, geo.x + 8), geo.x + geo.width - width - 8)
+        above, below = wy - geo.y - 12, geo.y + geo.height - (wy + wh) - 12
+        if above >= 220:
+            height = min(440, above)
+            y = wy - height - 6
+        elif below >= 220:
+            height = min(440, below)
+            y = wy + wh + 6
+        else:
+            height = min(440, geo.height - 40)
+            y = geo.y + 20
+        win = self.find_win
+        if win is None:
+            win = Gtk.Window(type=Gtk.WindowType.POPUP)       # мимо оконного менеджера: без рамки, поверх, без фокуса
+            win.set_app_paintable(True)
+            vis = win.get_screen().get_rgba_visual()
+            if vis is not None:
+                win.set_visual(vis)
+            ucm = WebKit2.UserContentManager()
+            web = WebKit2.WebView.new_with_user_content_manager(ucm)
+            web.set_background_color(Gdk.RGBA(0, 0, 0, 0))
+
+            def on_msg(_ucm, res):
+                try:
+                    c = res.get_js_value().to_string()
+                except Exception:
+                    return
+                self._page_cmd(c, web=web, win=win)
+            ucm.connect("script-message-received::widget", on_msg)
+            ucm.register_script_message_handler("widget")
+            web.connect("decide-policy", self._on_policy)
+            web.load_uri(f"{self.base_url}/find?q={urllib.parse.quote(q)}")
+            win.add(web)
+            win.connect("destroy", lambda *_: setattr(self, "find_win", None))
+            self.find_win = win
+        else:
+            win.get_child().evaluate_javascript(f"window.hostSearch && hostSearch({json.dumps(q)})",
+                                                -1, None, None, None, None)
+        win.resize(width, height)
+        win.move(x, y)
+        win.show_all()
+
+    def _search_close(self):
+        if self.find_win is not None:
+            self.find_win.destroy()
+            self.find_win = None
 
     # ── показ экрана на созвоне → доска размывается сама ──
     def _check_share(self):
@@ -507,6 +585,8 @@ class Widget(Gtk.Window):
             self._open_page("assistant", "/assistant", ASSIST_W, ASSIST_H)
         elif cmd == "close" and win is not None:
             win.destroy()
+        elif cmd == "search-close":
+            self._search_close()
         elif cmd.startswith("settings") and win is not None:
             self._open_settings(cmd.partition(":")[2])
         elif cmd.startswith("open:") and win is not None:

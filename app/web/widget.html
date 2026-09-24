@@ -51,6 +51,19 @@
   .bar .dot.on { animation: pulse 1.6s infinite; }
   @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(67,214,154,.6)} 70%{box-shadow:0 0 0 6px rgba(67,214,154,0)} 100%{box-shadow:0 0 0 0} }
   .bar .count { margin-left: auto; margin-right: 6px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+  /* поиск в шапке: результаты — в окне над панелью (widget.py / winwidget.py), в браузере — всплывающим окном */
+  .bar .hq { position: relative; flex: 0 1 190px; min-width: 80px; margin-left: 10px; transition: flex-basis .15s; }
+  .bar .hq:focus-within { flex-basis: 280px; }
+  .bar .hq input { width: 100%; height: 24px; border: 1px solid var(--line); border-radius: 7px; background: var(--card); color: var(--text);
+    font: inherit; font-size: 11.5px; padding: 0 22px 0 24px; outline: none; cursor: text; }
+  .bar .hq input:focus { border-color: var(--accent); background: var(--card-hover); }
+  .bar .hq input::placeholder { color: var(--muted); }
+  .bar .hq svg { position: absolute; left: 7px; top: 6px; color: var(--muted); pointer-events: none; }
+  .bar .hq .clr { position: absolute; right: 3px; top: 3px; width: 18px; height: 18px; border: 0; background: none; color: var(--muted);
+    border-radius: 5px; cursor: pointer; font-size: 11px; line-height: 18px; padding: 0; }
+  .bar .hq .clr:hover { color: var(--text); background: var(--card-hover); }
+  .bar .hq .clr[hidden] { display: none; }
+  .bar .hq input::-webkit-search-cancel-button, .bar .hq input::-webkit-search-decoration { -webkit-appearance: none; display: none; }
   .bar .ib { cursor: pointer; opacity: .7; display: inline-flex; align-items: center; gap: 4px;
     padding: 3px; border-radius: 7px; color: var(--text); }
   .bar .ib:hover { opacity: 1; background: var(--card-hover); }
@@ -245,6 +258,8 @@
     <span class="dot on" id="dot"></span>
     <span class="title" id="appName">messhub</span><span class="ver" id="ver"></span><span class="vok" id="vok" hidden>✓</span>
     <a class="upd" id="upd" hidden target="_blank" rel="noopener noreferrer"></a>
+    <label class="hq" data-t-title="Поиск по всем сообщениям · клавиша /"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="hq" type="search" autocomplete="off" spellcheck="false" data-t-ph="Поиск…" placeholder="Поиск…"><button class="clr" id="hqClr" type="button" hidden data-t-title="Очистить">✕</button></label>
     <span class="count" id="count">0</span>
     <span class="ib prof" id="profBtn" hidden data-t-title="Профиль">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span id="profName"></span>
@@ -715,6 +730,31 @@ async function cancelRemind(id){
   catch(e){toast(t('Не удалось отменить — сервер не отвечает'),{err:true});}
 }
 
+// ── поиск в шапке: окно результатов выпадает над панелью (окно-хозяин держит его рядом с полем) ──
+const hq=$('hq'); let hqT=0, hqWin=null;
+function hqSend(q){
+  $('hqClr').hidden=!q;
+  if(host){
+    if(!q){host.postMessage('search-close');return;}
+    const r=hq.getBoundingClientRect();
+    host.postMessage('search:'+JSON.stringify({q,x:Math.round(r.left),w:Math.round(r.width)}));
+  } else if(q){                                  // обычный браузер: отдельное окно
+    hqWin=window.open('/find?q='+encodeURIComponent(q),'messhub-find','width=640,height=460');
+  }
+}
+hq.addEventListener('input',()=>{clearTimeout(hqT);hqT=setTimeout(()=>hqSend(hq.value.trim()),220);});
+hq.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){e.preventDefault();hq.value='';hqSend('');hq.blur();}
+  else if(host&&(e.key==='ArrowDown'||e.key==='ArrowUp')){e.preventDefault();host.postMessage('search-nav:'+(e.key==='ArrowDown'?'down':'up'));}
+  else if(e.key==='Enter'){e.preventDefault();clearTimeout(hqT);if(host)host.postMessage('search-nav:enter');else hqSend(hq.value.trim());}
+});
+// ушли из поля (клик по доске или в другое окно) — окно результатов закрывается; клики в самом окне результатов
+// фокус не забирают, поэтому их это не касается
+hq.addEventListener('blur',()=>{setTimeout(()=>{if(document.activeElement!==hq&&host)host.postMessage('search-close');},250);});
+hq.addEventListener('focus',()=>{if(hq.value.trim())hqSend(hq.value.trim());});
+$('hqClr').addEventListener('click',()=>{hq.value='';hqSend('');hq.focus();});
+window.hostSearchClosed=()=>{};                  // окно результатов закрыли (открыли сообщение, ✕, Esc)
+
 // ── тихие часы: луна в шапке (состояние — заголовок X-Quiet каждого ответа /api/messages) ──
 let quietNow={active:false,reason:'',until:''};
 function applyQuiet(h){
@@ -891,7 +931,7 @@ document.addEventListener('pointermove',e=>{
 });
 document.addEventListener('pointerup',()=>{if(geo){host.postMessage('geom:'+geo.d.join(','));host.postMessage('geom-end');geo=null;}});
 const DOWN=PYW?'pointerdown':'mousedown';
-document.querySelector('.bar').addEventListener(DOWN,e=>{if(!e.target.closest('.ib,a'))dragStart('move',e);});
+document.querySelector('.bar').addEventListener(DOWN,e=>{if(!e.target.closest('.ib,a,.hq'))dragStart('move',e);});
 document.querySelectorAll('.rz').forEach(h=>h.addEventListener(DOWN,e=>dragStart('resize:'+h.dataset.edge,e)));
 document.addEventListener('mousemove',e=>{
   if(!dragCmd)return;
@@ -914,8 +954,10 @@ function applyPriv(){
 eye.addEventListener('click',()=>{priv=!priv;applyPriv();});
 $('gear').addEventListener('click',()=>{if(host)host.postMessage('settings');else window.open('/settings','_blank');});
 document.addEventListener('keydown',e=>{
+  if(e.target&&e.target.id==='hq') return;                   // печатают в поиске — клавиши B, F и т.п. не трогаем
   if(e.key==='Escape'){if(!menu.hidden)hideMenu();return;}    // окно виджета по Esc не закрывается
   if(e.ctrlKey||e.metaKey||e.altKey)return;
+  if(e.key==='/'||e.key==='.'){e.preventDefault();$('hq').focus();return;}
   if(e.key==='b'||e.key==='B'||e.key==='и'||e.key==='И'){priv=!priv;applyPriv();}
   if(e.key==='f'||e.key==='F'||e.key==='а'||e.key==='А')setFocus(!focus);
 });

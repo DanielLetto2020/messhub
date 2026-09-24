@@ -329,14 +329,16 @@ class AiTest(unittest.TestCase):
 
         def fake_stream(ai_prefs, st, messages):
             seen["system"] = messages[0]["content"]
-            for piece in ("Отчёт нужен ", "к пятнице (#1)."):
-                yield piece, 0
-            yield "", 7
-        with mock.patch.object(ai, "_stream", fake_stream):
+            yield {"think": "надо найти отчёт"}                     # отдельное поле размышлений (Ollama)
+            for piece in ("<think>ещё подумаю</think>Отчёт нужен ", "к пятнице (#1)."):   # и теги в тексте
+                yield {"t": piece}
+            yield {"tokens": 7, "done_reason": "stop"}
+        with mock.patch.object(ai, "_stream", fake_stream), mock.patch.object(ai, "thinks", return_value=True):
             out = self.post("/api/ai/chat", {"session": s["id"], "text": "Что с отчётом?"})
         evs = [json.loads(line) for line in out.splitlines() if line.strip()]
-        self.assertEqual([e["type"] for e in evs], ["context", "token", "token", "done"])
+        self.assertEqual([e["type"] for e in evs], ["context", "think", "think", "token", "token", "done"])
         self.assertEqual(evs[-1]["tokens"], 7)
+        self.assertEqual(evs[-1]["thinking"], "надо найти отчётещё подумаю")
         self.assertIn("#1 · ", seen["system"])                      # сообщения из базы — в промпте
         with urllib.request.urlopen(f"{self.base}/api/ai/session?id={s['id']}", timeout=10) as r:
             full = json.load(r)
@@ -350,6 +352,30 @@ class AiTest(unittest.TestCase):
         self.post("/api/ai/session/delete", {"id": s["id"]})
         with urllib.request.urlopen(f"{self.base}/api/ai/sessions", timeout=10) as r:
             self.assertNotIn(s["id"], [x["id"] for x in json.load(r)])
+
+    def test_empty_answer_explained(self):
+        """Вся «длина ответа» ушла на размышления — не «(пустой ответ)», а что поправить."""
+        s = json.loads(self.post("/api/ai/session", {"settings": {"provider": "ollama", "model": "demo:1b"}}))
+
+        def only_thinking(ai_prefs, st, messages):
+            yield {"think": "долго-долго думаю"}
+            yield {"tokens": 1024, "done_reason": "length"}
+        with mock.patch.object(ai, "_stream", only_thinking), mock.patch.object(ai, "thinks", return_value=True):
+            out = self.post("/api/ai/chat", {"session": s["id"], "text": "Что было?"})
+        done = json.loads(out.splitlines()[-1])
+        self.assertIn("весь лимит ушёл на размышления", done["note"])
+
+    def test_think_modes_and_splitter(self):
+        self.assertEqual(rules.clean_ai({"think": True})["think"], "show")
+        self.assertEqual(rules.clean_ai({"think": False})["think"], "hide")
+        self.assertEqual(rules.clean_ai({"think": "off"})["think"], "off")
+        sp, out = ai.ThinkSplitter(), []
+        for ch in ("<th", "ink>думаю</th", "ink>Отв", "ет <"):
+            out += sp.feed(ch)
+        out += sp.flush()
+        self.assertEqual("".join(p for k, p in out if k == "think"), "думаю")
+        self.assertEqual("".join(p for k, p in out if k == "answer"), "Ответ <")
+        self.assertEqual(ai.think_budget({"num_ctx": 8192}), 3276)
 
     def test_pages_served(self):
         with urllib.request.urlopen(self.base + "/assistant", timeout=10) as r:

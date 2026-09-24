@@ -133,7 +133,7 @@ PREF_DEFAULTS = {
     "scripts": {"enabled": True, "items": {}},   # свои источники: скрипты в <настройки>/sources.d (scripts.py)
     "ai": {"provider": "", "ollama_url": "http://127.0.0.1:11434", "lmstudio_url": "http://127.0.0.1:1234",
            "model": "", "temperature": 0.3, "num_ctx": 8192, "max_tokens": 1024, "system": "",
-           "period": "7d", "max_msgs": 300, "include_logs": False, "include_read": True,
+           "period": "7d", "max_msgs": 300, "include_logs": False, "include_read": True, "think": "hide",
            "allow_lan": False, "setup_done": False},   # ассистент на локальной модели (ai.py)
     # служебное — не настройки, в выгрузку и в версию настроек не входит:
     "backup_last": "", "report_last": "", "services_win_last": "", "quiet_state": "", "agenda_last": "",
@@ -572,6 +572,8 @@ def clean_ai(v):
            "system": str(v.get("system", d["system"]))[:4000],
            "period": v.get("period") if v.get("period") in ("1d", "2d", "7d", "30d", "all") else d["period"],
            "max_msgs": int(min(2000, max(10, int(v.get("max_msgs", d["max_msgs"]))))),
+           # размышления «думающих» моделей: hide — отдельно и свёрнуты, show — видны сразу, off — не просить
+           "think": _think_mode(v.get("think", d["think"])),
            **{k: bool(v.get(k, d[k])) for k in ("include_logs", "include_read", "allow_lan", "setup_done")}}
     for key in ("ollama_url", "lmstudio_url"):
         url = str(v.get(key, d[key])).strip().rstrip("/")
@@ -580,6 +582,12 @@ def clean_ai(v):
                                "The model address must be on this computer (or your home network, if allowed)"))
         out[key] = url
     return out
+
+
+def _think_mode(v):
+    if v is True:
+        return "show"
+    return v if v in ("hide", "show", "off") else "hide"
 
 
 def ai_url_ok(url, allow_lan=False):

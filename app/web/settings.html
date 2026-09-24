@@ -876,6 +876,8 @@ function bindResults(box,rows){
   });
 }
 async function showSearch(){
+  // запрос из окна поиска на доске («Все результаты в «Поиске»»)
+  try{const q=localStorage.getItem('messhub.searchq');if(q){localStorage.removeItem('messhub.searchq');sr.q=q;sr.offset=0;setTimeout(()=>$('sGo')&&$('sGo').click(),0);}}catch(e){}
   page.innerHTML=`<h1>${esc(t('Поиск'))}</h1>
     <p class="lead">${esc(t('Поиск по всем сохранённым сообщениям, в том числе прочитанным и скрытым. Найденное можно вернуть в виджет.'))}</p>
     <div class="filters">
