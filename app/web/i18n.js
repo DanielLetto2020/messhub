@@ -537,6 +537,64 @@ const EN = {
   'Чтобы сообщить об ошибке, выгрузи журнал: домашняя папка в выгрузке заменится на «~», имя пользователя — на <user>. Всё равно просмотри файл перед отправкой.':
     'To report a bug, export the log: your home folder becomes “~” and your user name becomes <user>. Still, look through the file before sending it.',
 
+  // ── ассистент: OpenRouter, картинки, код, графики ──
+  'Ollama и LM Studio бесплатные и работают на этом компьютере. Если ни одной нет — проще начать с Ollama: модели скачиваются прямо отсюда. OpenRouter — облачные модели, по желанию.':
+    'Ollama and LM Studio are free and run on this computer. If you have neither, Ollama is the easiest start: models download right from here. OpenRouter is cloud models, optional.',
+  'OpenRouter выключен — включи его в «Моделях» или выбери локальную модель': 'OpenRouter is off — turn it on under “Models” or pick a local model',
+  'OpenRouter даёт доступ к сотням облачных моделей по твоему ключу. В беседе с такой моделью к каждому вопросу уйдут выборка твоих сообщений (тексты, имена, названия чатов, хвосты логов, если они включены) и приложенные картинки — на серверы OpenRouter и компании, чья это модель. Что с ними будет дальше, решают их правила, а не messhub.':
+    'OpenRouter gives access to hundreds of cloud models with your key. In a conversation with such a model every question sends a selection of your messages (texts, names, chat titles, log tails if enabled) and attached pictures to the servers of OpenRouter and of the company behind the model. What happens next is up to their rules, not messhub.',
+  'OpenRouter отключён — облачные модели недоступны': 'OpenRouter is off — cloud models are unavailable',
+  'OpenRouter подключён': 'OpenRouter connected',
+  'OpenRouter подключён — облачные модели': 'OpenRouter connected — cloud models',
+  'SVG скопирован — можно вставить в документ': 'SVG copied — paste it into a document',
+  '{i} / {o} за 1 млн токенов': '{i} / {o} per 1M tokens',
+  '{n} не посчитались — модель сбоит на этих текстах. Умный поиск их не найдёт, обычный — найдёт. Попробую снова при перезапуске и раз в сутки.':
+    '{n} could not be indexed — the model fails on these texts. Smart search will not find them, plain search will. I will retry on restart and once a day.',
+  'В беседах с этими моделями выборка сообщений, вопросы и картинки уходят в OpenRouter и к провайдеру модели. Такие беседы помечены ☁.':
+    'Conversations with these models send the message selection, questions and pictures to OpenRouter and the model provider. They are marked ☁.',
+  'Видит картинки.': 'Sees pictures.',
+  'Выборка сообщений (тексты, имена, названия чатов), вопрос и картинки уйдут в OpenRouter и к провайдеру модели. Для личного и рабочего лучше локальная модель.':
+    'The message selection (texts, names, chat titles), the question and pictures will go to OpenRouter and the model provider. For personal and work chats a local model is better.',
+  'Выборка сообщений, вопрос и картинки уходят в OpenRouter и к провайдеру модели. Локальную модель можно выбрать в настройках беседы.':
+    'The message selection, the question and pictures go to OpenRouter and the model provider. You can pick a local model in the conversation settings.',
+  'Годятся PNG, JPEG, GIF и WebP': 'PNG, JPEG, GIF and WebP work',
+  'График': 'Chart', 'Таблица': 'Table', 'Другое': 'Other', 'Значение': 'Value', 'всего': 'total', 'Ряд {n}': 'Series {n}',
+  'График не нарисовался: данные не похожи на JSON.': 'The chart was not drawn: the data does not look like JSON.',
+  'График не нарисовался: нужны labels и series с числами.': 'The chart was not drawn: it needs labels and series with numbers.',
+  'Картинка не открылась': 'The picture did not open',
+  'Ключ {k} хранится только на этом компьютере. Согласие дано {d}.': 'The key {k} is stored only on this computer. Consent given {d}.',
+  'Ключ создаётся на openrouter.ai в разделе Keys. Он хранится только на этом компьютере (файл с доступом только для тебя) и странице обратно не показывается.':
+    'Create a key on openrouter.ai under Keys. It is stored only on this computer (a file only you can read) and is never shown back on the page.',
+  'Ключ сохранён': 'Key saved', 'Ключ удалён': 'Key deleted', 'Код скопирован': 'Code copied',
+  'Локальные модели работают на этом компьютере. Беседы с облачными моделями OpenRouter помечены ☁ — их сообщения уходят наружу.':
+    'Local models run on this computer. Conversations with OpenRouter cloud models are marked ☁ — their messages leave the computer.',
+  'Модели, которые можно использовать в беседах. Ollama и LM Studio работают на этом компьютере; OpenRouter — облако, подключается по желанию.':
+    'Models you can use in conversations. Ollama and LM Studio run on this computer; OpenRouter is the cloud, connected only if you want.',
+  'Найти модель…': 'Find a model…', 'Найти среди {n} моделей: gemini, qwen, deepseek…': 'Search {n} models: gemini, qwen, deepseek…',
+  'Не больше {n} картинок к одному вопросу': 'No more than {n} pictures per question',
+  'Ничего не нашлось — поменяй поиск или сними фильтры.': 'Nothing found — change the search or clear the filters.',
+  'Облачная модель': 'Cloud model', 'Облачная модель.': 'Cloud model.', 'Обновить список': 'Refresh list',
+  'Отключить': 'Disconnect', 'Отключить и удалить ключ': 'Disconnect and delete the key',
+  'Подключаешь на свой страх и риск. Для рабочих и личных переписок лучше оставить локальные модели. Локальные беседы работают как раньше, облачные помечены ☁.':
+    'You connect it at your own risk. For work and personal chats keep local models. Local conversations work as before, cloud ones are marked ☁.',
+  'Подключить OpenRouter': 'Connect OpenRouter', 'Показаны {a} из {b} — уточни поиск.': 'Showing {a} of {b} — refine the search.',
+  'Понимаю: выборка сообщений и вопросы будут уходить в OpenRouter': 'I understand: message selections and questions will be sent to OpenRouter',
+  'Попробовать сейчас': 'Retry now', 'Приложить картинку (можно вставить из буфера или перетащить)': 'Attach a picture (paste or drag it in too)',
+  'Рисую график…': 'Drawing the chart…', 'Скопировать SVG': 'Copy SVG', 'Сменить ключ': 'Change key', 'Снова в очереди: {n}': 'Queued again: {n}',
+  'Сотни облачных моделей по твоему ключу, часть бесплатно. Сообщения уходят наружу — на твой страх и риск.':
+    'Hundreds of cloud models with your key, some free. Messages leave the computer — at your own risk.',
+  'Сохранить ключ': 'Save key', 'Список моделей не загрузился: {e}': 'The model list did not load: {e}',
+  'Список моделей пуст — проверь интернет и нажми «Проверить ещё раз».': 'The model list is empty — check the internet and press “Check again”.',
+  'Точно удалить ключ?': 'Delete the key?', 'Убрать': 'Remove',
+  'Цена: {i} / {o} за 1 млн токенов (вход / ответ).': 'Price: {i} / {o} per 1M tokens (input / answer).',
+  'Цены — за 1 млн токенов, их берёт OpenRouter со счёта твоего ключа. Бесплатные модели обычно с ограничением запросов в минуту.':
+    'Prices are per 1M tokens, charged by OpenRouter to your key’s balance. Free models are usually rate-limited per minute.',
+  'Что на картинке?': 'What is in the picture?', 'Эта модель, похоже, не видит картинки': 'This model probably cannot see pictures',
+  'Это облако, а не этот компьютер': 'This is the cloud, not this computer',
+  'бесплатно': 'free', 'видит картинки': 'sees pictures', 'размышляет': 'reasons', 'облако': 'cloud', 'пишет…': 'writing…',
+  'Бесплатные': 'Free', 'Видят картинки': 'See pictures', 'Размышляют': 'Reason',
+  'локальные модели и облачные (OpenRouter)': 'local and cloud models (OpenRouter)',
+  'не подключён': 'not connected', 'подключён · моделей: {n}': 'connected · models: {n}', 'повторю сам через {n} с': 'retrying by itself in {n} s',
   // ── справка ──
   'Инструкции по настройке. Если что-то не ловится — начни с раздела «Система»: он сам подскажет известные случаи.':
     'Setup instructions. If something is not captured, start with “System”: it points out known issues.',

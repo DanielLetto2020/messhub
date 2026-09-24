@@ -134,7 +134,8 @@ PREF_DEFAULTS = {
     "ai": {"provider": "", "ollama_url": "http://127.0.0.1:11434", "lmstudio_url": "http://127.0.0.1:1234",
            "model": "", "temperature": 0.3, "num_ctx": 8192, "max_tokens": 1024, "system": "",
            "period": "7d", "max_msgs": 300, "include_logs": False, "include_read": True, "think": "hide",
-           "allow_lan": False, "setup_done": False},   # ассистент на локальной модели (ai.py)
+           "allow_lan": False, "setup_done": False,
+           "openrouter": False, "openrouter_consent": ""},   # ассистент (ai.py); OpenRouter — внешний, по согласию
     # служебное — не настройки, в выгрузку и в версию настроек не входит:
     "backup_last": "", "report_last": "", "services_win_last": "", "quiet_state": "", "agenda_last": "",
 }
@@ -564,7 +565,7 @@ _RE_LOCAL_URL = re.compile(r"^http://(127\.0\.0\.1|localhost|\[::1\]|10\.\d+\.\d
 def clean_ai(v):
     d = PREF_DEFAULTS["ai"]
     v = dict(v or {})
-    out = {"provider": v.get("provider") if v.get("provider") in ("", "ollama", "lmstudio") else "",
+    out = {"provider": v.get("provider") if v.get("provider") in ("", "ollama", "lmstudio", "openrouter") else "",
            "model": str(v.get("model", d["model"])).strip()[:200],
            "temperature": round(min(2.0, max(0.0, float(v.get("temperature", d["temperature"])))), 2),
            "num_ctx": int(min(262144, max(1024, int(v.get("num_ctx", d["num_ctx"]))))),
@@ -574,7 +575,8 @@ def clean_ai(v):
            "max_msgs": int(min(2000, max(10, int(v.get("max_msgs", d["max_msgs"]))))),
            # размышления «думающих» моделей: hide — отдельно и свёрнуты, show — видны сразу, off — не просить
            "think": _think_mode(v.get("think", d["think"])),
-           **{k: bool(v.get(k, d[k])) for k in ("include_logs", "include_read", "allow_lan", "setup_done")}}
+           **{k: bool(v.get(k, d[k])) for k in ("include_logs", "include_read", "allow_lan", "setup_done", "openrouter")},
+           "openrouter_consent": str(v.get("openrouter_consent", d["openrouter_consent"]))[:19]}
     for key in ("ollama_url", "lmstudio_url"):
         url = str(v.get(key, d[key])).strip().rstrip("/")
         if not ai_url_ok(url, out["allow_lan"]):

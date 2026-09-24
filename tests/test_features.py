@@ -11,7 +11,9 @@ import time
 import unittest
 import urllib.request
 from datetime import datetime, timedelta
-from http.server import ThreadingHTTPServer
+import base64
+import urllib.error
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest import mock
 
 import common
@@ -19,7 +21,9 @@ import ai
 import calendar_src
 import events
 import logwatch
+import paths
 import quiet
+import rag
 import reminders
 import resources
 import rules
@@ -380,6 +384,163 @@ class AiTest(unittest.TestCase):
     def test_pages_served(self):
         with urllib.request.urlopen(self.base + "/assistant", timeout=10) as r:
             self.assertIn(b'id="view"', r.read())
+
+
+PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
+
+
+class FakeOpenRouter(BaseHTTPRequestHandler):
+    """Поддельный OpenRouter: каталог моделей и потоковый ответ (SSE) с размышлениями и ценой."""
+    seen = {}
+
+    def log_message(self, *a):
+        pass
+
+    def do_GET(self):
+        body = json.dumps({"data": [
+            {"id": "demo/vision-pro", "name": "Vision Pro", "context_length": 128000,
+             "architecture": {"input_modalities": ["text", "image"], "output_modalities": ["text"]},
+             "supported_parameters": ["reasoning"], "pricing": {"prompt": "0.000001", "completion": "0.000002"}},
+            {"id": "demo/free:free", "name": "Free", "context_length": 32000, "architecture": {},
+             "pricing": {"prompt": "0", "completion": "0"}},
+            {"id": "demo/painter", "name": "Painter", "architecture": {"output_modalities": ["image"]}}]}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_POST(self):
+        FakeOpenRouter.seen = {"auth": self.headers.get("Authorization"),
+                               "body": json.loads(self.rfile.read(int(self.headers["Content-Length"])))}
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.end_headers()
+        for ev in ({"choices": [{"delta": {"reasoning": "считаю"}}]}, {"choices": [{"delta": {"content": "Готово "}}]},
+                   {"choices": [{"delta": {"content": "(#1)."}, "finish_reason": "stop"}]},
+                   {"choices": [], "usage": {"completion_tokens": 5, "cost": 0.00042}}):
+            self.wfile.write(b": OPENROUTER PROCESSING\n\ndata: " + json.dumps(ev).encode() + b"\n\n")
+        self.wfile.write(b"data: [DONE]\n\n")
+
+
+class OpenRouterTest(AiTest):
+    """Облачные модели: только по согласию и с ключом; ключ наружу не отдаётся; картинки к вопросу."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.fake = ThreadingHTTPServer(("127.0.0.1", 0), FakeOpenRouter)
+        threading.Thread(target=cls.fake.serve_forever, daemon=True).start()
+        cls.patch = mock.patch.object(ai, "OPENROUTER", f"http://127.0.0.1:{cls.fake.server_address[1]}")
+        cls.patch.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.patch.stop()
+        cls.fake.shutdown()
+        cls.fake.server_close()
+        super().tearDownClass()
+
+    def get(self, path):
+        with urllib.request.urlopen(self.base + path, timeout=10) as r:
+            return json.load(r)
+
+    def post_err(self, path, body):
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            self.post(path, body)
+        return json.load(cm.exception)["error"]
+
+    def test_openrouter_consent_key_and_stream(self):
+        self.post("/api/ai/setup", {"ai": {"openrouter": True, "openrouter_consent": "x"}})   # в обход согласия — нельзя
+        self.assertFalse(self.get("/api/ai/status")["prefs"]["openrouter"])
+        self.assertIn("ключ", self.post_err("/api/ai/openrouter", {"enabled": True, "consent": True}))
+        self.assertIn("согласие", self.post_err("/api/ai/openrouter", {"enabled": True, "key": "sk-or-v1-demo-token-not-real-1234"}))
+        st = json.loads(self.post("/api/ai/openrouter", {"enabled": True, "consent": True}))
+        self.assertTrue(st["enabled"])
+        if os.name != "nt":                         # на Windows прав «600» нет — там профиль пользователя
+            self.assertEqual(stat.S_IMODE(os.stat(paths.OPENROUTER_CFG).st_mode), 0o600)
+        full = json.dumps(self.get("/api/ai/status"), ensure_ascii=False)
+        self.assertNotIn("demo-token-not-real", full)                      # ключ странице не отдаётся
+        self.assertIn("…1234", full)
+        models = self.get("/api/ai/openrouter/models")["models"]
+        self.assertEqual([m["name"] for m in models], ["demo/free:free", "demo/vision-pro"])   # без моделей-«художников»
+        self.assertTrue(models[0]["free"] and models[1]["vision"] and models[1]["reasoning"])
+        self.assertEqual(models[1]["price_in"], 1.0)
+
+        s = json.loads(self.post("/api/ai/session", {"settings": {"provider": "openrouter", "model": "demo/vision-pro", "period": "all"}}))
+        out = self.post("/api/ai/chat", {"session": s["id"], "text": "Что было?", "images": ["data:image/png;base64," + base64.b64encode(PNG).decode()]})
+        evs = [json.loads(x) for x in out.splitlines() if x.strip()]
+        self.assertEqual(evs[-1]["type"], "done", evs[-1])
+        self.assertTrue(evs[-1]["external"])
+        self.assertEqual(evs[-1]["cost"], 0.00042)
+        self.assertEqual(evs[-1]["thinking"], "считаю")
+        self.assertEqual(FakeOpenRouter.seen["auth"], "Bearer sk-or-v1-demo-token-not-real-1234")
+        last = FakeOpenRouter.seen["body"]["messages"][-1]
+        self.assertEqual(last["content"][0], {"type": "text", "text": "Что было?"})
+        self.assertTrue(last["content"][1]["image_url"]["url"].startswith("data:image/png;base64,"))
+        msgs = self.get(f"/api/ai/session?id={s['id']}")["messages"]
+        self.assertEqual(msgs[1]["content"], "Готово (#1).")
+        name = msgs[0]["meta"]["images"][0]
+        with urllib.request.urlopen(f"{self.base}/ai-image/{name}", timeout=10) as r:
+            self.assertEqual((r.headers["Content-Type"], r.read()), ("image/png", PNG))
+
+        self.post("/api/ai/setup", {"ai": {"provider": "openrouter", "model": "demo/vision-pro"}})
+        st = json.loads(self.post("/api/ai/openrouter", {"enabled": False}))
+        self.assertFalse(st["enabled"])
+        self.assertEqual(self.get("/api/ai/status")["prefs"]["provider"], "")      # новые беседы — не в облако
+        out = self.post("/api/ai/chat", {"session": s["id"], "text": "Ещё?"})
+        self.assertIn("OpenRouter выключен", json.loads(out.splitlines()[-1])["error"])
+        self.post("/api/ai/session/delete", {"id": s["id"]})
+        self.assertIsNone(ai.image_file(name))                             # картинка удалена вместе с беседой
+        self.post("/api/ai/openrouter", {"enabled": False, "key": ""})
+        self.assertFalse(os.path.exists(paths.OPENROUTER_CFG))
+
+    def test_images_checked_and_formatted(self):
+        for bad in ("data:text/plain;base64,aGk=", "data:image/png;base64," + base64.b64encode(b"not an image").decode(), "http://x/y.png"):
+            with self.assertRaises(ValueError):
+                ai.save_images([bad])
+        url = "data:image/png;base64," + base64.b64encode(PNG).decode()
+        a, b = ai.save_images([url, url])
+        self.assertEqual(a, b)                                             # одна и та же картинка — один файл
+        self.assertIsNone(ai.image_file("../../etc/passwd"))
+        msg = {"role": "user", "content": "что тут?"}
+        self.assertEqual(ai._with_images("ollama", msg, [a])["images"], [base64.b64encode(PNG).decode()])
+        self.assertEqual(ai._with_images("lmstudio", msg, [a])["content"][1]["type"], "image_url")
+        self.assertIs(ai._with_images("ollama", msg, []), msg)
+
+
+class RagTest(unittest.TestCase):
+    """Умный поиск: сбойный текст (NaN у bge-m3 → 500 на всю порцию) не держит очередь."""
+
+    def test_bad_text_does_not_block_queue(self):
+        db = common.new_db("rag.db")
+        prefs(db, {"rag": {"enabled": True, "model": "bge-m3"}})
+        conn = sqlite3.connect(db)
+        common.put(conn, "eXpress", "Команда", "Иван: обычный текст про отчёт")
+        common.put(conn, "eXpress", "Команда", "Иван: СБОЙ целиком")
+        common.put(conn, "eXpress", "Команда", "Иван: начало со СБОЙ. А тут нормальный хвост")
+        conn.commit()
+        calls = []
+
+        def fake_call(path, body=None, timeout=30, method=None):
+            if body is None:                                               # список моделей Ollama
+                return {"models": [{"name": "bge-m3:latest"}]}
+            calls.append(len(body["input"]))
+            if any("СБОЙ" in x for x in body["input"]):
+                raise urllib.error.HTTPError("u", 500, "Internal Server Error", {}, None)
+            return {"embeddings": [[1.0, float(len(x))] for x in body["input"]]}
+        with mock.patch.object(rag, "_call", fake_call):
+            self.assertEqual(rag.index_step(db), 3)
+            self.assertEqual(rag.index_step(db), 0)
+            st = rag.status(conn)
+            self.assertEqual((st["indexed"], st["skipped"], st["error"]), (2, 1, ""))
+            self.assertEqual(calls[0], 3)                                  # сначала вся порция
+            self.assertEqual(len(rag.search(conn, "отчёт", 5)), 2)         # пропущенное не мешает поиску
+            self.assertEqual(rag.retry_skipped(db), 1)                     # и снова пробуется позже
+            self.assertEqual(rag.status(conn)["skipped"], 0)
+        conn.close()
+        e = urllib.error.HTTPError("u", 404, "nf", {}, None)
+        self.assertIn("Установить", rag.human_error(e))
+        self.assertIn("не запущена", rag.human_error(urllib.error.URLError(ConnectionRefusedError("refused"))))
 
 
 if __name__ == "__main__":

@@ -944,8 +944,10 @@ async function renderRag(){
   let html='';
   if(!s.ollama)html+=`<div class="warnbox">${esc(t('Ollama не отвечает на {h}. Установи её (см. «Справка → Умный поиск») и запусти.',{h:'127.0.0.1:11434'}))}</div>`;
   if(s.installing)html+=`<p>${esc(t('Установка: {p}',{p:s.progress}))}</p>`;
-  if(s.error)html+=`<p class="result err">${esc(t('Ошибка: {e}',{e:s.error}))}</p>`;
+  if(s.error)html+=`<p class="result err">${esc(t('Ошибка: {e}',{e:s.error}))}${s.enabled&&s.retry_in?' · '+esc(t('повторю сам через {n} с',{n:s.retry_in})):''}</p>`;
   html+=`<p class="${s.enabled?'':'muted'}">${esc(s.enabled?t('Включён: модель {m}, посчитано {a} из {b} сообщений.',{m:s.model,a:s.indexed,b:s.total}):t('Выключен.'))}</p>
+    ${s.enabled&&s.skipped?`<p class="hint">${esc(t('{n} не посчитались — модель сбоит на этих текстах. Умный поиск их не найдёт, обычный — найдёт. Попробую снова при перезапуске и раз в сутки.',{n:s.skipped}))}
+      <button class="btn sm" type="button" id="rRetry">${esc(t('Попробовать сейчас'))}</button></p>`:''}
     <div class="field"><label for="rModel">${esc(t('Модель векторов'))}</label><div class="ctl"><input class="inp" id="rModel" value="${attr(s.model)}" list="dlEmb" style="width:220px">
       <datalist id="dlEmb">${['bge-m3','nomic-embed-text','mxbai-embed-large',...s.embed_models].map(m=>`<option value="${attr(m)}">`).join('')}</datalist></div>
       <label for="rChat">${esc(t('Модель для ответов'))}</label><div class="ctl"><select class="inp" id="rChat"><option value="">${esc(t('первая доступная'))}</option>
@@ -958,10 +960,11 @@ async function renderRag(){
   box.innerHTML=html;
   $('rInst').onclick=async()=>{try{await api('/api/rag/install',{model:$('rModel').value.trim()||'bge-m3',chat_model:$('rChat').value});renderRag();}catch(e){toast(e.message,true);}};
   if($('rOff'))$('rOff').onclick=async()=>{await api('/api/rag/disable',{drop:false});toast(t('Умный поиск выключен.'));renderRag();};
+  if($('rRetry'))$('rRetry').onclick=async()=>{try{const r=await api('/api/rag/retry',{});toast(t('Снова в очереди: {n}',{n:r.queued}));}catch(e){toast(e.message,true);}renderRag();};
   if($('rDrop'))confirmBtn($('rDrop'),t('Нажми ещё раз — удалить'),async()=>{await api('/api/rag/disable',{drop:true});toast(t('Умный поиск выключен.'));renderRag();});
   if($('rRm'))confirmBtn($('rRm'),t('Нажми ещё раз — удалить'),async()=>{try{await api('/api/rag/remove-model',{model:s.model});toast(t('Модель удалена из Ollama'));}catch(e){toast(e.message,true);}renderRag();});
   // пока ставится или считает векторы — обновляем раз в пару секунд
-  if(s.installing||(s.enabled&&s.indexed<s.total))ragPoll=setTimeout(()=>{if($('ragBox'))renderRag();},s.installing?1000:4000);
+  if(s.installing||(s.enabled&&s.indexed+s.skipped<s.total))ragPoll=setTimeout(()=>{if($('ragBox'))renderRag();},s.installing?1000:4000);
 }
 async function doAsk(){
   const qv=$('aQ').value.trim();if(!qv)return;
@@ -1672,7 +1675,10 @@ ru: [
 <p>Кнопка ✨ в шапке доски открывает ассистента. Он собирает подходящие сообщения из базы и отвечает моделью на этом компьютере — через <b>Ollama</b> или <b>LM Studio</b>. Сообщения никуда не уходят; адреса моделей — только на этом компьютере (домашняя сеть — если явно разрешить).</p>
 <ul><li>При первом запуске мастер найдёт Ollama и LM Studio, покажет установленные модели и предложит скачать новую (для Ollama — прямо в окне, с подсказкой, поместится ли модель в видеокарту).</li>
 <li>У каждой беседы свои настройки: модель, температура, размер контекста, длина ответа, какие сообщения брать (период, источники, прочитанные, логи) и свой системный промпт.</li>
-<li>Номера вида #123 в ответе открывают само сообщение; «опирался на …» показывает всю выборку.</li></ul>
+<li>Номера вида #123 в ответе открывают само сообщение; «опирался на …» показывает всю выборку.</li>
+<li>Код и JSON подсвечиваются, таблицы рисуются таблицами. Попроси «построй график» — ответ нарисует столбцы, линии или кольцо; кнопки над графиком — «Таблица» и «Скопировать SVG».</li>
+<li>Картинку к вопросу можно приложить скрепкой, вставить из буфера или перетащить — для моделей, которые видят картинки.</li>
+<li><b>OpenRouter</b> (облачные модели) — только если сам подключишь в «Моделях» своим ключом и согласишься: в таких беседах (они помечены ☁) выборка сообщений, вопрос и картинки уходят в OpenRouter. Отключается там же.</li></ul>
 <pre>curl -fsSL https://ollama.com/install.sh | sh     # Ollama на Linux</pre>`],
 ['Тихие часы и показ экрана', `
 <p><b>Тихие часы</b> — по расписанию, вручную (луна в шапке доски: «тихо на час», «до утра») или вместе с «Не беспокоить» GNOME. Пока тихо, правила не играют звук, а в конце приходит сводка в колонку «Сводки». По желанию программа сама включает «Не беспокоить» на это время.</p>
@@ -1743,7 +1749,10 @@ en: [
 <p>The ✨ button in the board header opens the assistant. It gathers matching messages from the database and answers with a model on this computer — via <b>Ollama</b> or <b>LM Studio</b>. Messages go nowhere; model addresses must be on this computer (your home network only if you allow it).</p>
 <ul><li>On first start a wizard finds Ollama and LM Studio, shows installed models and offers to download one (for Ollama right in the window, with a hint whether it fits your GPU).</li>
 <li>Each conversation has its own settings: model, temperature, context size, answer length, which messages to use (period, sources, read ones, logs) and its own system prompt.</li>
-<li>Numbers like #123 in an answer open the message; “based on …” shows the whole selection.</li></ul>`],
+<li>Numbers like #123 in an answer open the message; “based on …” shows the whole selection.</li>
+<li>Code and JSON are highlighted, tables are drawn as tables. Ask for a chart and the answer draws bars, lines or a ring; the buttons above it are “Table” and “Copy SVG”.</li>
+<li>Attach a picture with the paper clip, paste it or drag it in — for models that see pictures.</li>
+<li><b>OpenRouter</b> (cloud models) — only if you connect it yourself under “Models” with your key and agree: such conversations (marked ☁) send the message selection, the question and pictures to OpenRouter. Disconnect it in the same place.</li></ul>`],
 ['Quiet hours and screen sharing', `
 <p><b>Quiet hours</b> — by schedule, by hand (the moon in the board header: “quiet for an hour”, “until morning”) or together with GNOME “Do Not Disturb”. While quiet, rules play no sound, and a digest lands in the Digests column afterwards. Optionally the app turns “Do Not Disturb” on for that time.</p>
 <p><b>Screen sharing</b>: while you share your screen (Chrome's “… is sharing your screen” bar, the Firefox indicator, the Zoom toolbar, a PipeWire capture stream) the board blurs and comes back afterwards. Add your own signs under Appearance.</p>

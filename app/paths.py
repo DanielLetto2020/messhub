@@ -9,6 +9,7 @@
     ~/.config/<APP_ID>/widget-state.json       место и размер виджета
     ~/.config/<APP_ID>/telegram-forward.json   токен бота для пересылки (права 600)
     ~/.config/<APP_ID>/ingest.json             ключ приёма событий по HTTP (права 600)
+    ~/.config/<APP_ID>/openrouter.json         ключ OpenRouter, если его подключили в ассистенте (права 600)
     ~/.cache/<APP_ID>/avatars/                 аватары отправителей из уведомлений
 
 Так `git pull` в папке с кодом никогда не лежит рядом с перепиской и токенами.
@@ -59,6 +60,8 @@ LOG_DIR = os.path.join(DATA_DIR, "logs")
 WIDGET_STATE = os.path.join(CONFIG_DIR, "widget-state.json")
 FORWARD_CFG = os.path.join(CONFIG_DIR, "telegram-forward.json")
 INGEST_CFG = os.path.join(CONFIG_DIR, "ingest.json")
+OPENROUTER_CFG = os.path.join(CONFIG_DIR, "openrouter.json")   # ключ OpenRouter (ассистент, по желанию; права 600)
+AI_IMAGES_DIR = os.path.join(DATA_DIR, "ai-images")            # картинки, приложенные к вопросам ассистенту
 AVATAR_DIR = os.path.join(CACHE_DIR, "avatars")
 
 

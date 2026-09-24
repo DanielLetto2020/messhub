@@ -22,6 +22,7 @@
     color-scheme: light;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { height: 100%; margin: 0; }
   body { background: var(--bg); color: var(--text); font: 13.5px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
   button, input, select, textarea { font: inherit; color: inherit; }
@@ -88,9 +89,93 @@
   .msg.ai .bub ul, .msg.ai .bub ol { margin: 0 0 8px; padding-left: 22px; }
   .msg.ai .bub li { margin: 2px 0; }
   .msg.ai .bub h4 { margin: 10px 0 6px; font-size: 13.5px; }
-  .msg.ai .bub pre { background: var(--code); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; margin: 0 0 8px; }
+  .msg.ai .bub h3 { margin: 12px 0 6px; font-size: 15px; }
   .msg.ai .bub code { background: var(--code); border-radius: 4px; padding: 0 4px; }
-  .msg.ai .bub pre code { background: none; padding: 0; }
+  .msg.ai .bub blockquote { margin: 0 0 8px; padding: 2px 0 2px 12px; border-left: 3px solid var(--line2); color: var(--muted); }
+  .msg.ai .bub blockquote p:last-child { margin-bottom: 0; }
+  .msg.ai .bub hr { border: 0; border-top: 1px solid var(--line2); margin: 12px 0; }
+  .msg.ai .bub li.tk { list-style: none; margin-left: -18px; }
+  .msg.ai .bub .task { color: var(--muted); } .msg.ai .bub .task.done { color: var(--ok); }
+  .msg.ai .bub s { color: var(--muted); }
+  /* код: шапка с языком и «Скопировать», подсветка */
+  .code { border: 1px solid var(--line); border-radius: 10px; margin: 0 0 10px; background: var(--code); overflow: hidden; }
+  .code .ch, .chart .chh { display: flex; align-items: center; gap: 8px; padding: 4px 6px 4px 12px; border-bottom: 1px solid var(--line); color: var(--faint); font-size: 11.5px; }
+  .code .sp, .chart .sp { flex: 1; }
+  .cbtn { border: 0; background: none; color: var(--muted); font-size: 11.5px; padding: 2px 8px; border-radius: 6px; cursor: pointer; }
+  .cbtn:hover { color: var(--text); background: var(--surface2); }
+  .code pre { margin: 0; padding: 10px 12px; overflow: auto; max-height: 520px; white-space: pre; line-height: 1.5; }
+  .code code { background: none !important; padding: 0 !important; }
+  .t-kw { color: #c79bff; } .t-str { color: #9ad48a; } .t-num { color: #f2b25a; } .t-com { color: var(--faint); font-style: italic; }
+  .t-key { color: #7fb6ff; } .t-fn { color: #6fd3e0; } .t-add { color: var(--ok); } .t-del { color: var(--bad); }
+  body.light .t-kw { color: #7a3fc7; } body.light .t-str { color: #2f7d32; } body.light .t-num { color: #b5651d; }
+  body.light .t-key { color: #2f5fb8; } body.light .t-fn { color: #0f7c8a; }
+  /* таблицы */
+  .tbl { overflow-x: auto; margin: 0 0 10px; border: 1px solid var(--line); border-radius: 10px; }
+  .tbl table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  .tbl th, .tbl td { padding: 5px 10px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
+  .tbl thead th { border-top: 0; background: var(--surface2); font-weight: 600; white-space: nowrap; }
+  .tbl td { font-variant-numeric: tabular-nums; }
+  /* графики: цвета рядов — проверенная палитра (тёмная и светлая), текст — цветом текста, сетка — едва видна */
+  .chart { margin: 0 0 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); overflow: hidden;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767; --so:#6d7586; }
+  body.light .chart { --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300; --s7:#4a3aa7; --s8:#e34948; --so:#9aa0ab; }
+  .chart.wait { padding: 16px; color: var(--muted); }
+  .chart .chh b { color: var(--text); font-size: 12.5px; }
+  .chart .lg { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 8px 12px 0; font-size: 12px; color: var(--muted); }
+  .chart .lg span { display: inline-flex; align-items: center; gap: 6px; }
+  .chart .lg b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .chart .lg i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .chart .cv { padding: 6px 8px 4px; }
+  .chart svg { display: block; width: 100%; height: auto; font: 11px system-ui, sans-serif; }
+  .chart .ctab { margin: 8px; }
+  .chart .grid { stroke: var(--line); stroke-width: 1; } .chart .axis { stroke: var(--line2); stroke-width: 1; }
+  .chart .tick, .chart .lab { fill: var(--faint); font-variant-numeric: tabular-nums; }
+  .chart .val { fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .chart .tot { fill: var(--text); font-size: 22px; font-weight: 650; }
+  .chart .ln { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .chart .dot { stroke: var(--bg); stroke-width: 2; }
+  .chart .slice { stroke: var(--bg); stroke-width: 2; }
+  .chart .hr { fill: transparent; } .chart .hit:hover .hr { fill: var(--surface2); }
+  .chart .xh { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0; } .chart .hit:hover .xh { opacity: 1; }
+  .chart .slice:hover { opacity: .85; }
+  .f1{fill:var(--s1);background:var(--s1)} .f2{fill:var(--s2);background:var(--s2)} .f3{fill:var(--s3);background:var(--s3)} .f4{fill:var(--s4);background:var(--s4)}
+  .f5{fill:var(--s5);background:var(--s5)} .f6{fill:var(--s6);background:var(--s6)} .f7{fill:var(--s7);background:var(--s7)} .f8{fill:var(--s8);background:var(--s8)}
+  .fo{fill:var(--so);background:var(--so)}
+  .k1{stroke:var(--s1)} .k2{stroke:var(--s2)} .k3{stroke:var(--s3)} .k4{stroke:var(--s4)} .k5{stroke:var(--s5)} .k6{stroke:var(--s6)} .k7{stroke:var(--s7)} .k8{stroke:var(--s8)}
+  #ctip { position: fixed; z-index: 30; pointer-events: none; background: #262b36; color: #eef1f6; border: 1px solid var(--line2); border-radius: 8px;
+    padding: 5px 9px; font-size: 12px; white-space: pre; box-shadow: 0 6px 18px rgba(0,0,0,.35); display: none; font-variant-numeric: tabular-nums; }
+  /* картинки к вопросу */
+  .imgs { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; margin: 0 0 4px; }
+  .imgs img { width: 120px; height: 90px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line2); cursor: zoom-in; background: var(--surface2); }
+  .msg.me { flex-direction: column; align-items: flex-end; }
+  .atts { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0 2px; }
+  .atts:empty { display: none; }
+  .att { position: relative; }
+  .att img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line2); display: block; }
+  .att button { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; border: 0; background: var(--bad); color: #fff;
+    font-size: 11px; line-height: 18px; padding: 0; cursor: pointer; }
+  .qwrap { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .box.drop { border-color: var(--accent); background: var(--accent-bg); }
+  .vwarn { color: var(--warn); }
+  .lb { position: fixed; inset: 0; background: rgba(0,0,0,.78); z-index: 40; display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
+  .lb img { max-width: 94vw; max-height: 92vh; border-radius: 8px; }
+  /* облачная модель (OpenRouter): жёлтая плашка */
+  .ext { border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent); background: var(--warn-bg); color: var(--text); border-radius: 12px; padding: 10px 14px; margin: 0 0 14px; }
+  .ext b.w { color: var(--warn); }
+  .ext p { margin: 6px 0; color: var(--muted); font-size: 12.5px; }
+  .ext .row { margin: 8px 0 0; }
+  .extbar { display: flex; align-items: center; gap: 8px; border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent); background: var(--warn-bg);
+    border-radius: 10px; padding: 5px 10px; margin: 0 0 8px; font-size: 12px; color: var(--muted); }
+  .extbar b { color: var(--warn); font-weight: 650; }
+  .chip.ext2 { border-color: color-mix(in srgb, var(--warn) 60%, transparent); color: var(--warn); }
+  .chip.ext2 .dot { background: var(--warn); }
+  .filt { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 12px; }
+  .filt label { display: inline-flex; gap: 5px; align-items: center; border: 1px solid var(--line2); border-radius: 999px; padding: 2px 10px; font-size: 12px; cursor: pointer; color: var(--muted); }
+  .filt label:has(input:checked) { border-color: var(--accent); background: var(--accent-bg); color: var(--text); }
+  .filt input { display: none; }
+  .tag.ext { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+  .pcard.cloud { border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+  .pcard.cloud[aria-checked="true"] { border-color: var(--warn); background: var(--warn-bg); }
   .msg.ai .bub a.ref { color: var(--accent); text-decoration: none; background: var(--accent-bg); border-radius: 5px; padding: 0 4px; font-size: 12px; cursor: pointer; }
   .msg.ai .bub a.lnk { color: var(--accent); }
   .msg.ai .bub .caret { display: inline-block; width: 7px; height: 14px; background: var(--muted); vertical-align: -2px; animation: blink 1s steps(2) infinite; }
@@ -142,7 +227,7 @@
   .steps { display: flex; gap: 6px; margin: 0 0 18px; color: var(--faint); font-size: 12px; flex-wrap: wrap; }
   .steps span { border: 1px solid var(--line); border-radius: 999px; padding: 1px 10px; }
   .steps span.on { color: var(--text); border-color: var(--accent); background: var(--accent-bg); }
-  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 0 16px; }
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 0 0 16px; }
   .pcard { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: var(--surface); cursor: pointer; text-align: left; }
   .pcard:hover { border-color: var(--line2); }
   .pcard[aria-checked="true"] { border-color: var(--accent); background: var(--accent-bg); }
@@ -210,7 +295,7 @@
 <body>
 <div class="app">
   <aside class="side">
-    <div class="brand"><b data-t="Ассистент">Ассистент</b><span data-t="на модели на этом компьютере">на модели на этом компьютере</span></div>
+    <div class="brand"><b data-t="Ассистент">Ассистент</b><span id="brandSub" data-t="на модели на этом компьютере">на модели на этом компьютере</span></div>
     <button class="btn primary new" type="button" id="newBtn" data-t="Новая беседа">Новая беседа</button>
     <input class="inp find" id="find" data-t-ph="Найти беседу" placeholder="Найти беседу">
     <div class="sess" id="sess"></div>
@@ -232,6 +317,8 @@
   </section>
 </div>
 <div id="toast" role="status" aria-live="polite"></div>
+<div id="ctip" role="tooltip"></div>
+<input type="file" id="attFile" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
 <script>
 // ошибки страницы — в журнал программы (настройки → «Логи»)
 (()=>{let n=0;window.addEventListener('error',e=>{if(++n>10)return;
@@ -268,46 +355,251 @@ const gb=x=>(Math.round(x*10)/10).toLocaleString(LANG==='en'?'en':'ru')+' '+t('�
 const PERIOD_NAMES={'1d':'за сутки','2d':'за 2 дня','7d':'за неделю','30d':'за месяц','all':'за всё время'};
 const FIT={ok:['ok','поместится в видеокарту'],cpu:['cpu','на процессоре — медленнее'],big:['big','может не хватить памяти']};
 
-// ── ответ модели: небольшой безопасный Markdown, номера #123 — ссылки на сообщения ──
+// ── ответ модели: безопасный Markdown — заголовки, списки (вложенные, задачи), таблицы, цитаты, код с подсветкой,
+//    JSON, графики из блоков ```chart; номера #123 — ссылки на сообщения ──
 function inline(s){
-  s=esc(s);
-  s=s.replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*/g,'$1<i>$2</i>');
-  s=s.replace(/https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)]/g,m=>`<a class="lnk" href="${m}" target="_blank" rel="noopener noreferrer">${m}</a>`);
-  s=s.replace(/(^|[\s(\[,;:])#(\d{1,9})\b/g,'$1<a class="ref" data-ref="$2" title="'+attr(t('Открыть сообщение'))+'">#$2</a>');
-  return s;
+  return String(s).split(/(`[^`\n]+`)/).map((part,i)=>i%2?`<code>${esc(part.slice(1,-1))}</code>`:inlineText(part)).join('');
 }
-function md(text){
-  const out=[], lines=String(text||'').split('\n');
-  let i=0, list=null;
-  const close=()=>{if(list){out.push(`</${list}>`);list=null;}};
+function inlineText(s){
+  const keep=[]; const hold=h=>{keep.push(h);return `\u0000${keep.length-1}\u0000`;};
+  s=esc(s);
+  s=s.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)"<>]+)\)/g,(m,txt,url)=>hold(`<a class="lnk" href="${url}" target="_blank" rel="noopener noreferrer">${txt}</a>`));
+  s=s.replace(/https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)]/g,m=>hold(`<a class="lnk" href="${m}" target="_blank" rel="noopener noreferrer">${m}</a>`));
+  s=s.replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>').replace(/(^|[^\w])__([^_\n]+)__(?!\w)/g,'$1<b>$2</b>')
+     .replace(/(^|[^*\w])\*([^*\n]+)\*(?!\w)/g,'$1<i>$2</i>').replace(/~~([^~\n]+)~~/g,'<s>$1</s>');
+  s=s.replace(/(^|[\s(\[,;:])#(\d{1,9})\b/g,'$1<a class="ref" data-ref="$2" title="'+attr(t('Открыть сообщение'))+'">#$2</a>');
+  return s.replace(/\u0000(\d+)\u0000/g,(m,i)=>keep[+i]);
+}
+// подсветка кода: строки, комментарии, числа, ключевые слова — простым разбором, без внешних библиотек
+const HL_KW={
+  js:'as async await break case catch class const continue default delete do else export extends false finally for from function if import in instanceof interface let new null of return static super switch this throw true try type typeof undefined var void while yield',
+  py:'and as assert async await break class continue def del elif else except False finally for from global if import in is lambda None nonlocal not or pass raise return self True try while with yield',
+  sh:'case cd do done echo elif else esac exit export fi for function if in local return sudo then until while',
+  sql:'all alter and as asc avg between by case count create delete desc distinct drop else end exists from group having in index inner insert into is join key left like limit max min not null offset on or order outer primary right select set sum table then union update values when where',
+  go:'break case chan const continue default defer else fallthrough false for func go goto if import interface map nil package range return select struct switch true type var',
+  rs:'as async await break const continue crate dyn else enum extern false fn for if impl in let loop match mod move mut pub ref return self Self static struct super trait true type unsafe use where while',
+  c:'auto bool break case catch char class const continue default delete do double else enum extern false float for if int long namespace new nullptr private protected public return short sizeof static struct switch template this throw true try typedef union unsigned using void volatile while',
+  yaml:'true false null yes no on off', css:'important',
+};
+const HL_ALIAS={javascript:'js',ts:'js',typescript:'js',jsx:'js',tsx:'js',mjs:'js',python:'py',py3:'py',bash:'sh',shell:'sh',zsh:'sh',console:'sh',
+  dockerfile:'sh',postgres:'sql',postgresql:'sql',mysql:'sql',sqlite:'sql',golang:'go',rust:'rs','c++':'c',cpp:'c',h:'c',java:'c',cs:'c',csharp:'c',
+  kotlin:'c',php:'c',swift:'c',yml:'yaml',toml:'yaml',ini:'yaml',scss:'css',less:'css',xml:'html',svg:'html',vue:'html'};
+function paint(src,re,pick){
+  let out='',last=0,m;re.lastIndex=0;
+  while((m=re.exec(src))){if(!m[0]){re.lastIndex++;continue;}
+    out+=esc(src.slice(last,m.index));const c=pick(m);out+=c?`<span class="${c}">${esc(m[0])}</span>`:esc(m[0]);last=re.lastIndex;}
+  return out+esc(src.slice(last));
+}
+function prettyJson(src){
+  const s=src.trim();
+  try{const o=JSON.parse(s);return /\n/.test(s)?s:JSON.stringify(o,null,2);}catch(e){return null;}
+}
+function hlJson(src){
+  return paint(src,/("(?:[^"\\\n]|\\.)*")(?=\s*:)|("(?:[^"\\\n]|\\.)*")|\b(true|false|null)\b|(-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)/g,
+    m=>m[1]?'t-key':m[2]?'t-str':m[3]?'t-kw':'t-num');
+}
+function hlCode(code,lang){
+  lang=HL_ALIAS[lang]||lang;
+  if(lang==='json') return hlJson(code);
+  if(lang==='html') return paint(code,/(<!--[\s\S]*?-->)|(<\/?[\w:.-]+)|([\w:-]+)(?==)|("[^"]*"|'[^']*')|(\/?>)/g,
+    m=>m[1]?'t-com':m[2]||m[5]?'t-kw':m[3]?'t-key':'t-str');
+  if(lang==='diff'||lang==='patch') return code.split('\n').map(l=>{const c=/^\+/.test(l)?'t-add':/^-/.test(l)?'t-del':/^@@/.test(l)?'t-kw':'';
+    return c?`<span class="${c}">${esc(l)}</span>`:esc(l);}).join('\n');
+  const kw=HL_KW[lang]; if(kw===undefined) return esc(code);
+  const words=new Set(kw.split(' ')), ci=lang==='sql';
+  const line=lang==='py'||lang==='sh'||lang==='yaml'?'#[^\\n]*':lang==='sql'?'--[^\\n]*':'\\/\\/[^\\n]*';
+  const block=/^(js|go|rs|c|css|sql)$/.test(lang)?'|\\/\\*[\\s\\S]*?\\*\\/':'';
+  const key=lang==='yaml'?'|(^[ \\t-]*[\\w.\\-"\']+(?=:(?:\\s|$)))':lang==='css'?'|([\\w-]+(?=\\s*:[^:]))':'';
+  const re=new RegExp(`(${line}${block})|("(?:[^"\\\\\\n]|\\\\.)*"|'(?:[^'\\\\\\n]|\\\\.)*'|\`(?:[^\`\\\\]|\\\\.)*\`)${key||'|((?!))'}|(\\b0x[\\da-fA-F]+\\b|\\b\\d[\\d_]*(?:\\.\\d+)?(?:[eE][+-]?\\d+)?\\b)|([A-Za-z_$][\\w$]*)(?=\\s*\\()|([A-Za-z_$][\\w$]*)`,'gm');
+  return paint(code,re,m=>{if(m[1])return't-com';if(m[2])return't-str';if(m[3])return't-key';if(m[4])return't-num';
+    const w=m[5]||m[6];return words.has(ci?w.toLowerCase():w)?'t-kw':m[5]&&lang!=='sh'&&lang!=='yaml'?'t-fn':'';});
+}
+function codeHtml(code,lang,open){
+  lang=(lang||'').toLowerCase();
+  let shown=code, ln=lang;
+  if(lang==='json'||(!lang&&/^\s*[\[{]/.test(code))){const p=prettyJson(code);if(p!==null){shown=p;ln='json';}}
+  return `<div class="code"><div class="ch"><span>${esc(ln||t('код'))}</span>${open?`<span class="faint">${esc(t('пишет…'))}</span>`:''}<span class="sp"></span>
+    <button class="cbtn" type="button" data-ccopy="1">${esc(t('Скопировать'))}</button></div><pre><code>${hlCode(shown,ln)}</code></pre></div>`;
+}
+function tableHtml(rows){
+  const cells=l=>l.trim().replace(/^\|/,'').replace(/\|$/,'').split(/(?<!\\)\|/).map(c=>c.trim().replace(/\\\|/g,'|'));
+  const head=cells(rows[0]), al=cells(rows[1]).map(c=>/^:-+:$/.test(c)?'center':/-+:$/.test(c)?'right':'');
+  const td=(tag,c,i)=>`<${tag}${al[i]?` style="text-align:${al[i]}"`:''}>${inline(c)}</${tag}>`;
+  return `<div class="tbl"><table><thead><tr>${head.map((c,i)=>td('th',c,i)).join('')}</tr></thead><tbody>${rows.slice(2).map(r=>
+    `<tr>${cells(r).slice(0,head.length).map((c,i)=>td('td',c,i)).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+const LIST_RE=/^(\s*)([-*•+]|\d{1,4}[.)])\s+(.*)$/, TABLE_SEP=/^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
+const BLOCK_START=/^(```|~~~|#{1,6}\s|>|\s*([-*•+]|\d{1,4}[.)])\s|\s*([-*_]\s*){3,}$)/;
+function md(text,live){
+  const out=[], lines=String(text||'').replace(/\r/g,'').split('\n');
+  let i=0; const stack=[];
+  const closeLists=(to)=>{while(stack.length>to){const l=stack.pop();out.push(`</li></${l.type}>`);}};
   while(i<lines.length){
-    const ln=lines[i];
-    if(/^```/.test(ln)){close();const buf=[];i++;while(i<lines.length&&!/^```/.test(lines[i]))buf.push(lines[i++]);i++;
-      out.push(`<pre><code>${esc(buf.join('\n'))}</code></pre>`);continue;}
-    let m;
-    if((m=ln.match(/^#{1,4}\s+(.*)/))){close();out.push(`<h4>${inline(m[1])}</h4>`);i++;continue;}
-    if((m=ln.match(/^\s*[-*•]\s+(.*)/))){if(list!=='ul'){close();list='ul';out.push('<ul>');}out.push(`<li>${inline(m[1])}</li>`);i++;continue;}
-    if((m=ln.match(/^\s*\d+[.)]\s+(.*)/))){if(list!=='ol'){close();list='ol';out.push('<ol>');}out.push(`<li>${inline(m[1])}</li>`);i++;continue;}
-    close();
-    if(!ln.trim()){i++;continue;}
+    const ln=lines[i]; let m;
+    if((m=ln.match(/^\s*(```|~~~)\s*([\w+#.-]*)/))){
+      closeLists(0);const fence=m[1],lang=m[2].toLowerCase(),buf=[];i++;
+      while(i<lines.length&&!lines[i].trim().startsWith(fence))buf.push(lines[i++]);
+      const open=i>=lines.length;i++;
+      const code=buf.join('\n');
+      if(lang==='chart'){
+        let spec=null;try{spec=JSON.parse(code);}catch(e){}
+        out.push(spec?chartHtml(spec):open&&live?`<div class="chart wait">${esc(t('Рисую график…'))}</div>`
+          :codeHtml(code,'json')+`<div class="note">${esc(t('График не нарисовался: данные не похожи на JSON.'))}</div>`);
+      } else out.push(codeHtml(code,lang,open&&live));
+      continue;
+    }
+    if((m=ln.match(/^(#{1,6})\s+(.*?)\s*#*\s*$/))){closeLists(0);out.push(m[1].length<=2?`<h3>${inline(m[2])}</h3>`:`<h4>${inline(m[2])}</h4>`);i++;continue;}
+    if(/^\s*([-*_]\s*){3,}$/.test(ln)){closeLists(0);out.push('<hr>');i++;continue;}
+    if(/^\s*>/.test(ln)){closeLists(0);const buf=[];while(i<lines.length&&/^\s*>/.test(lines[i]))buf.push(lines[i++].replace(/^\s*>\s?/,''));
+      out.push(`<blockquote>${md(buf.join('\n'),live)}</blockquote>`);continue;}
+    if(ln.includes('|')&&i+1<lines.length&&TABLE_SEP.test(lines[i+1])&&lines[i+1].includes('|')){
+      closeLists(0);const rows=[ln,lines[i+1]];i+=2;while(i<lines.length&&lines[i].includes('|')&&lines[i].trim())rows.push(lines[i++]);
+      out.push(tableHtml(rows));continue;}
+    if((m=ln.match(LIST_RE))){
+      const ind=m[1].replace(/\t/g,'    ').length, type=/\d/.test(m[2])?'ol':'ul';
+      while(stack.length&&ind<stack[stack.length-1].ind-1)closeLists(stack.length-1);
+      const top=stack[stack.length-1], n=parseInt(m[2],10), open=type==='ol'&&n>1?`<ol start="${n}">`:`<${type}>`;
+      if(!top||ind>top.ind+1){out.push(open);stack.push({type,ind});}
+      else if(top.type!==type){closeLists(stack.length-1);out.push(open);stack.push({type,ind});}
+      else out.push('</li>');
+      let body=m[3], task='';
+      const tm=body.match(/^\[([ xX])\]\s+(.*)/); if(tm){task=`<span class="task${tm[1]===' '?'':' done'}">${tm[1]===' '?'☐':'☑'}</span> `;body=tm[2];}
+      out.push(`<li${task?' class="tk"':''}>${task}${inline(body)}`);i++;
+      while(i<lines.length&&lines[i].trim()&&!LIST_RE.test(lines[i])&&!BLOCK_START.test(lines[i])&&/^\s{2,}/.test(lines[i]))
+        out.push('<br>'+inline(lines[i++].trim()));
+      continue;
+    }
+    if(!ln.trim()){i++;if(stack.length&&!(i<lines.length&&(LIST_RE.test(lines[i])||/^\s{2,}\S/.test(lines[i]))))closeLists(0);continue;}
+    closeLists(0);
     const para=[ln];i++;
-    while(i<lines.length&&lines[i].trim()&&!/^(```|#{1,4}\s|\s*[-*•]\s|\s*\d+[.)]\s)/.test(lines[i]))para.push(lines[i++]);
+    while(i<lines.length&&lines[i].trim()&&!BLOCK_START.test(lines[i])&&!(lines[i].includes('|')&&i+1<lines.length&&TABLE_SEP.test(lines[i+1])&&lines[i+1].includes('|')))para.push(lines[i++]);
     out.push(`<p>${para.map(inline).join('<br>')}</p>`);
   }
-  close();
+  closeLists(0);
   return out.join('');
+}
+
+// ── графики из ```chart: {type: bar|line|pie, title, labels, series:[{name, data}]} → SVG с подсказками и таблицей ──
+function chartSpec(sp){
+  if(!sp||typeof sp!=='object') return null;
+  let labels=sp.labels, series=sp.series, type=String(sp.type||'bar').toLowerCase();
+  if(!labels&&sp.data&&Array.isArray(sp.data.labels)){labels=sp.data.labels;series=(sp.data.datasets||[]).map(d=>({name:d.label,data:d.data}));}
+  if(!labels&&Array.isArray(sp.data)&&sp.data.length&&typeof sp.data[0]==='object'){
+    const rows=sp.data, lk=Object.keys(rows[0]).find(k=>typeof rows[0][k]==='string')||Object.keys(rows[0])[0];
+    const vk=Object.keys(rows[0]).filter(k=>k!==lk&&rows.some(r=>!isNaN(parseFloat(r[k]))));
+    labels=rows.map(r=>r[lk]);series=vk.map(k=>({name:k,data:rows.map(r=>r[k])}));}
+  if(series&&!Array.isArray(series)&&typeof series==='object') series=Object.entries(series).map(([name,data])=>({name,data}));
+  if(!series&&Array.isArray(sp.values)) series=[{name:sp.name||'',data:sp.values}];
+  if(!Array.isArray(labels)||!Array.isArray(series)||!series.length) return null;
+  const num=v=>{const n=typeof v==='number'?v:parseFloat(String(v).replace(',','.').replace(/\s/g,''));return isFinite(n)?n:null;};
+  labels=labels.slice(0,60).map(x=>String(x==null?'':x));
+  series=series.slice(0,8).map((s,k)=>({name:String((s&&(s.name||s.label))||(series.length>1?t('Ряд {n}',{n:k+1}):'')),
+    data:labels.map((_,j)=>num(Array.isArray(s)?s[j]:s&&s.data?s.data[j]:null))}));
+  if(!series.some(s=>s.data.some(v=>v!==null))) return null;
+  if(!/^(bar|line|pie|donut|area)$/.test(type)) type=type.includes('pie')||type.includes('doughnut')?'pie':type.includes('line')?'line':'bar';
+  return {type:type==='donut'?'pie':type==='area'?'line':type,title:String(sp.title||''),labels,series,unit:String(sp.unit||'')};
+}
+const fmtN=v=>v==null?'—':Number(v).toLocaleString(LANG==='en'?'en':'ru',{maximumFractionDigits:Math.abs(v)<10?2:Math.abs(v)<1000?1:0});
+const fmtS=v=>Math.abs(v)>=1e6?fmtN(v/1e6)+(LANG==='en'?'M':' млн'):Math.abs(v)>=1e4?fmtN(v/1e3)+(LANG==='en'?'k':' тыс'):fmtN(v);
+function niceScale(lo,hi){
+  if(lo===hi){hi=lo+1;lo=Math.min(0,lo);}
+  const raw=(hi-lo)/4, p=Math.pow(10,Math.floor(Math.log10(raw))), step=[1,2,2.5,5,10].map(k=>k*p).find(s=>s>=raw);
+  const a=Math.floor(lo/step)*step, b=Math.ceil(hi/step)*step, ticks=[];
+  for(let v=a;v<=b+step/2;v+=step)ticks.push(+v.toFixed(10));
+  return {lo:a,hi:b,ticks};
+}
+const trunc=(s,n)=>s.length>n?s.slice(0,n-1)+'…':s;
+function chartHtml(raw){
+  const c=chartSpec(raw);
+  if(!c) return `<div class="note">${esc(t('График не нарисовался: нужны labels и series с числами.'))}</div>`+codeHtml(JSON.stringify(raw,null,2),'json');
+  const u=c.unit?' '+c.unit:'', multi=c.series.length>1||c.type==='pie';
+  let svg='', legend='';
+  const W=640, tip=s=>` data-tip="${attr(s)}"`;
+  if(c.type==='pie'){
+    let items=c.labels.map((l,j)=>({l,v:Math.max(0,c.series[0].data[j]||0)})).filter(x=>x.v>0).sort((a,b)=>b.v-a.v);
+    if(items.length>6){const rest=items.slice(5).reduce((a,x)=>a+x.v,0);items=items.slice(0,5).concat([{l:t('Другое'),v:rest,other:1}]);}
+    const sum=items.reduce((a,x)=>a+x.v,0)||1, R=110, r0=68, cx=W/2, cy=130;
+    let a0=-Math.PI/2;
+    svg=`<svg viewBox="0 0 ${W} 260" role="img" aria-label="${attr(c.title||t('График'))}">`+items.map((x,k)=>{
+      const a1=a0+2*Math.PI*x.v/sum, big=a1-a0>Math.PI?1:0, p=(r,a)=>`${(cx+r*Math.cos(a)).toFixed(2)},${(cy+r*Math.sin(a)).toFixed(2)}`;
+      const d=items.length===1?`M${cx-R},${cy}a${R},${R} 0 1,0 ${2*R},0a${R},${R} 0 1,0 ${-2*R},0M${cx-r0},${cy}a${r0},${r0} 0 1,1 ${2*r0},0a${r0},${r0} 0 1,1 ${-2*r0},0Z`
+        :`M${p(R,a0)}A${R},${R} 0 ${big},1 ${p(R,a1)}L${p(r0,a1)}A${r0},${r0} 0 ${big},0 ${p(r0,a0)}Z`;
+      a0=a1;
+      return `<path class="${x.other?'fo':'f'+(k+1)} slice" d="${d}"${tip(`${x.l}: ${fmtN(x.v)}${u} · ${Math.round(100*x.v/sum)}%`)}/>`;
+    }).join('')+`<text class="tot" x="${cx}" y="${cy-4}" text-anchor="middle">${esc(fmtS(sum))}</text><text class="lab" x="${cx}" y="${cy+14}" text-anchor="middle">${esc(t('всего'))}${esc(u)}</text></svg>`;
+    legend=items.map((x,k)=>`<span><i class="${x.other?'fo':'f'+(k+1)}"></i>${esc(x.l)} <b>${Math.round(100*x.v/sum)}%</b></span>`).join('');
+  } else {
+    const all=c.series.flatMap(s=>s.data).filter(v=>v!==null);
+    let lo=Math.min(0,...all), hi=Math.max(0,...all);
+    if(c.type==='line'&&Math.min(...all)>0&&Math.min(...all)>0.5*Math.max(...all)){lo=Math.min(...all);hi=Math.max(...all);}
+    const sc=niceScale(lo,hi), n=c.labels.length;
+    const horiz=c.type==='bar'&&c.series.length===1&&(n>8||c.labels.some(l=>l.length>12))&&n<=30;
+    if(horiz){
+      const lw=Math.min(200,8+6.6*Math.max(...c.labels.map(l=>Math.min(28,l.length)))), rh=26, H=n*rh+8, x0=lw+8, x1=W-64;
+      const X=v=>x0+(x1-x0)*(v-Math.min(0,sc.lo))/((sc.hi-Math.min(0,sc.lo))||1);
+      svg=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${attr(c.title||t('График'))}"><line class="axis" x1="${X(0)}" x2="${X(0)}" y1="2" y2="${H-4}"/>`+
+        c.labels.map((l,j)=>{const v=c.series[0].data[j], y=4+j*rh;
+          if(v===null) return `<text class="lab" x="${lw}" y="${y+17}" text-anchor="end">${esc(trunc(l,28))}</text>`;
+          const a=X(Math.min(0,v)), b=X(Math.max(0,v)), w=Math.max(1,b-a), r=Math.min(4,w/2), h=rh-8, y0=y+4;
+          const d=v>=0?`M${a},${y0}H${b-r}Q${b},${y0} ${b},${y0+r}V${y0+h-r}Q${b},${y0+h} ${b-r},${y0+h}H${a}Z`
+            :`M${b},${y0}H${a+r}Q${a},${y0} ${a},${y0+r}V${y0+h-r}Q${a},${y0+h} ${a+r},${y0+h}H${b}Z`;
+          return `<g class="hit"${tip(`${l}: ${fmtN(v)}${u}`)}><rect class="hr" x="0" y="${y}" width="${W}" height="${rh}"/><text class="lab" x="${lw}" y="${y+17}" text-anchor="end">${esc(trunc(l,28))}</text>
+            <path class="f1" d="${d}"/><text class="val" x="${v>=0?b+6:a-6}" y="${y+17}" text-anchor="${v>=0?'start':'end'}">${esc(fmtS(v))}</text></g>`;}).join('')+`</svg>`;
+    } else {
+      const H=280, ml=12+7*Math.max(...sc.ticks.map(v=>fmtS(v).length)), mr=14, mt=12, mb=40, pw=W-ml-mr, ph=H-mt-mb;
+      const Y=v=>mt+ph*(1-(v-sc.lo)/((sc.hi-sc.lo)||1)), band=pw/n, every=Math.ceil(n/Math.floor(pw/64));
+      svg=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${attr(c.title||t('График'))}">`+
+        sc.ticks.map(v=>`<line class="${v===0?'axis':'grid'}" x1="${ml}" x2="${W-mr}" y1="${Y(v)}" y2="${Y(v)}"/><text class="tick" x="${ml-6}" y="${Y(v)+4}" text-anchor="end">${esc(fmtS(v))}</text>`).join('')+
+        c.labels.map((l,j)=>j%every?'':`<text class="lab" x="${ml+band*(j+.5)}" y="${H-mb+18}" text-anchor="middle">${esc(trunc(l,Math.max(6,Math.floor(band*every/7))))}</text>`).join('');
+      const tipAt=j=>`${c.labels[j]}\n`+c.series.map(s=>`${s.name?s.name+': ':''}${fmtN(s.data[j])}${u}`).join('\n');
+      if(c.type==='bar'){
+        const gw=band*(c.series.length>1?.78:.62), bw=Math.max(2,gw/c.series.length-2);
+        svg+=c.labels.map((l,j)=>{const gx=ml+band*j+(band-gw)/2;
+          return `<g class="hit"${tip(tipAt(j))}><rect class="hr" x="${ml+band*j}" y="${mt}" width="${band}" height="${ph}"/>`+c.series.map((s,k)=>{const v=s.data[j];if(v===null)return'';
+            const x=gx+k*(bw+2), yv=Y(v), y0=Y(Math.max(sc.lo,Math.min(0,sc.hi))), top=Math.min(yv,y0), h=Math.max(1,Math.abs(y0-yv)), r=Math.min(4,bw/2,h);
+            const d=v>=0?`M${x},${top+h}V${top+r}Q${x},${top} ${x+r},${top}H${x+bw-r}Q${x+bw},${top} ${x+bw},${top+r}V${top+h}Z`
+              :`M${x},${top}V${top+h-r}Q${x},${top+h} ${x+r},${top+h}H${x+bw-r}Q${x+bw},${top+h} ${x+bw},${top+h-r}V${top}Z`;
+            return `<path class="f${k+1}" d="${d}"/>`;}).join('')+`</g>`;}).join('');
+      } else {
+        const X=j=>ml+band*(j+.5), dots=n<=24;
+        svg+=c.series.map((s,k)=>{let d='',pen=false;s.data.forEach((v,j)=>{if(v===null){pen=false;return;}d+=(pen?'L':'M')+X(j).toFixed(1)+','+Y(v).toFixed(1);pen=true;});
+          return `<path class="k${k+1} ln" d="${d}"/>`+(dots?s.data.map((v,j)=>v===null?'':`<circle class="f${k+1} dot" cx="${X(j)}" cy="${Y(v)}" r="4"/>`).join(''):'');}).join('')+
+          c.labels.map((l,j)=>`<g class="hit"${tip(tipAt(j))}><rect class="hr" x="${ml+band*j}" y="${mt}" width="${band}" height="${ph}"/><line class="xh" x1="${X(j)}" x2="${X(j)}" y1="${mt}" y2="${mt+ph}"/></g>`).join('');
+      }
+      svg+='</svg>';
+      legend=multi?c.series.map((s,k)=>`<span><i class="f${k+1}"></i>${esc(s.name)}</span>`).join(''):'';
+    }
+  }
+  const table=`<div class="tbl ctab" hidden><table><thead><tr><th></th>${c.series.map(s=>`<th style="text-align:right">${esc(s.name||t('Значение'))}</th>`).join('')}</tr></thead><tbody>${
+    c.labels.map((l,j)=>`<tr><td>${esc(l)}</td>${c.series.map(s=>`<td style="text-align:right">${esc(fmtN(s.data[j]))}${esc(u)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  svg=svg.replace(/ (d|x|y|x1|x2|y1|y2|cx|cy|width|height)="([^"]*)"/g,(m,k,v)=>` ${k}="${v.replace(/-?\d+\.\d+/g,z=>+(+z).toFixed(1))}"`);
+  return `<figure class="chart"><div class="chh">${c.title?`<b>${esc(c.title)}</b>`:''}<span class="sp"></span>
+    <button class="cbtn" type="button" data-ctab="1">${esc(t('Таблица'))}</button><button class="cbtn" type="button" data-csvg="1">${esc(t('Скопировать SVG'))}</button></div>
+    ${legend?`<div class="lg">${legend}</div>`:''}<div class="cv">${svg}</div>${table}</figure>`;
 }
 
 // ── состояние ──
 let ST=null, PREFS=null, SESS=[], CUR=null, SOURCES=[], streaming=null;
-async function loadStatus(){ST=await api('/api/ai/status');return ST;}
+async function loadStatus(){ST=await api('/api/ai/status');drawFootNote();return ST;}
 function chatModels(){
   const o=(ST.ollama.models||[]).filter(m=>!m.embed).map(m=>({provider:'ollama',name:m.name,info:[m.params,m.quant,m.gb?gb(m.gb):''].filter(Boolean).join(' · ')}));
   const l=(ST.lmstudio.models||[]).filter(m=>!m.embed).map(m=>({provider:'lmstudio',name:m.name,info:[m.loaded?t('загружена'):'',m.ctx?t('контекст до {n}',{n:m.ctx}):''].filter(Boolean).join(' · ')}));
-  return [...o,...l];
+  const r=orOn()?(ST.openrouter.models||[]).map(m=>({provider:'openrouter',name:m.name,info:orInfo(m)})):[];
+  return [...o,...l,...r];
 }
-const provName=p=>p==='lmstudio'?'LM Studio':p==='ollama'?'Ollama':'';
-const provOk=p=>p==='lmstudio'?ST.lmstudio.ok:ST.ollama.ok;
+const provName=p=>p==='lmstudio'?'LM Studio':p==='ollama'?'Ollama':p==='openrouter'?'OpenRouter':'';
+const orOn=()=>!!(ST&&ST.openrouter&&ST.openrouter.enabled&&ST.openrouter.has_key);
+const provOk=p=>p==='lmstudio'?ST.lmstudio.ok:p==='openrouter'?orOn():ST.ollama.ok;
+const price=v=>'$'+(+v).toLocaleString('en',{maximumFractionDigits:v<1?3:2});
+function orInfo(m){return [m.ctx?t('контекст до {n}',{n:m.ctx.toLocaleString()}):'',m.free?t('бесплатно'):
+  t('{i} / {o} за 1 млн токенов',{i:price(m.price_in),o:price(m.price_out)})].filter(Boolean).join(' · ');}
+// заметка внизу списка бесед: где работают модели
+function drawFootNote(){
+  const n=document.querySelector('.side .foot .note'); if(!n) return;
+  $('brandSub').textContent=orOn()?t('локальные модели и облачные (OpenRouter)'):t('на модели на этом компьютере');
+  n.textContent=orOn()?t('Локальные модели работают на этом компьютере. Беседы с облачными моделями OpenRouter помечены ☁ — их сообщения уходят наружу.')
+    :t('Модель работает на этом компьютере — сообщения никуда не отправляются.');
+}
 
 // ── беседы ──
 async function loadSessions(){SESS=await api('/api/ai/sessions');drawSessions();}
@@ -317,7 +609,7 @@ function drawSessions(){
   const rows=SESS.filter(s=>!q||(s.title||'').toLowerCase().includes(q));
   const groups=[[t('Сегодня'),rows.filter(s=>(s.updated||'').slice(0,10)===today)],[t('Раньше'),rows.filter(s=>(s.updated||'').slice(0,10)!==today)]];
   $('sess').innerHTML=rows.length?groups.filter(g=>g[1].length).map(([name,list])=>`<div class="sgrp">${esc(name)}</div>`+list.map(s=>
-    `<div class="srow" data-s="${s.id}" aria-current="${CUR&&CUR.id===s.id}" tabindex="0"><span class="st" title="${attr(s.title||t('Новая беседа'))}">${esc(s.title||t('Новая беседа'))}</span>
+    `<div class="srow" data-s="${s.id}" aria-current="${CUR&&CUR.id===s.id}" tabindex="0"><span class="st" title="${attr(s.title||t('Новая беседа'))}">${s.provider==='openrouter'?'☁ ':''}${esc(s.title||t('Новая беседа'))}</span>
       <span class="sb"><button class="ib" type="button" data-ren="${s.id}" title="${attr(t('Переименовать'))}">✎</button><button class="ib" type="button" data-del="${s.id}" title="${attr(t('Удалить'))}">✕</button></span></div>`).join('')).join('')
     :`<div class="sgrp">${esc(t(q?'Ничего не нашлось':'Бесед пока нет'))}</div>`;
   $('sess').querySelectorAll('.srow').forEach(r=>{r.onclick=()=>openSession(+r.dataset.s);r.onkeydown=e=>{if(e.key==='Enter')openSession(+r.dataset.s);};});
@@ -351,8 +643,16 @@ function drawHead(){
   $('ttl').textContent=CUR.title||t('Новая беседа');
   const s=CUR.settings, ok=s.provider&&provOk(s.provider);
   $('modelChip').classList.toggle('off',!ok);
-  $('modelTxt').textContent=s.model?`${provName(s.provider)} · ${s.model.split('/').pop()}`:t('модель не выбрана');
-  $('modelChip').title=ok?t('Модель и настройки беседы'):t('{p} не отвечает — запусти или выбери другую модель',{p:provName(s.provider)||t('Модель')});
+  $('modelChip').classList.toggle('ext2',ok&&s.provider==='openrouter');
+  $('modelTxt').textContent=s.model?`${s.provider==='openrouter'?'☁ ':''}${provName(s.provider)} · ${s.model.split('/').pop()}`:t('модель не выбрана');
+  $('modelChip').title=ok?t('Модель и настройки беседы'):s.provider==='openrouter'?t('OpenRouter выключен — включи его в «Моделях» или выбери локальную модель')
+    :t('{p} не отвечает — запусти или выбери другую модель',{p:provName(s.provider)||t('Модель')});
+}
+// что умеет модель беседы (картинки, размышления) — для подсказок под полем ввода
+async function loadInfo(){
+  const s=CUR&&CUR.settings; if(!s||!s.model){if(CUR)CUR.info=null;return;}
+  try{CUR.info=await api(`/api/ai/model-info?provider=${encodeURIComponent(s.provider)}&model=${encodeURIComponent(s.model)}`);}catch(e){CUR.info=null;}
+  drawAtts();
 }
 
 // ── чат ──
@@ -367,28 +667,44 @@ const QUICK=[
 function showChat(){
   closeDrawer();
   drawHead();
+  const typed=$('q')?$('q').value:'';
+  ATT=[];
+  const ext=CUR.settings.provider==='openrouter';
   $('view').innerHTML=`<div id="chat"><div class="col" id="msgs"></div></div>
-    <div class="composer"><div class="col"><div class="box"><textarea id="q" rows="1" placeholder="${attr(t('Спроси о своих сообщениях…'))}"></textarea>
+    <div class="composer"><div class="col">${ext?`<div class="extbar">☁ <span><b>${esc(t('Облачная модель.'))}</b> ${esc(t('Выборка сообщений, вопрос и картинки уходят в OpenRouter и к провайдеру модели. Локальную модель можно выбрать в настройках беседы.'))}</span></div>`:''}
+      <div class="box" id="qbox"><button class="ib" type="button" id="attBtn" title="${attr(t('Приложить картинку (можно вставить из буфера или перетащить)'))}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>
+      <div class="qwrap"><div class="atts" id="atts"></div><textarea id="q" rows="1" placeholder="${attr(t('Спроси о своих сообщениях…'))}"></textarea></div>
       <button class="send" type="button" id="sendBtn" title="${attr(t('Отправить · Enter'))}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button></div>
       <div class="under"><span>${esc(t('Сообщения'))}</span><select class="inp" id="per">${Object.keys(PERIOD_NAMES).map(k=>`<option value="${k}"${CUR.settings.period===k?' selected':''}>${esc(t(PERIOD_NAMES[k]))}</option>`).join('')}</select>
-        <span>${esc(t('Слова «сегодня», «вчера», «за неделю» в вопросе сами сузят выборку.'))}</span><span class="sp"></span><span>${esc(t('Enter — отправить, Shift+Enter — новая строка'))}</span></div></div></div>`;
+        <span>${esc(t('Слова «сегодня», «вчера», «за неделю» в вопросе сами сузят выборку.'))}</span><span class="sp"></span><span id="vwarn" class="vwarn"></span><span>${esc(t('Enter — отправить, Shift+Enter — новая строка'))}</span></div></div></div>`;
   drawMessages();
-  const q=$('q');
+  const q=$('q'); q.value=typed;
   q.oninput=()=>{q.style.height='auto';q.style.height=Math.min(200,q.scrollHeight)+'px';};
   q.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();send();}};
   $('sendBtn').onclick=()=>streaming?stop():send();
+  $('attBtn').onclick=()=>$('attFile').click();
+  q.onpaste=e=>{const fs=[...(e.clipboardData||{}).items||[]].filter(it=>it.kind==='file'&&/^image\//.test(it.type)).map(it=>it.getAsFile());
+    if(fs.length){e.preventDefault();addImages(fs);}};
+  const qb=$('qbox');
+  qb.ondragover=e=>{e.preventDefault();qb.classList.add('drop');};
+  qb.ondragleave=()=>qb.classList.remove('drop');
+  qb.ondrop=e=>{e.preventDefault();qb.classList.remove('drop');addImages([...(e.dataTransfer.files||[])]);};
+  drawAtts(); loadInfo();
   $('per').onchange=async e=>{try{CUR=await api('/api/ai/session',{id:CUR.id,settings:{period:e.target.value}});toast(t('Выборка: {p}',{p:t(PERIOD_NAMES[e.target.value])}));}catch(err){toast(err.message,true);}};
   q.focus();
 }
 function msgHtml(m,live){
-  if(m.role==='user') return `<div class="msg me"><div class="bub">${esc(m.content)}</div></div>`;
+  if(m.role==='user'){
+    const im=(m.meta&&m.meta.images)||m.previews||[];
+    return `<div class="msg me">${im.length?`<div class="imgs">${im.map(x=>`<img src="${attr(/^data:/.test(x)?x:'/ai-image/'+x)}" alt="" data-zoom="1">`).join('')}</div>`:''}<div class="bub">${esc(m.content)}</div></div>`;
+  }
   const meta=m.meta||{}, n=(meta.ids||[]).length;
   const secs=meta.ms?(meta.ms/1000).toFixed(1).replace('.',LANG==='en'?'.':',')+' '+t('с'):'';
   const thk=meta.thinking?thinkHtml(meta.thinking,false):'';
   return `<div class="msg ai" data-mid="${m.id||''}">${thk}<div class="bub">${md(m.content)}${live?'<span class="caret"></span>':''}</div>
     ${meta.note?`<div class="note">${esc(meta.note)}</div>`:''}
     ${live?'':`<div class="meta">${n?`<button class="btn ghost sm" type="button" data-srcs="${attr((meta.ids||[]).join(','))}">${esc(t('опирался на {n}',{n:tp(n,...W.msg)}))} ▸</button>`:`<span>${esc(t('сообщений в выборке не было'))}</span>`}
-      <span>${esc([meta.model,secs,meta.tokens?t('{n} токенов',{n:meta.tokens}):'',meta.stopped?t('остановлено'):''].filter(Boolean).join(' · '))}</span>
+      <span>${meta.external?'☁ ':''}${esc([meta.model,secs,meta.tokens?t('{n} токенов',{n:meta.tokens}):'',meta.cost!=null?'$'+(+meta.cost).toFixed(meta.cost<0.01?5:3):'',meta.stopped?t('остановлено'):''].filter(Boolean).join(' · '))}</span>
       <span class="sp"></span><button class="btn ghost sm" type="button" data-copy="1">${esc(t('Скопировать'))}</button></div><div class="srcsbox"></div>`}</div>`;
 }
 // размышления «думающей» модели: свёрнуты (или раскрыты — режим «показывать»), во время ответа — «думает…»
@@ -419,6 +735,26 @@ function drawMessages(){
 }
 function bindMsgs(root){
   root.querySelectorAll('a.ref').forEach(a=>a.onclick=e=>{e.preventDefault();openMessage(+a.dataset.ref);});
+  root.querySelectorAll('[data-ccopy]').forEach(b=>b.onclick=async()=>{const ok=await copyText(b.closest('.code').querySelector('pre').textContent);
+    toast(ok?t('Код скопирован'):t('Не скопировалось'),!ok);});
+  root.querySelectorAll('[data-ctab]').forEach(b=>b.onclick=()=>{const f=b.closest('.chart'),tb=f.querySelector('.ctab'),cv=f.querySelector('.cv');
+    tb.hidden=!tb.hidden;cv.hidden=!tb.hidden;b.textContent=tb.hidden?t('Таблица'):t('График');});
+  // SVG для документа: цвета темы вписываются прямо в элементы
+  root.querySelectorAll('[data-csvg]').forEach(b=>b.onclick=async()=>{
+    const f=b.closest('.chart'), orig=f.querySelector('svg'), sv=orig.cloneNode(true), a=orig.querySelectorAll('*'), c=sv.querySelectorAll('*');
+    sv.setAttribute('xmlns','http://www.w3.org/2000/svg');
+    a.forEach((el,i)=>{const st=getComputedStyle(el);
+      c[i].setAttribute('style',`fill:${st.fill};stroke:${st.stroke};stroke-width:${st.strokeWidth};opacity:${st.opacity};font-size:${st.fontSize};font-weight:${st.fontWeight}`);});
+    sv.setAttribute('style','font-family:system-ui,sans-serif;background:'+getComputedStyle(f).backgroundColor);
+    const ok=await copyText(sv.outerHTML);toast(ok?t('SVG скопирован — можно вставить в документ'):t('Не скопировалось'),!ok);});
+  root.querySelectorAll('.chart svg').forEach(sv=>{
+    sv.onmousemove=e=>{const h=e.target.closest('[data-tip]'),tip=$('ctip');if(!h){tip.style.display='none';return;}
+      tip.textContent=h.dataset.tip;tip.style.display='block';
+      const w=tip.offsetWidth,hh=tip.offsetHeight;let x=e.clientX+14,y=e.clientY+14;
+      if(x+w>innerWidth-8)x=e.clientX-w-14;if(y+hh>innerHeight-8)y=e.clientY-hh-14;tip.style.left=x+'px';tip.style.top=y+'px';};
+    sv.onmouseleave=()=>{$('ctip').style.display='none';};});
+  root.querySelectorAll('img[data-zoom]').forEach(im=>im.onclick=()=>{const lb=document.createElement('div');lb.className='lb';
+    lb.innerHTML=`<img src="${attr(im.src)}" alt="">`;lb.onclick=()=>lb.remove();document.body.appendChild(lb);});
   root.querySelectorAll('[data-copy]').forEach(b=>b.onclick=async()=>{const mid=+b.closest('.msg').dataset.mid;
     const m=(CUR.messages||[]).find(x=>x.id===mid);const ok=await copyText(m?m.content:'');toast(ok?t('Скопировано'):t('Не скопировалось'),!ok);});
   root.querySelectorAll('[data-srcs]').forEach(b=>b.onclick=async()=>{
@@ -431,16 +767,50 @@ function bindMsgs(root){
     }catch(e){toast(e.message,true);}
   });
 }
+// картинки к вопросу: из кнопки, буфера обмена или перетаскиванием; большие — уменьшаются до 1600 px
+let ATT=[];
+const IMG_MAX=4;
+function drawAtts(){
+  const box=$('atts'); if(!box) return;
+  box.innerHTML=ATT.map((a,i)=>`<span class="att"><img src="${attr(a.url)}" alt="" title="${attr(a.name)}"><button type="button" data-rmatt="${i}" title="${attr(t('Убрать'))}">✕</button></span>`).join('');
+  box.querySelectorAll('[data-rmatt]').forEach(b=>b.onclick=()=>{ATT.splice(+b.dataset.rmatt,1);drawAtts();});
+  const w=$('vwarn'); if(w) w.textContent=ATT.length&&CUR&&CUR.info&&!CUR.info.vision?t('Эта модель, похоже, не видит картинки'):'';
+}
+function shrink(file){
+  return new Promise((ok,bad)=>{
+    if(!/^image\/(png|jpeg|gif|webp)$/.test(file.type)) return bad(new Error(t('Годятся PNG, JPEG, GIF и WebP')));
+    const u=URL.createObjectURL(file), im=new Image();
+    im.onload=()=>{const k=Math.min(1,1600/Math.max(im.naturalWidth,im.naturalHeight));URL.revokeObjectURL(u);
+      if(k===1&&file.size<2.5*1024*1024){const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=()=>bad(r.error);r.readAsDataURL(file);return;}
+      const c=document.createElement('canvas');c.width=Math.round(im.naturalWidth*k);c.height=Math.round(im.naturalHeight*k);
+      const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(im,0,0,c.width,c.height);ok(c.toDataURL('image/jpeg',.88));};
+    im.onerror=()=>{URL.revokeObjectURL(u);bad(new Error(t('Картинка не открылась')));};
+    im.src=u;});
+}
+async function addImages(files){
+  for(const f of files){
+    if(ATT.length>=IMG_MAX){toast(t('Не больше {n} картинок к одному вопросу',{n:IMG_MAX}),true);break;}
+    try{ATT.push({name:f.name||'image',url:await shrink(f)});}catch(e){toast(e.message,true);}
+  }
+  drawAtts(); if($('q'))$('q').focus();
+}
+$('attFile').onchange=e=>{addImages([...e.target.files]);e.target.value='';};
+// файл, брошенный мимо поля, не должен открыться вместо страницы
+document.addEventListener('dragover',e=>e.preventDefault());
+document.addEventListener('drop',e=>e.preventDefault());
+
 async function send(){
-  const q=$('q'), text=q.value.trim();
-  if(!text||streaming) return;
+  const q=$('q'), images=ATT.map(a=>a.url);
+  let text=q.value.trim();
+  if((!text&&!images.length)||streaming) return;
+  if(!text) text=t('Что на картинке?');
   const s=CUR.settings;
   if(!s.model){toast(t('Выбери модель в настройках беседы'),true);openDrawer();return;}
-  q.value='';q.oninput();
-  CUR.messages=[...(CUR.messages||[]),{role:'user',content:text}];
+  q.value='';q.oninput();ATT=[];drawAtts();
+  CUR.messages=[...(CUR.messages||[]),{role:'user',content:text,previews:images}];
   const box=$('msgs');
   if(CUR.messages.length===1) box.innerHTML='';
-  box.insertAdjacentHTML('beforeend',msgHtml({role:'user',content:text}));
+  box.insertAdjacentHTML('beforeend',msgHtml({role:'user',content:text,previews:images}));
   box.insertAdjacentHTML('beforeend',`<div class="ctx" id="ctxLine">${esc(t('Собираю сообщения…'))}</div>`+msgHtml({role:'assistant',content:''},true));
   const liveMsg=box.lastElementChild, live=liveMsg.querySelector('.bub');
   $('chat').scrollTop=$('chat').scrollHeight;
@@ -451,10 +821,10 @@ async function send(){
       if(!d){live.insertAdjacentHTML('beforebegin',thinkHtml(thinkAcc,true));d=liveMsg.querySelector('details.thk');}
       d.open=wasOpen;d.querySelector('summary').textContent=(acc?t('Размышления модели'):t('Думает…'))+' · '+t('{n} символов',{n:thinkAcc.length.toLocaleString()});
       const tt=d.querySelector('.tt');tt.textContent=thinkAcc;if(d.open)tt.scrollTop=tt.scrollHeight;}
-    live.innerHTML=md(acc)+'<span class="caret"></span>';bindMsgs(live);
+    live.innerHTML=md(acc,true)+'<span class="caret"></span>';bindMsgs(live);
     const c=$('chat');if(c.scrollHeight-c.scrollTop-c.clientHeight<160)c.scrollTop=c.scrollHeight;};
   try{
-    const r=await fetch('/api/ai/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session:CUR.id,text}),signal:ctl.signal});
+    const r=await fetch('/api/ai/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session:CUR.id,text,images}),signal:ctl.signal});
     if(!r.ok){let d=null;try{d=await r.json();}catch(e){}throw new Error((d&&d.error)||t('Сервер ответил {c}',{c:r.status}));}
     const reader=r.body.getReader(), dec=new TextDecoder(); let buf='';
     for(;;){
@@ -489,13 +859,17 @@ function closeDrawer(){$('drawer').classList.remove('open');$('drawer').setAttri
 async function openDrawer(){
   if(!CUR) return;
   const s=JSON.parse(JSON.stringify(CUR.settings)), models=chatModels(), d=$('drawer');
-  let info={ctx:0};
+  let info={ctx:0}, mf='';
   const draw=()=>{
-    const opts=models.map(m=>`<option value="${attr(m.provider+'|'+m.name)}"${s.provider===m.provider&&s.model===m.name?' selected':''}>${esc(provName(m.provider)+' · '+m.name)}</option>`).join('');
+    const opt=m=>`<option value="${attr(m.provider+'|'+m.name)}"${s.provider===m.provider&&s.model===m.name?' selected':''}>${esc(m.name)}</option>`;
+    const opts=['ollama','lmstudio','openrouter'].map(p=>{const ms=models.filter(m=>m.provider===p&&(!mf||m.name.toLowerCase().includes(mf)||(s.provider===p&&s.model===m.name)));
+      return ms.length?`<optgroup label="${attr(p==='openrouter'?'☁ OpenRouter — '+t('облако'):provName(p))}">${ms.map(opt).join('')}</optgroup>`:'';}).join('');
     d.innerHTML=`<div class="dh"><span>${esc(t('Настройки беседы'))}</span><button class="ib" type="button" id="dx" title="${attr(t('Закрыть'))}">✕</button></div>
       <div class="db">
-        <div class="fld"><label>${esc(t('Модель'))}</label><select class="inp" id="dModel">${opts||`<option value="">${esc(t('моделей нет — открой «Модели»'))}</option>`}${s.model&&!models.some(m=>m.name===s.model)?`<option value="${attr(s.provider+'|'+s.model)}" selected>${esc(s.model)} (${esc(t('недоступна'))})</option>`:''}</select>
-          <div class="hint">${info.ctx?esc(t('Модель умеет контекст до {n} токенов.',{n:info.ctx.toLocaleString()})):''}</div></div>
+        <div class="fld"><label>${esc(t('Модель'))}</label>${models.length>12?`<input class="inp" id="dMf" value="${attr(mf)}" placeholder="${attr(t('Найти модель…'))}" style="margin:0 0 6px">`:''}<select class="inp" id="dModel">${opts||`<option value="">${esc(t('моделей нет — открой «Модели»'))}</option>`}${s.model&&!models.some(m=>m.name===s.model)?`<option value="${attr(s.provider+'|'+s.model)}" selected>${esc(s.model)} (${esc(t('недоступна'))})</option>`:''}</select>
+          <div class="hint">${esc([info.ctx?t('Модель умеет контекст до {n} токенов.',{n:info.ctx.toLocaleString()}):'',info.vision?t('Видит картинки.'):'',
+            s.provider==='openrouter'&&(info.price_in||info.price_out)?t('Цена: {i} / {o} за 1 млн токенов (вход / ответ).',{i:price(info.price_in),o:price(info.price_out)}):''].filter(Boolean).join(' '))}</div>
+          ${s.provider==='openrouter'?`<div class="ext" style="margin-top:8px"><b class="w">☁ ${esc(t('Облачная модель'))}</b><p>${esc(t('Выборка сообщений (тексты, имена, названия чатов), вопрос и картинки уйдут в OpenRouter и к провайдеру модели. Для личного и рабочего лучше локальная модель.'))}</p></div>`:''}</div>
         <div class="fld"><label>${esc(t('Температура'))}: <b id="dTv">${s.temperature}</b></label><input type="range" id="dTemp" min="0" max="1.5" step="0.05" value="${s.temperature}">
           <div class="hint">${esc(t('Ниже — точнее и повторяемее (для сводок и поиска), выше — свободнее.'))}</div></div>
         <div class="fld"><label>${esc(t('Размер контекста'))}</label><select class="inp" id="dCtx">${ST.ctx_sizes.map(n=>`<option value="${n}"${s.num_ctx===n?' selected':''}>${n.toLocaleString()} ${esc(t('токенов'))}</option>`).join('')}</select>
@@ -519,6 +893,7 @@ async function openDrawer(){
         <button class="btn" type="button" id="dDef">${esc(t('Сделать по умолчанию'))}</button>
         <button class="btn ghost" type="button" id="dSysReset">${esc(t('Стандартный промпт'))}</button></div>`;
     $('dx').onclick=closeDrawer;
+    if($('dMf')){const f=$('dMf');f.oninput=()=>{mf=f.value.trim().toLowerCase();const pos=f.selectionStart;draw();const g=$('dMf');g.focus();g.setSelectionRange(pos,pos);};}
     $('dModel').onchange=async e=>{const [p,...n]=e.target.value.split('|');s.provider=p;s.model=n.join('|');info=await api(`/api/ai/model-info?provider=${encodeURIComponent(p)}&model=${encodeURIComponent(s.model)}`).catch(()=>({ctx:0}));draw();};
     $('dTemp').oninput=e=>{s.temperature=+e.target.value;$('dTv').textContent=s.temperature;};
     $('dCtx').onchange=e=>{s.num_ctx=+e.target.value;};
@@ -531,8 +906,7 @@ async function openDrawer(){
     $('dLogs').onchange=e=>{s.include_logs=e.target.checked;};
     $('dSys').oninput=e=>{s.system=e.target.value;};
     $('dSysReset').onclick=()=>{s.system='';$('dSys').value='';};
-    $('dSave').onclick=async()=>{try{CUR=await api('/api/ai/session',{id:CUR.id,settings:s});toast(t('Сохранено'));drawHead();closeDrawer();
-      if($('per'))$('per').value=CUR.settings.period;}catch(e){toast(e.message,true);}};
+    $('dSave').onclick=async()=>{try{CUR=await api('/api/ai/session',{id:CUR.id,settings:s});toast(t('Сохранено'));await loadSessions();showChat();}catch(e){toast(e.message,true);}};
     $('dDef').onclick=async()=>{try{await api('/api/ai/defaults',{settings:s});CUR=await api('/api/ai/session',{id:CUR.id,settings:s});
       toast(t('Сохранено как настройки новых бесед'));drawHead();}catch(e){toast(e.message,true);}};
   };
@@ -562,14 +936,21 @@ function bindPull(){const b=$('pullStop');if(b)b.onclick=async()=>{await api('/a
 // вкладки «Установленные» / «Скачать» и поиск по названию и описанию (состояние — между перерисовками)
 let mTab=null, mQuery='', mPick='';
 function modelLists(provider){
+  if(provider==='openrouter') return {inst:ST.openrouter.models||[],cat:[]};
   const o=ST.ollama, l=ST.lmstudio;
   const inst=provider==='lmstudio'?(l.models||[]).filter(m=>!m.embed):(o.models||[]).filter(m=>!m.embed);
   const have=new Set((o.models||[]).map(m=>m.name));
   const cat=provider==='ollama'?ST.catalog.filter(c=>!have.has(c.name)&&!have.has(c.name+':latest')):[];
   return {inst,cat};
 }
+let orF={free:false,vision:false,reasoning:false};
 function modelsHtml(pickable, provider){
   const {inst,cat}=modelLists(provider);
+  if(pickable&&!mPick) mPick=PREFS.ai.provider===provider?PREFS.ai.model:'';
+  if(provider==='openrouter') return `<div class="filt">${[['free','Бесплатные'],['vision','Видят картинки'],['reasoning','Размышляют']].map(([k,l])=>
+      `<label><input type="checkbox" data-orf="${k}"${orF[k]?' checked':''}>${esc(t(l))}</label>`).join('')}</div>
+    <input class="inp msearch" id="mSearch" value="${attr(mQuery)}" placeholder="${attr(t('Найти среди {n} моделей: gemini, qwen, deepseek…',{n:inst.length}))}">
+    <div id="mBody"></div>`;
   if(mTab===null||(provider!=='ollama'&&mTab==='get')) mTab=inst.length||provider!=='ollama'?'local':'get';
   if(pickable&&!mPick) mPick=PREFS.ai.provider===provider?PREFS.ai.model:'';
   return `<div id="pullSlot">${provider==='ollama'?pullHtml(ST.pull):''}</div>
@@ -581,6 +962,17 @@ function modelsHtml(pickable, provider){
 function modelsBody(pickable, provider){
   const {inst,cat}=modelLists(provider), hw=ST.hardware, cur=PREFS.ai, q=mQuery.trim().toLowerCase();
   const hit=(...xs)=>!q||xs.some(x=>String(x||'').toLowerCase().includes(q));
+  if(provider==='openrouter'){
+    const all=inst.filter(m=>hit(m.name,m.title)&&(!orF.free||m.free)&&(!orF.vision||m.vision)&&(!orF.reasoning||m.reasoning)), rows=all.slice(0,150);
+    const def=m=>cur.provider===provider&&cur.model===m.name;
+    if(!rows.length) return `<p class="lead">${esc(t(inst.length?'Ничего не нашлось — поменяй поиск или сними фильтры.':'Список моделей пуст — проверь интернет и нажми «Проверить ещё раз».'))}</p>`;
+    return `<div class="list">${rows.map(m=>`<div class="mrow"><span>${pickable?`<input type="radio" name="mdl" value="${attr(m.name)}"${mPick===m.name?' checked':''}>`:def(m)?'★':'☁'}</span>
+      <span><span class="nm">${esc(m.name)}</span>${def(m)?`<span class="tag ok">${esc(t('по умолчанию'))}</span>`:''}${m.free?`<span class="tag ok">${esc(t('бесплатно'))}</span>`:''}${m.vision?`<span class="tag">${esc(t('видит картинки'))}</span>`:''}${m.reasoning?`<span class="tag">${esc(t('размышляет'))}</span>`:''}<br>
+        <span class="sub">${esc([m.title,orInfo(m)].filter(Boolean).join(' · '))}</span></span>
+      <span class="btns">${pickable?'':`<button class="btn sm" type="button" data-def="${attr(m.name)}">${esc(t('По умолчанию'))}</button>`}</span></div>`).join('')}</div>
+      ${all.length>rows.length?`<p class="faint">${esc(t('Показаны {a} из {b} — уточни поиск.',{a:rows.length,b:all.length}))}</p>`:''}
+      <p class="faint">${esc(t('Цены — за 1 млн токенов, их берёт OpenRouter со счёта твоего ключа. Бесплатные модели обычно с ограничением запросов в минуту.'))}</p>`;
+  }
   if(mTab==='local'){
     const rows=inst.filter(m=>hit(m.name,m.family,m.params));
     const row=m=>`<div class="mrow"><span>${pickable?`<input type="radio" name="mdl" value="${attr(m.name)}"${mPick===m.name?' checked':''}>`:(cur.provider===provider&&cur.model===m.name?'★':'')}</span>
@@ -617,6 +1009,7 @@ function bindModels(provider, onChange, pickable){
       toast(t('Модель по умолчанию: {m}',{m:b.dataset.def}));onChange();}catch(e){toast(e.message,true);}});
   };
   v.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{mTab=b.dataset.tab;onChange();});
+  v.querySelectorAll('[data-orf]').forEach(cb=>cb.onchange=()=>{orF[cb.dataset.orf]=cb.checked;body();});
   const si=$('mSearch'); si.oninput=()=>{mQuery=si.value;body();};
   body();
   bindPull(); if(ST.pull&&!ST.pull.done) watchPull(onChange);
@@ -635,8 +1028,8 @@ async function showModels(){
   let prov=PREFS.ai.provider||(ST.ollama.ok?'ollama':ST.lmstudio.ok?'lmstudio':'ollama');
   const draw=()=>{
     $('view').innerHTML=`<div class="panel"><div class="col"><h1>${esc(t('Модели'))}</h1>
-      <p class="lead">${esc(t('Модели, которые можно использовать в беседах. Всё работает на этом компьютере.'))}</p>
-      <div class="row"><span class="seg">${['ollama','lmstudio'].map(p=>`<button class="btn${prov===p?' primary':''}" type="button" data-prov="${p}">${esc(provName(p))} ${(p==='ollama'?ST.ollama.ok:ST.lmstudio.ok)?'✓':'·'}</button>`).join(' ')}</span>
+      <p class="lead">${esc(t('Модели, которые можно использовать в беседах. Ollama и LM Studio работают на этом компьютере; OpenRouter — облако, подключается по желанию.'))}</p>
+      <div class="row"><span class="seg">${['ollama','lmstudio','openrouter'].map(p=>`<button class="btn${prov===p?' primary':''}" type="button" data-prov="${p}">${p==='openrouter'?'☁ ':''}${esc(provName(p))} ${provOk(p)?'✓':'·'}</button>`).join(' ')}</span>
         <span class="sp" style="flex:1"></span><button class="btn ghost" type="button" id="back">${esc(t('← К беседе'))}</button></div>
       ${provHint(prov)}${provOk(prov)?modelsHtml(false,prov):''}</div></div>`;
     $('view').querySelectorAll('[data-prov]').forEach(b=>b.onclick=()=>{prov=b.dataset.prov;mTab=null;mQuery='';draw();});
@@ -649,7 +1042,28 @@ async function showModels(){
 $('modelsBtn').onclick=showModels;
 
 // подсказка, если провайдер не запущен: как установить / запустить
+function orConsentHtml(){
+  return `<div class="ext"><b class="w">⚠ ${esc(t('Это облако, а не этот компьютер'))}</b>
+    <p>${esc(t('OpenRouter даёт доступ к сотням облачных моделей по твоему ключу. В беседе с такой моделью к каждому вопросу уйдут выборка твоих сообщений (тексты, имена, названия чатов, хвосты логов, если они включены) и приложенные картинки — на серверы OpenRouter и компании, чья это модель. Что с ними будет дальше, решают их правила, а не messhub.'))}</p>
+    <p>${esc(t('Подключаешь на свой страх и риск. Для рабочих и личных переписок лучше оставить локальные модели. Локальные беседы работают как раньше, облачные помечены ☁.'))}</p>
+    <p class="faint">${esc(t('Ключ создаётся на openrouter.ai в разделе Keys. Он хранится только на этом компьютере (файл с доступом только для тебя) и странице обратно не показывается.'))}</p>
+    <div class="row"><input class="inp" type="password" id="orKey" placeholder="sk-or-v1-…" autocomplete="off" spellcheck="false" style="flex:1;min-width:220px"></div>
+    <label class="sw"><input type="checkbox" id="orOk"> ${esc(t('Понимаю: выборка сообщений и вопросы будут уходить в OpenRouter'))}</label>
+    <div class="row"><button class="btn primary" type="button" id="orOn" disabled>${esc(t('Подключить OpenRouter'))}</button></div></div>`;
+}
 function provHint(p){
+  if(p==='openrouter'){
+    const o=ST.openrouter;
+    if(!orOn()) return orConsentHtml();
+    return `<div class="ext"><b class="w">☁ ${esc(t('OpenRouter подключён — облачные модели'))}</b>
+      <p>${esc(t('В беседах с этими моделями выборка сообщений, вопросы и картинки уходят в OpenRouter и к провайдеру модели. Такие беседы помечены ☁.'))}</p>
+      <p class="faint">${esc(t('Ключ {k} хранится только на этом компьютере. Согласие дано {d}.',{k:o.hint,d:(o.consent||'').slice(0,16)}))}</p>
+      ${o.error?`<p class="bad">${esc(t('Список моделей не загрузился: {e}',{e:o.error}))}</p>`:''}
+      <div class="row"><button class="btn sm" type="button" id="orKeyBtn">${esc(t('Сменить ключ'))}</button><button class="btn sm" type="button" data-recheck="1">${esc(t('Обновить список'))}</button>
+        <button class="btn sm" type="button" id="orOff">${esc(t('Отключить'))}</button><button class="btn danger sm" type="button" id="orDel">${esc(t('Отключить и удалить ключ'))}</button></div>
+      <div class="row" id="orKeyRow" hidden><input class="inp" type="password" id="orKey" placeholder="sk-or-v1-…" autocomplete="off" spellcheck="false" style="flex:1;min-width:220px">
+        <button class="btn primary sm" type="button" id="orKeySave">${esc(t('Сохранить ключ'))}</button></div></div>`;
+  }
   if(p==='ollama'){
     const o=ST.ollama;
     return o.ok?`<p class="ok">✓ Ollama ${esc(o.version)} · ${esc(o.url)}</p>`:`<div class="pullbox"><b class="bad">${esc(t('Ollama не отвечает'))}</b> · <span class="muted">${esc(o.url)} — ${esc(o.error)}</span>
@@ -665,6 +1079,14 @@ function provHint(p){
     <button class="btn" type="button" data-recheck="1">${esc(t('Проверить ещё раз'))}</button></div>`;
 }
 function bindProvHint(redraw){
+  const orSet=async body=>{try{ST.openrouter=await api('/api/ai/openrouter',body);await loadStatus();PREFS.ai=ST.prefs;redraw();return true;}
+    catch(e){toast(e.message,true);return false;}};
+  if($('orOn')){const upd=()=>{$('orOn').disabled=!($('orOk').checked&&$('orKey').value.trim());};$('orOk').onchange=upd;$('orKey').oninput=upd;
+    $('orOn').onclick=async()=>{$('orOn').disabled=true;if(await orSet({enabled:true,key:$('orKey').value.trim(),consent:$('orOk').checked}))toast(t('OpenRouter подключён'));else upd();};}
+  if($('orKeyBtn'))$('orKeyBtn').onclick=()=>{$('orKeyRow').hidden=false;$('orKey').focus();};
+  if($('orKeySave'))$('orKeySave').onclick=async()=>{if(await orSet({enabled:true,key:$('orKey').value.trim(),consent:true}))toast(t('Ключ сохранён'));};
+  if($('orOff'))$('orOff').onclick=async()=>{if(await orSet({enabled:false}))toast(t('OpenRouter отключён — облачные модели недоступны'));};
+  if($('orDel'))confirmBtn($('orDel'),t('Точно удалить ключ?'),async()=>{if(await orSet({enabled:false,key:''}))toast(t('Ключ удалён'));});
   $('view').querySelectorAll('[data-recheck]').forEach(b=>b.onclick=async()=>{b.disabled=true;await loadStatus();redraw();});
   $('view').querySelectorAll('[data-lmstart]').forEach(b=>b.onclick=async()=>{b.disabled=true;b.textContent=t('Запускаю…');
     try{const r=await api('/api/ai/lmstudio/start',{});toast(r.ok?t('Сервер LM Studio запущен'):r.output||t('Не получилось'),!r.ok);}catch(e){toast(e.message,true);}
@@ -687,11 +1109,14 @@ async function showSetup(step){
       <p class="lead">🔒 ${esc(t('Отвечает модель на этом компьютере — через Ollama или LM Studio. Сообщения никуда не уходят, интернет нужен только чтобы один раз скачать модель.'))}</p>
       <button class="btn primary" type="button" id="next">${esc(t('Начать настройку'))}</button>`;
     else if(step===2) body=`<h1>${esc(t('Где будет работать модель'))}</h1>
-      <p class="lead">${esc(t('Обе программы бесплатные и работают на этом компьютере. Если ни одной нет — проще начать с Ollama: модели скачиваются прямо отсюда.'))}</p>
+      <p class="lead">${esc(t('Ollama и LM Studio бесплатные и работают на этом компьютере. Если ни одной нет — проще начать с Ollama: модели скачиваются прямо отсюда. OpenRouter — облачные модели, по желанию.'))}</p>
       <div class="cards">${['ollama','lmstudio'].map(p=>{const s=p==='ollama'?ST.ollama:ST.lmstudio;const n=(s.models||[]).filter(m=>!m.embed).length;
         return `<button class="pcard" type="button" role="radio" aria-checked="${prov===p}" data-p="${p}"><h3>${esc(provName(p))} ${s.ok?`<span class="ok">✓</span>`:`<span class="bad">·</span>`}</h3>
           <p>${esc(p==='ollama'?t('Простая, модели скачиваются одной кнопкой прямо в этом окне.'):t('Программа с окном: модели ищутся и скачиваются в ней самой.'))}</p>
-          <p class="${s.ok?'ok':'bad'}">${esc(s.ok?t('найдена · моделей для чата: {n}',{n}):t('не отвечает — {e}',{e:s.error}))}</p></button>`;}).join('')}</div>
+          <p class="${s.ok?'ok':'bad'}">${esc(s.ok?t('найдена · моделей для чата: {n}',{n}):t('не отвечает — {e}',{e:s.error}))}</p></button>`;}).join('')}
+        <button class="pcard cloud" type="button" role="radio" aria-checked="${prov==='openrouter'}" data-p="openrouter"><h3>☁ OpenRouter <span class="tag ext">${esc(t('облако'))}</span></h3>
+          <p>${esc(t('Сотни облачных моделей по твоему ключу, часть бесплатно. Сообщения уходят наружу — на твой страх и риск.'))}</p>
+          <p class="${orOn()?'ok':'muted'}">${esc(orOn()?t('подключён · моделей: {n}',{n:(ST.openrouter.models||[]).length}):t('не подключён'))}</p></button></div>
       ${provHint(prov)}
       <div class="row"><button class="btn ghost" type="button" id="prev">${esc(t('← Назад'))}</button><button class="btn primary" type="button" id="next"${provOk(prov)?'':' disabled'}>${esc(t('Дальше'))}</button></div>`;
     else if(step===3) body=`<h1>${esc(t('Какая модель'))}</h1>

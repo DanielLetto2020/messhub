@@ -79,6 +79,11 @@ def plan(lang):
         ("assistant-settings", "/assistant", A, ["wait-for:.msg.ai", "openDrawer();'ok'", 1000]),
         ("assistant-models", "/assistant", A, ["wait-for:.srow", "showModels();'ok'", 1200,
             "document.querySelector('[data-tab=get]').click();'ok'", 700]),
+        ("assistant-chart", "/assistant", A, ["wait-for:.msg.ai",
+            "openSession(SESS.find(s=>s.provider==='openrouter').id);'ok'", "wait-for:.chart svg", 700,
+            "document.getElementById('chat').scrollTop=0;'ok'", 300]),
+        ("assistant-openrouter", "/assistant", A, ["wait-for:.srow", "showModels();'ok'", 1200,
+            "document.querySelector('[data-prov=openrouter]').click();'ok'", 700]),
         ("settings-logs", "/settings#logs", S, ["wait-for:.lg", 600]),
         ("settings-help", "/settings#help", S, [900]),
         # в конце — снимки, которые меняют настройки демо-папки: ИТ-колонки (остальные скрыты), светлая тема

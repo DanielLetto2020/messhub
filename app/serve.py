@@ -9,6 +9,7 @@
     /assistant → assistant.html — ассистент на локальной модели (ai.py; API /api/ai/…)
     /find?q=… → find.html — результаты поиска из шапки доски (окно выпадает над панелью)
     /i18n.js — переводы страниц     /avatar/<файл> — аватары из уведомлений
+    /ai-image/<файл> — картинки, приложенные к вопросам ассистенту
 
   Сообщения:
     GET /api/messages   последние N (JSON); &after=ID — только новые (id > ID);
@@ -38,7 +39,7 @@
   Настройки: /api/settings/sources|source|rules, /api/rules(/delete), /api/source-mode,
     /api/prefs, /api/stats, /api/data, /api/purge, /api/export, /api/config/export|import,
     /api/backups(/make|/restore), /api/report/preview|send, /api/forward(/test),
-    /api/rag/status|install|disable|remove-model|search|ask, /api/ingest/config|token,
+    /api/rag/status|install|disable|retry|remove-model|search|ask, /api/ingest/config|token,
     /api/diag, /api/autostart, /api/restart, /api/version, /api/update (новая версия на GitHub),
     /api/mail (ящики IMAP, см. mail.py) + /api/mail/channel|account|delete|test|check
 
@@ -524,12 +525,28 @@ def start_background(db_path):
             time.sleep(60)
 
     def rag_loop():
+        # сбойные тексты считаются по кускам (rag.index_step); Ollama недоступна — пауза растёт до 5 минут,
+        # пропущенные сообщения пробуются снова при запуске и раз в сутки
+        pause, retry_at = 20, 0.0
         while True:
             n = 0
+            if time.time() >= retry_at:
+                try:
+                    rag.retry_skipped(db_path)
+                except sqlite3.Error:
+                    pass
+                retry_at = time.time() + 86400
             try:
                 n = rag.index_step(db_path)
+                pause = 20
             except Exception as e:  # Ollama выключили, модель удалили — не падаем
-                rag.state["error"] = str(e)
+                msg = rag.human_error(e)
+                if msg != rag.state["error"]:
+                    applog.warn(f"Умный поиск: векторы не посчитались ({msg}), повторяю сам")
+                rag.state.update(error=msg, retry_at=time.time() + pause)
+                time.sleep(pause)
+                pause = min(300, pause * 2)
+                continue
             time.sleep(1 if n else 20)
 
     threading.Thread(target=slow, name="background", daemon=True).start()
@@ -758,6 +775,12 @@ def make_handler(db_path):
                 if not f:
                     return self._send(404, b"not found", "text/plain; charset=utf-8")
                 return self._file(f, "image/png" if f.endswith(".png") else "image/jpeg")
+            if p.startswith("/ai-image/"):
+                f = ai.image_file(unquote(p[10:]))
+                if not f:
+                    return self._send(404, b"not found", "text/plain; charset=utf-8")
+                return self._file(f, {"png": "image/png", "jpg": "image/jpeg", "gif": "image/gif",
+                                      "webp": "image/webp"}[f.rsplit(".", 1)[1]])
 
             self._lang()
             try:
@@ -830,6 +853,12 @@ def make_handler(db_path):
                     self._json(dict(ai.pull))
                 elif p == "/api/ai/model-info":
                     self._json(read(db_path, ai.model_info, arg("provider"), arg("model")))
+                elif p == "/api/ai/openrouter/models":
+                    ai_p = read(db_path, rules.get_prefs)["ai"]
+                    if not ai_p["openrouter"]:
+                        self._json({"error": L("OpenRouter выключен", "OpenRouter is off")}, 400)
+                    else:
+                        self._json({"models": ai.or_models(force=arg("force") == "1"), "error": ai._or_models["error"]})
                 elif p == "/api/ai/export":
                     self._json({"text": read(db_path, ai.export_markdown, num("id", 0))})
                 elif p == "/api/quiet":
@@ -885,9 +914,12 @@ def make_handler(db_path):
         def _ai_chat(self):
             """Ответ ассистента потоком (NDJSON, по строке на событие); закрыли окно — модель останавливается."""
             try:
-                size = min(int(self.headers.get("Content-Length") or 0), 65536)
+                size = int(self.headers.get("Content-Length") or 0)
+                if size > 48 * 1024 * 1024:          # до 4 картинок по 8 МБ в base64
+                    raise ValueError
                 payload = json.loads(self.rfile.read(size) or b"{}")
                 sid, text = int(payload.get("session")), str(payload.get("text") or "")
+                images = [str(x) for x in (payload.get("images") or [])][:ai.MAX_IMAGES]
             except (ValueError, TypeError):
                 return self._json({"error": L("Неверный запрос", "Bad request")}, 400)
             self.send_response(200)
@@ -905,7 +937,7 @@ def make_handler(db_path):
                 except OSError:              # окно закрыли или нажали «Стоп»
                     return False
             try:
-                ai.chat(db_path, sid, text, emit, i18n.lang())
+                ai.chat(db_path, sid, text, emit, i18n.lang(), images)
             except (ValueError, sqlite3.Error) as e:
                 emit({"type": "error", "error": str(e)})
 
@@ -928,8 +960,15 @@ def make_handler(db_path):
                     raise BadRequest(L("Неизвестное событие", "Unknown event"))
                 return events.command(db_path, payload)
             if p == "/api/ai/setup":
-                write(db_path, rules.set_prefs, {"ai": dict(payload.get("ai") or {})})
+                upd = dict(payload.get("ai") or {})
+                upd.pop("openrouter", None)           # OpenRouter включается только через /api/ai/openrouter
+                upd.pop("openrouter_consent", None)
+                write(db_path, rules.set_prefs, {"ai": upd})
                 return read(db_path, ai.status)
+            if p == "/api/ai/openrouter":
+                return write(db_path, ai.or_setup, bool(payload.get("enabled")),
+                             None if payload.get("key") is None else str(payload.get("key")),
+                             bool(payload.get("consent")))
             if p == "/api/ai/session":
                 if payload.get("id"):
                     return write(db_path, ai.update_session, int(payload["id"]), payload.get("title"),
@@ -1057,6 +1096,8 @@ def make_handler(db_path):
                 rag.install(db_path, str(payload.get("model") or "bge-m3").strip(),
                             str(payload.get("chat_model") or "").strip())
                 return {"ok": True}
+            if p == "/api/rag/retry":
+                return {"queued": rag.retry_skipped(db_path)}
             if p == "/api/rag/disable":
                 write(db_path, rag.disable, bool(payload.get("drop")))
                 return {"ok": True}

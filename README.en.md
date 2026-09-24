@@ -38,7 +38,8 @@ the screen anyway.
 - **Sharing your screen on a call.** The board blurs by itself as soon as you start sharing (or with
   one button), so colleagues don't read too much.
 - **"Ask your messages".** An assistant on a model on your own computer: "what did I miss?", "who
-  asked about the report?", "summarize the chat" - with message numbers in the answer.
+  asked about the report?", "summarize the chat", "chart messages per day" - with message numbers in
+  the answer.
 - **Deadlines get lost in chats.** "Call tomorrow at 10", "report by Friday" - the card gets a ⏰, one
   click and the reminder comes on time. Quiet hours - no sounds at night and on weekends.
 - **You'd rather not hand your messages to a service.** Everything is stored and processed on your
@@ -134,8 +135,22 @@ open the message itself.
   agreements", "Server report".
 - **Everything stays with you** - the model address must be on this computer (your home network only
   if you allow it); cloud addresses are refused.
+- **Answers with code, tables and charts** - code and JSON highlighting with a Copy button, tables,
+  task lists, quotes. Ask for a chart and the answer draws bars, lines or a ring with hover tips; it
+  switches to a table and copies as SVG.
+- **Pictures with a question** - the paper clip, paste or drag and drop (up to 4); for models that see
+  pictures (gemma3, qwen2.5vl, llava and the like).
+- **OpenRouter - optional, at your own risk.** Hundreds of cloud models with your own key (some free).
+  It is connected only by hand: a key, a consent checkbox and a yellow warning that the message
+  selection, the question and pictures go to the servers of OpenRouter and of the company behind the
+  model. Cloud conversations are marked ☁ and with a yellow bar above the input; local ones work as
+  before. The key stays on this computer in a file only you can read.
 
 ![Assistant](docs/screens/en/assistant.png)
+
+![A chart in the answer](docs/screens/en/assistant-chart.png)
+
+![OpenRouter cloud models](docs/screens/en/assistant-openrouter.png)
 
 ![Models: installed and catalog](docs/screens/en/assistant-models.png)
 
@@ -330,7 +345,10 @@ keep the sender name and message preview on.
 - The board and settings pages are open only to this computer, and other websites in your browser
   can't reach them: the server answers only its own pages.
 - The assistant answers with a model on this computer (Ollama or LM Studio). The internet is only
-  needed once to download a model; a cloud model address is refused.
+  needed once to download a model; a cloud model address is refused. The only exception is
+  OpenRouter, if you connect it yourself with your key and agree: then conversations with a cloud
+  model (marked ☁) send the message selection, the question and pictures to OpenRouter. One button
+  turns it off, and the key can be deleted.
 - Themed columns and the app log are stored locally too. Log tails are never forwarded, not even
   by a "Forward to Telegram" rule.
 - Every 12 hours the app asks GitHub for the latest version number to show "a new version is out".
