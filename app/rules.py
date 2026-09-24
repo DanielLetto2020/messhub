@@ -47,6 +47,11 @@ SOURCES = (
     ("messhub-containers", "containers", ("Контейнеры", "Containers"), "🐳", 7),
     ("messhub-services", "services", ("Службы", "Services"), "⚙️", 7),
     ("messhub-commands", "commands", ("Команды", "Commands"), "⌨️", 7),
+    ("messhub-resources", "resources", ("Ресурсы", "Resources"), "📊", 7),
+    ("messhub-logwatch", "logwatch", ("Журналы", "Log watch"), "📜", 7),
+    ("messhub-reminders", "reminders", ("Напоминания", "Reminders"), "⏰", 3),
+    ("messhub-digest", "digest", ("Сводки", "Digests"), "🌙", 3),
+    ("messhub-calendar", "calendar", ("Календарь", "Calendar"), "📅", 3),   # события из календарей (calendar.py)
     ("express", "express", ("eXpress", "eXpress"), "💬", 0),
     ("telegram", "telegram", ("Telegram", "Telegram"), "✈️", 1),
     ("max", "max", ("MAX", "MAX"), "🅼", 2),
@@ -115,15 +120,29 @@ PREF_DEFAULTS = {
         "containers": {"enabled": False, "startstop": False, "log_lines": 20, "ignore": []},
         "services": {"enabled": False, "system": True, "user": True, "log_lines": 20},
         "commands": {"enabled": False, "log_lines": 20},
+        "resources": {"enabled": False, "disk_pct": 90, "mem_pct": 95, "swap_pct": 80,
+                      "cpu_temp": 90, "gpu_temp": 85, "paths": []},
+        "logwatch": {"enabled": False, "watches": []},     # [{id, name, kind: file|unit, target, scope, pattern, icase}]
+        "calendar": {"enabled": False, "before": 10, "agenda": True, "agenda_time": "09:00", "files": []},
     },
+    "time_hints": True,       # «⏰ 15:00» на плашке, если в тексте есть время, — напомнить (reminders.py)
+    "share_blur": True,       # размывать доску, пока показывается экран (screen.py)
+    "share_patterns": [],     # свои признаки показа экрана: части заголовков окон
+    "quiet": {"enabled": False, "schedule": [], "manual_until": "", "sound": False, "forward": True,
+              "follow_dnd": True, "set_dnd": False, "summary": True},   # тихие часы (quiet.py)
+    "scripts": {"enabled": True, "items": {}},   # свои источники: скрипты в <настройки>/sources.d (scripts.py)
+    "ai": {"provider": "", "ollama_url": "http://127.0.0.1:11434", "lmstudio_url": "http://127.0.0.1:1234",
+           "model": "", "temperature": 0.3, "num_ctx": 8192, "max_tokens": 1024, "system": "",
+           "period": "7d", "max_msgs": 300, "include_logs": False, "include_read": True,
+           "allow_lan": False, "setup_done": False},   # ассистент на локальной модели (ai.py)
     # служебное — не настройки, в выгрузку и в версию настроек не входит:
-    "backup_last": "", "report_last": "", "services_win_last": "",
+    "backup_last": "", "report_last": "", "services_win_last": "", "quiet_state": "", "agenda_last": "",
 }
-STATE_PREFS = ("backup_last", "report_last", "services_win_last")
+STATE_PREFS = ("backup_last", "report_last", "services_win_last", "quiet_state", "agenda_last")
 # от этих настроек зависит вид доски — по их хэшу (X-Prefs-Ver) виджет перечитывает её
 DISPLAY_PREFS = ("language", "opacity", "font_size", "compact", "theme", "group_by_chat",
                  "avatars", "col_order", "hidden_cols", "closed_cols", "mail_channel", "mentions",
-                 "source_names", "profiles", "profile")
+                 "source_names", "profiles", "profile", "time_hints", "share_blur", "share_patterns", "quiet")
 
 
 # ── источники ───────────────────────────────────────────────────────────────
@@ -372,8 +391,22 @@ def _clean_pref(k, v):
         return round(min(1.0, max(0.3, float(v))), 2)
     if k == "font_size":
         return int(min(18, max(11, int(v))))
-    if k in ("compact", "group_by_chat", "avatars", "update_check"):
+    if k in ("compact", "group_by_chat", "avatars", "update_check", "time_hints", "share_blur"):
         return bool(v)
+    if k == "share_patterns":
+        items = v.split(",") if isinstance(v, str) else list(v)
+        return [str(x).strip()[:80] for x in items if str(x).strip()][:30]
+    if k == "quiet":
+        return clean_quiet(v)
+    if k == "scripts":
+        items = {}
+        for name, o in dict(v.get("items") or {}).items():
+            if re.match(r"^[\w.\-]{1,80}$", str(name)):
+                items[str(name)] = {"enabled": bool(o.get("enabled", True)),
+                                    "interval": int(min(86400, max(10, int(o.get("interval", 300)))))}
+        return {"enabled": bool(v.get("enabled", True)), "items": items}
+    if k == "ai":
+        return clean_ai(v)
     if k == "theme":
         if v not in ("dark", "light"):
             raise bad
@@ -442,11 +475,40 @@ def _clean_pref(k, v):
     if k == "themed":
         return clean_themed(v)
     if k in STATE_PREFS:
-        return str(v)[:40]
+        return str(v)[:300]
     raise ValueError(L(f"Неизвестная настройка «{k}»", f"Unknown setting “{k}”"))
 
 
 LOG_LINES = (0, 10, 20, 50)
+# границы числовых настроек тематических колонок: ключ → (мин, макс)
+THEMED_RANGES = {"disk_pct": (50, 99), "mem_pct": (50, 99), "swap_pct": (10, 100), "cpu_temp": (50, 110),
+                 "gpu_temp": (50, 110), "before": (0, 240)}
+
+
+def _str_list(val, limit=30, width=200):
+    items = val.split(",") if isinstance(val, str) else list(val or [])
+    return [str(x).strip()[:width] for x in items if str(x).strip()][:limit]
+
+
+def clean_watch(w):
+    """Одно наблюдение за логом: файл или служба journald + регулярное выражение."""
+    wid = str(w.get("id") or "").strip()[:40] or secrets_id()
+    kind = w.get("kind") if w.get("kind") in ("file", "unit") else "file"
+    target, pattern = str(w.get("target") or "").strip()[:500], str(w.get("pattern") or "").strip()[:500]
+    if not target or not pattern:
+        raise ValueError(L("У наблюдения нужны файл или служба и выражение", "A watch needs a file or unit and a pattern"))
+    try:
+        re.compile(pattern)
+    except re.error as e:
+        raise ValueError(L(f"Выражение не разбирается: {e}", f"The pattern is invalid: {e}"))
+    return {"id": wid if _RE_ID.match(wid) else secrets_id(), "name": str(w.get("name") or "").strip()[:60] or target[-60:],
+            "kind": kind, "target": target, "scope": "user" if w.get("scope") == "user" else "system",
+            "pattern": pattern, "icase": bool(w.get("icase", True))}
+
+
+def secrets_id():
+    import secrets
+    return "w" + secrets.token_hex(4)
 
 
 def clean_themed(v, base=None):
@@ -464,11 +526,68 @@ def clean_themed(v, base=None):
                 val = int(val)
                 if val not in LOG_LINES:
                     raise ValueError(L("Строк лога — 0, 10, 20 или 50", "Log lines must be 0, 10, 20 or 50"))
-            elif key == "ignore":
-                items = val.split(",") if isinstance(val, str) else list(val)
-                val = [str(x).strip()[:80] for x in items if str(x).strip()][:30]
+            elif key in THEMED_RANGES:
+                lo, hi = THEMED_RANGES[key]
+                val = int(min(hi, max(lo, int(val))))
+            elif key in ("ignore", "paths", "files"):
+                val = _str_list(val, width=80 if key == "ignore" else 500)
+            elif key == "watches":
+                val = [clean_watch(dict(w)) for w in list(val or [])[:30]]
+            elif key == "agenda_time":
+                val = str(val)
+                if not _RE_HM.match(val) or val == "24:00":
+                    raise ValueError(L("Время — в виде 09:00", "Time must look like 09:00"))
             out.setdefault(col, {})[key] = val
     return out
+
+
+def clean_quiet(v):
+    d = PREF_DEFAULTS["quiet"]
+    v = dict(v or {})
+    sched = []
+    for slot in list(v.get("schedule") or [])[:14]:
+        days = sorted({int(x) for x in slot.get("days", []) if 0 <= int(x) <= 6})
+        frm, to = str(slot.get("from", "")), str(slot.get("to", ""))
+        if not days or not _RE_HM.match(frm) or not _RE_HM.match(to) or frm == to:
+            raise ValueError(L("В расписании тихих часов нужны дни и время «с–по»",
+                               "Quiet hours need days and a from–to time"))
+        sched.append({"days": days, "from": frm, "to": to})
+    until = str(v.get("manual_until") or "")[:19]
+    return {"enabled": bool(v.get("enabled", d["enabled"])), "schedule": sched, "manual_until": until,
+            **{k: bool(v.get(k, d[k])) for k in ("sound", "forward", "follow_dnd", "set_dnd", "summary")}}
+
+
+_RE_LOCAL_URL = re.compile(r"^http://(127\.0\.0\.1|localhost|\[::1\]|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|"
+                           r"172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d{2,5})?/?$")
+
+
+def clean_ai(v):
+    d = PREF_DEFAULTS["ai"]
+    v = dict(v or {})
+    out = {"provider": v.get("provider") if v.get("provider") in ("", "ollama", "lmstudio") else "",
+           "model": str(v.get("model", d["model"])).strip()[:200],
+           "temperature": round(min(2.0, max(0.0, float(v.get("temperature", d["temperature"])))), 2),
+           "num_ctx": int(min(262144, max(1024, int(v.get("num_ctx", d["num_ctx"]))))),
+           "max_tokens": int(min(32768, max(64, int(v.get("max_tokens", d["max_tokens"]))))),
+           "system": str(v.get("system", d["system"]))[:4000],
+           "period": v.get("period") if v.get("period") in ("1d", "2d", "7d", "30d", "all") else d["period"],
+           "max_msgs": int(min(2000, max(10, int(v.get("max_msgs", d["max_msgs"]))))),
+           **{k: bool(v.get(k, d[k])) for k in ("include_logs", "include_read", "allow_lan", "setup_done")}}
+    for key in ("ollama_url", "lmstudio_url"):
+        url = str(v.get(key, d[key])).strip().rstrip("/")
+        if not ai_url_ok(url, out["allow_lan"]):
+            raise ValueError(L("Адрес модели — только на этом компьютере (или в домашней сети, если разрешено)",
+                               "The model address must be on this computer (or your home network, if allowed)"))
+        out[key] = url
+    return out
+
+
+def ai_url_ok(url, allow_lan=False):
+    """Модель — только на этом компьютере; домашняя сеть — если разрешено. Облака — никогда."""
+    m = _RE_LOCAL_URL.match(url + "/")
+    if not m:
+        return False
+    return allow_lan or m.group(1) in ("127.0.0.1", "localhost", "[::1]")
 
 
 def themed(prefs):
@@ -481,8 +600,18 @@ def set_prefs(conn, patch):
         raise ValueError(L("Ожидался объект настроек", "Expected a settings object"))
     for k, v in patch.items():
         try:
-            # тематические колонки меняют по одной настройке — остальное берём из сохранённого
-            val = clean_themed(v, get_prefs(conn)["themed"]) if k == "themed" else _clean_pref(k, v)
+            # тематические колонки, тихие часы, скрипты и ассистент меняют по одной настройке —
+            # остальное берём из сохранённого
+            if k == "themed":
+                val = clean_themed(v, get_prefs(conn)["themed"])
+            elif k in ("quiet", "ai", "scripts") and isinstance(v, dict):
+                cur = get_prefs(conn)[k]
+                merged = {**cur, **v}
+                if k == "scripts" and isinstance(v.get("items"), dict):
+                    merged["items"] = {**cur["items"], **v["items"]}
+                val = _clean_pref(k, merged)
+            else:
+                val = _clean_pref(k, v)
         except (TypeError, AttributeError, KeyError):
             raise ValueError(L(f"Неверное значение настройки «{k}»", f"Invalid value for setting “{k}”"))
         conn.execute("INSERT INTO prefs (key, value) VALUES (?, ?) "
@@ -534,9 +663,11 @@ def apply_on_insert(conn, rec):
             conn.execute("INSERT INTO rule_hits (message_id, rule_id, action, at) VALUES (?,?,?,?)",
                          (rec["id"], r["id"], r["action"], now))
     conn.commit()
-    if "sound" in done:
+    import quiet
+    hush = quiet.active(prefs)          # тихие часы: звук — только если разрешён, пересылка — по настройке
+    if "sound" in done and not (hush and not prefs["quiet"]["sound"]):
         actions.play_sound()
-    if "forward" in done:
+    if "forward" in done and not (hush and not prefs["quiet"]["forward"]):
         actions.forward(meta, rec)
     return sorted(done)
 

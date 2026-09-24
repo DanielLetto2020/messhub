@@ -165,9 +165,15 @@ def main():
             a.port = s.getsockname()[1]
 
     from http.server import ThreadingHTTPServer
+    import calendar_src
     import collect
     import containers
+    import logwatch
     import mail
+    import quiet
+    import reminders
+    import resources
+    import scripts
     import serve
     import services
     import wincatcher
@@ -178,6 +184,8 @@ def main():
     if not a.selftest:
         containers.start(a.db)          # тематические колонки: пока включены в настройках
         services.start(a.db)
+        for mod in (resources, logwatch, calendar_src, scripts, quiet, reminders):
+            mod.start(a.db)
     httpd = ThreadingHTTPServer((host, a.port), serve.make_handler(a.db))
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     if a.selftest:

@@ -77,20 +77,27 @@ import actions
 import applog
 import avatars
 import backup
+import calendar_src
 import catcher
 import containers
 import diag
 import events
 import i18n
 import ingest
+import logwatch
 import mail
 import paths
 import rag
 import report
+import quiet
+import reminders
+import resources
 import rules
+import scripts
 import services
 import stats
 import updates
+import when
 import version
 from i18n import L
 
@@ -164,6 +171,16 @@ class View:
                  mention=bool(self.mre and self.mre.search(text)))
         return d
 
+    def times(self, d):
+        """Будущие дата/время из текста — «⏰» на плашке (кроме своих служебных колонок)."""
+        if not self.prefs["time_hints"] or (d.get("app") or "").startswith("messhub-") or not d.get("event_iso"):
+            return []
+        try:
+            base = datetime.fromisoformat(d["event_iso"][:19])
+        except ValueError:
+            return []
+        return when.find(d.get("message") or "", base)
+
     def visible(self, d):
         return bool(d.get("pinned")) or self.rs.visible(d["src"], d["chat"], d["sender"], d.get("message") or "")
 
@@ -210,6 +227,11 @@ def query(db_path, after=None, limit=100, app="", q="", unread=False, widget=Fal
                 break
         if after is None:
             out.reverse()
+        if widget or ids:                    # доска и окно сообщения: «⏰» и заведённые напоминания
+            rem = reminders.for_ids(conn, [d["id"] for d in out])
+            for d in out:
+                d["times"] = v.times(d)
+                d["remind_at"] = rem.get(d["id"], "")
         return out, v.rs.ver, rules.prefs_ver(v.prefs)
     finally:
         conn.close()
@@ -594,8 +616,16 @@ def themed_info(db_path):
             else containers.public_status())
     serv = (dict(services.public_status(), found=True, running=True, error="", failed=1) if demo
             else services.public_status())
+    res = (dict(resources.public_status(), running=True, values={"disk /": "72%", "memory": "41%", "cpu": "54°C",
+                                                                  "gpu0": "49°C"}) if demo else resources.public_status())
+    cal = calendar_src.public_status()
+    cal_srcs = [p.replace(os.path.expanduser("~"), "~") for p, _ in calendar_src.sources(rules.themed(prefs)["calendar"]["files"])]
+    if demo:
+        cal, cal_srcs = dict(cal, running=True, events=4, sources=2), ["~/.local/share/evolution/calendar/system/calendar.ics",
+                                                                     "~/Календари/работа.ics"]
     return {"prefs": rules.themed(prefs), "platform": "windows" if os.name == "nt" else "linux",
             "containers": cont, "services": serv, "commands": {"run": run_cmd, "hook": hook},
+            "resources": res, "logwatch": logwatch.public_status(), "calendar": dict(cal, files=cal_srcs),
             "log_lines": list(rules.LOG_LINES)}
 
 
@@ -739,7 +769,9 @@ def make_handler(db_path):
                         db_path, after=int(after) if after.isdigit() else None,
                         limit=max(1, min(1000, num("limit", 100))), app=arg("app"), q=arg("q"),
                         unread=arg("unread") == "1", widget=arg("rules") == "1", ids=ids)
-                    self._json(data, headers={"X-Rules-Ver": rver, "X-Prefs-Ver": pver})
+                    q = quiet.current
+                    self._json(data, headers={"X-Rules-Ver": rver, "X-Prefs-Ver": pver,
+                                              "X-Quiet": f"{int(bool(q['active']))};{q['reason']};{q['until']}"})
                 elif p == "/api/sources":
                     self._json(sources(db_path, apply_rules=arg("rules") == "1"))
                 elif p == "/api/visible":
@@ -783,6 +815,11 @@ def make_handler(db_path):
                                 "bind": read(db_path, lambda c: rules.get_prefs(c)["ingest_bind"])})
                 elif p == "/api/themed":
                     self._json(themed_info(db_path))
+                elif p == "/api/quiet":
+                    self._json(dict(quiet.public_status(), prefs=read(db_path, rules.get_prefs)["quiet"]))
+                elif p == "/api/scripts":
+                    self._json(dict(scripts.info(db_path), dir=scripts.DIR.replace(os.path.expanduser("~"), "~")
+                                    if os.environ.get(f"{paths.ENV_PREFIX}_THEMED_DEMO") else scripts.DIR))
                 elif p == "/api/logs":
                     self._json(applog.query(arg("level") or "all", arg("q"), arg("src"),
                                             max(1, min(5000, num("limit", 1000)))))
@@ -841,6 +878,31 @@ def make_handler(db_path):
                 if payload.get("kind") != "command":
                     raise BadRequest(L("Неизвестное событие", "Unknown event"))
                 return events.command(db_path, payload)
+            if p == "/api/quiet":
+                return write(db_path, quiet.set_manual, str(payload.get("action") or ""))
+            if p == "/api/remind":
+                at = write(db_path, reminders.add, int(payload.get("id")), str(payload.get("at") or ""),
+                           str(payload.get("event_at") or ""))
+                return {"at": at}
+            if p == "/api/remind/cancel":
+                return {"cancelled": write(db_path, reminders.cancel, int(payload.get("id")))}
+            if p == "/api/logwatch/preview":
+                try:
+                    return logwatch.preview(dict(payload.get("watch") or {}))
+                except OSError as e:
+                    raise BadRequest(L(f"Не открыть: {e}", f"Can't open: {e}"))
+            if p == "/api/scripts/example":
+                path = scripts.make_example()
+                return {"path": path, **scripts.info(db_path)}
+            if p == "/api/scripts/run":
+                return scripts.run_now(db_path, str(payload.get("name") or ""))
+            if p == "/api/scripts/open":
+                os.makedirs(scripts.DIR, exist_ok=True)
+                if os.name == "nt":
+                    os.startfile(scripts.DIR)      # noqa: S606 — своя папка настроек
+                else:
+                    subprocess.Popen(["xdg-open", scripts.DIR], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return {"ok": True}
             if p == "/api/logs/clear":
                 return {"cleared": applog.clear()}
             if p == "/api/logs/export":

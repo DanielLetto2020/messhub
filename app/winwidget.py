@@ -9,6 +9,7 @@ window.pywebview.api.post(…):
       (у окна без рамки на Windows нет системного перетаскивания — сдвиг считает страница);
   lock:1 / lock:0 — замок: не двигать, не менять размер, держать под остальными окнами;
   settings / settings:<раздел> — окно настроек;  message:<id> — окно одного сообщения (/message?id=N);
+  assistant — окно ассистента (/assistant);
   open:{"app","site"} — сайт открыть в браузере, приложение — по его AUMID (shell:AppsFolder).
 
 Прозрачных окон WebView2 не умеет — подложка сплошная (класс pyw на странице). Место, размер
@@ -53,7 +54,8 @@ class Api:
     def __init__(self, base_url, state_path):
         self._base, self._state_path = base_url, state_path
         self._state = _load_state(state_path)
-        self._win = self._settings = self._message = None
+        self._win = self._settings = None
+        self._pages = {}             # отдельные окна страниц: message, assistant
         self._g0 = None
         self._save_timer = None
 
@@ -91,7 +93,9 @@ class Api:
         elif msg == "settings" or msg.startswith("settings:"):
             self._open_settings(msg.split(":", 1)[1] if ":" in msg else "")
         elif msg.startswith("message:") and msg[8:].isdigit():
-            self._open_message(int(msg[8:]))
+            self._open_page("message", f"/message?id={int(msg[8:])}&host=pywebview", 900, 640)
+        elif msg == "assistant":
+            self._open_page("assistant", "/assistant?host=pywebview", 1120, 760)
         elif msg.startswith("open:"):
             self._open(json.loads(msg[5:]))
 
@@ -163,23 +167,26 @@ class Api:
                                                background_color="#16181d", min_size=(760, 480))
         self._settings.events.closed += lambda: setattr(self, "_settings", None)
 
-    def _open_message(self, mid):
-        """Сообщение и лог целиком — отдельное окно, одно на всех (уже открыто — показать в нём другое)."""
+    def _open_page(self, kind, path, width, height):
+        """Отдельное окно страницы (сообщение, ассистент), каждого вида одно: уже открыто — показать."""
         import webview
-        url = f"{self._base}/message?id={mid}&host=pywebview"
-        if self._message:
+        url = self._base + path
+        win = self._pages.get(kind)
+        if win:
             try:
-                self._message.load_url(url)
-                self._message.restore()
-                self._message.show()
+                if kind == "message":
+                    win.load_url(url)
+                win.restore()
+                win.show()
                 return
             except Exception:  # noqa: BLE001 — окно уже закрыли
-                self._message = None
-        bridge = MessageApi(self)
-        self._message = webview.create_window(version.APP_NAME, url, js_api=bridge, width=900, height=640,
-                                              background_color="#171a21", min_size=(480, 320))
-        bridge._win = self._message
-        self._message.events.closed += lambda: setattr(self, "_message", None)
+                self._pages.pop(kind, None)
+        bridge = PageApi(self)
+        win = webview.create_window(version.APP_NAME, url, js_api=bridge, width=width, height=height,
+                                    background_color="#171a21", min_size=(480, 320))
+        bridge._win = win
+        self._pages[kind] = win
+        win.events.closed += lambda: self._pages.pop(kind, None)
 
     def _on_loaded(self):
         locked = "true" if self._state.get("locked") else "false"
@@ -187,8 +194,9 @@ class Api:
         self._keep_below()
 
 
-class MessageApi:
-    """Мост окна сообщения: close — закрыть окно, open:{…} — перейти в приложение (как с доски)."""
+class PageApi:
+    """Мост отдельного окна (сообщение, ассистент): close — закрыть, open:{…} — перейти в приложение,
+    message:<id> / assistant / settings — открыть другое окно (как с доски)."""
 
     def __init__(self, main):
         self._main, self._win = main, None
@@ -200,8 +208,10 @@ class MessageApi:
                 self._win.destroy()
             elif msg.startswith("open:"):
                 self._main._open(json.loads(msg[5:]))
+            else:
+                self._main._handle(msg)
         except Exception as e:  # noqa: BLE001 — ошибка одной команды не роняет окно
-            print(f"окно сообщения: {msg!r}: {e!r}", flush=True)
+            print(f"окно страницы: {msg!r}: {e!r}", flush=True)
 
 
 def _default_geometry():

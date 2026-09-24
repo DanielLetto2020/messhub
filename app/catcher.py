@@ -411,6 +411,8 @@ def make_handler(conn, verbose=False, on_insert=None, skip=None):
     def handle(rec):
         if skip and skip(rec):
             return None
+        if rec["app"] == "messhub-popup":    # свои всплывашки (напоминания) — уже на доске
+            return None
         if telegram_should_skip(rec):        # Telegram: только чаты, без ботов/каналов
             return None
         key = (rec["app"], rec["raw_summary"], rec["raw_body"])

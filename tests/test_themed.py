@@ -166,7 +166,7 @@ class LifecycleTest(ServerCase):
         conn.commit()
         conn.close()
         code, info = self.req("/api/themed")
-        self.assertEqual(set(info["prefs"]), {"containers", "services", "commands"})
+        self.assertEqual(set(info["prefs"]), {"containers", "services", "commands", "resources", "logwatch", "calendar"})
         self.assertIn("run", info["commands"])
 
 

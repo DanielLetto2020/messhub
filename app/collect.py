@@ -23,11 +23,17 @@ import time
 from http.server import ThreadingHTTPServer
 
 import applog
+import calendar_src
 import catcher
 import containers
 import ingest
+import logwatch
 import mail
+import quiet
+import reminders
+import resources
 import rules
+import scripts
 import serve
 import services
 import version
@@ -87,6 +93,12 @@ def main():
     # тематические колонки: контейнеры (docker/podman) и упавшие службы — пока включены в настройках
     containers.start(args.db)
     services.start(args.db)
+    resources.start(args.db)
+    logwatch.start(args.db)
+    calendar_src.start(args.db)
+    scripts.start(args.db)          # свои источники: скрипты в <настройки>/sources.d
+    quiet.start(args.db)            # тихие часы: переходы, «Не беспокоить» GNOME, сводка
+    reminders.start(args.db)        # напоминания по сообщениям
     # приём событий из сети — отдельный сервер только для /api/ingest, если включён
     conn = sqlite3.connect(args.db)
     bind = rules.get_prefs(conn)["ingest_bind"]
