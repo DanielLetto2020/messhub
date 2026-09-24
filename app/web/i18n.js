@@ -342,8 +342,10 @@ const EN = {
   'Лог': 'Log', 'Двойной клик — скопировать лог': 'Double-click to copy the log', '✓ Починилось в {hm}': '✓ Fixed at {hm}',
   // окно «целиком»
   'Открыть целиком': 'Open in full', 'Показать целиком': 'Show in full', 'целиком': 'in full',
-  'Скопировать текст': 'Copy text', 'Скопировать лог': 'Copy log', 'Закрыть · Esc': 'Close · Esc',
-  'Отметить прочитанным': 'Mark read',
+  'Скопировать текст': 'Copy text', 'Скопировать лог': 'Copy log', 'Отметить прочитанным': 'Mark read',
+  'Важное': 'Important', 'Содержимое скрыто для показа экрана.': 'Contents are hidden for screen sharing.',
+  'Сообщения нет: его удалили по сроку хранения или вручную.': 'The message is gone: it was removed by the retention period or by hand.',
+  'Сервер виджета не отвечает — сообщение не загрузилось.': 'The widget server is not responding, so the message could not load.',
 
   // ── логи ──
   'Логи': 'Logs',

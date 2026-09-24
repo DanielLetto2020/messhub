@@ -129,6 +129,9 @@ class LifecycleTest(ServerCase):
         conn.close()
         code, vis = self.req("/api/visible")
         self.assertIn(str(b), vis["resolved"])
+        code, _ = self.req("/api/pin", {"ids": [b], "pinned": True})     # закрепили в окне сообщения
+        code, vis = self.req("/api/visible")
+        self.assertIn(b, vis["pinned"])
         code, msgs = self.req(f"/api/messages?rules=1&ids={b}")
         self.assertEqual(msgs[0]["src"], "containers")
         self.assertTrue(msgs[0]["resolved_at"])

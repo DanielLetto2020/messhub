@@ -34,6 +34,7 @@ DARK_DESK = ("document.documentElement.style.background='#0e1014';"
              "document.body.classList.remove('nohost');'ok'")
 W, S = (1640, 470), (1150, 800)        # размер окна: виджет и настройки
 IT = (1240, 470)                        # доска только с тематическими колонками
+M = (900, 640)                          # окно одного сообщения
 LANG_Q = {"ru": {"search": "созвон"}, "en": {"search": "call"}}
 
 
@@ -78,8 +79,9 @@ def plan(lang):
             "body:JSON.stringify({hidden_cols:['express','telegram','mail','max','whatsapp','other:ci']})})"
             ".then(()=>location.reload());'ok'", 2200, DARK_DESK,
             "document.querySelector('.col[data-key=containers] .msg [data-act=det]').click();'ok'", 500]),
-        ("widget-full", "/widget", IT, [DARK_DESK, 600,
-            "document.querySelector('.col[data-key=containers] .det [data-act=full]').click();'ok'", 500]),
+        # окно сообщения целиком: id карточки shop-api узнаём у сервера и открываем её
+        ("message", "/message", M, ["fetch('/api/messages?limit=500').then(r=>r.json()).then(rs=>"
+            "location.replace('/message?id='+rs.find(m=>m.chat==='shop-api'&&m.details).id));'ok'", 1500]),
         ("widget-light", "/widget", W, [
             "fetch('/api/prefs',{method:'POST',headers:{'Content-Type':'application/json'},"
             "body:JSON.stringify({theme:'light',opacity:0.9,hidden_cols:['containers','services','commands']})})"

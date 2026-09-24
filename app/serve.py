@@ -5,6 +5,7 @@
 
   Страницы и файлы:
     / и /widget → widget.html (в браузере — та же доска)     /settings → settings.html
+    /message?id=N → message.html — отдельное окно: сообщение и лог целиком
     /i18n.js — переводы страниц     /avatar/<файл> — аватары из уведомлений
 
   Сообщения:
@@ -99,6 +100,7 @@ PAGES = {
     "/": ("widget.html", "text/html; charset=utf-8"),
     "/widget": ("widget.html", "text/html; charset=utf-8"),
     "/settings": ("settings.html", "text/html; charset=utf-8"),
+    "/message": ("message.html", "text/html; charset=utf-8"),     # окно одного сообщения: /message?id=N
     "/i18n.js": ("i18n.js", "text/javascript; charset=utf-8"),
 }
 
@@ -312,7 +314,8 @@ def visible_ids(db_path):
     rows, _, _ = query(db_path, limit=10 ** 6, unread=True, widget=True, upto=max_id)
     # «починилось» у карточек тематических колонок — виджет перерисует их на месте
     return {"max_id": max_id, "ids": [r["id"] for r in rows],
-            "resolved": {str(r["id"]): r["resolved_at"] for r in rows if r.get("resolved_at")}}
+            "resolved": {str(r["id"]): r["resolved_at"] for r in rows if r.get("resolved_at")},
+            "pinned": [r["id"] for r in rows if r.get("pinned")]}     # закрепили в окне сообщения
 
 
 def column_state(db_path, src):

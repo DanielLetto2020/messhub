@@ -147,36 +147,6 @@
   .more { display: inline-block; margin-top: 2px; font-size: 10.5px; font-weight: 600; color: var(--accent); cursor: pointer; }
   .more:hover { text-decoration: underline; text-underline-offset: 2px; }
 
-  /* окно «целиком»: полный текст и лог одного сообщения поверх доски */
-  .modal { position: absolute; inset: 0; z-index: 40; display: flex; justify-content: center; align-items: stretch;
-    padding: 8px; background: rgba(0,0,0,.38); }
-  .modal[hidden] { display: none; }
-  .mbox { width: min(900px, 100%); display: flex; flex-direction: column; min-height: 0;
-    background: rgba(var(--glass), .98); border: 1px solid var(--line); border-radius: 12px;
-    box-shadow: 0 12px 40px rgba(0,0,0,.5); overflow: hidden; }
-  .pyw .mbox { background: rgb(var(--glass)); }
-  .mhead { display: flex; align-items: center; gap: 8px; padding: 7px 8px 6px 12px; border-bottom: 1px solid var(--line); flex: 0 0 auto; }
-  .mhead .mt { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .mhead .mt .ico { margin-right: 2px; }
-  .mhead .mtime { color: var(--muted); font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .mhead .mx { width: 26px; height: 26px; border: 0; border-radius: 7px; background: none; color: var(--muted);
-    cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
-  .mhead .mx:hover { color: var(--text); background: var(--card-hover); }
-  .mbody { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 10px 12px 12px; }
-  .mtext { white-space: pre-wrap; word-break: break-word; line-height: 1.5; }
-  .mtext mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1px; }
-  .mlog { margin-top: 12px; }
-  .mlog .mlh { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
-  .mlog pre { margin: 0; padding: 8px 10px; border-radius: 8px; background: rgba(0,0,0,.28);
-    font: 11px/1.5 ui-monospace, "DejaVu Sans Mono", Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
-  body.light .mlog pre { background: rgba(0,0,0,.06); }
-  .mfoot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 7px 10px; border-top: 1px solid var(--line); flex: 0 0 auto; }
-  .mfoot .sp { flex: 1; }
-  .mfoot button { border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text);
-    font: inherit; font-size: 12px; padding: 4px 10px; cursor: pointer; }
-  .mfoot button:hover { background: var(--card-hover); }
-  .mfoot button.pri { background: var(--ok-bg); border-color: transparent; color: var(--ok); font-weight: 600; }
-  .wrap.privacy .mbody, .wrap.privacy .mhead .mt { filter: blur(11px); }
   .msg.copied::after, .msg.copyfail::after { position: absolute; right: 8px; bottom: 6px; font-size: 10px;
     padding: 1px 7px; border-radius: 999px; background: var(--ok-bg); color: var(--ok); content: attr(data-note); }
   .msg.copyfail::after { color: var(--bad); background: rgba(255,122,122,.14); }
@@ -294,14 +264,6 @@
   </div>
   <div id="board"><div id="empty" data-t="Ожидание сообщений…">Ожидание сообщений…</div></div>
   <div id="toast" role="status" aria-live="polite"><span class="tt"></span><button class="tb" type="button" hidden></button></div>
-  <div class="modal" id="modal" hidden>
-    <div class="mbox" role="dialog" aria-modal="true" aria-labelledby="mTitle">
-      <div class="mhead"><span class="mt" id="mTitle"></span><span class="mtime" id="mTime"></span>
-        <button class="mx" type="button" data-mact="close" data-t-title="Закрыть · Esc" data-t-aria="Закрыть"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
-      <div class="mbody" id="mBody"></div>
-      <div class="mfoot" id="mFoot"></div>
-    </div>
-  </div>
 </div>
 <div class="menu" id="menu" hidden></div>
 <div class="rz n" data-edge="n"></div><div class="rz s" data-edge="s"></div>
@@ -541,7 +503,6 @@ async function savePrefs(patch){
 
 // ── убрать с доски (прочитано, отложено, пропало при сверке) ──
 function dropIds(ids){
-  if(modalId!=null&&ids.includes(modalId)) closeFull();       // сообщение ушло с доски — и окно с ним
   const keys=new Set();
   for(const id of ids){const m=msgs.get(id);if(!m)continue;keys.add(m.src);
     const el=board.querySelector(`.msg[data-id="${id}"]`);
@@ -674,47 +635,21 @@ async function togglePin(id){
   toast(m.pinned?t('Закреплено: не прочитается само'):t('Откреплено'));
 }
 
-// ── окно «целиком»: полный текст, лог и действия одного сообщения ──
-const modal=$('modal');
-let modalId=null, modalBack=null;
-function fmtWhen(iso){if(!iso)return'';const x=iso.replace('T',' ');return x.length>=16?x.slice(8,10)+'.'+x.slice(5,7)+' '+x.slice(11,16):x;}
-function drawFull(m){
-  $('mTitle').innerHTML=`<span class="ico">${esc(m.src_ico)}</span> <span class="chat">${esc(m.chat||m.src_name)}</span>`+
-    (m.sender&&m.sender!==m.chat?` · <span class="sender">${esc(m.sender)}</span>`:'');
-  $('mTitle').title=m.src_name; $('mTime').textContent=fmtWhen(m.event_iso);
-  const n=m.details?m.details.split('\n').length:0;
-  $('mBody').innerHTML=`<div class="mtext">${rich(m.message||'')}</div>`+
-    (m.resolved_at?`<div class="fixed">${esc(t('✓ Починилось в {hm}',{hm:m.resolved_at.slice(11,16)}))}</div>`:'')+
-    (m.details?`<div class="mlog"><div class="mlh">${esc(t('Лог'))} · ${esc(tp(n,...W.line))}</div><pre>${esc(m.details)}</pre></div>`:'');
-  const go=goTitle(m);
-  $('mFoot').innerHTML=`<button type="button" data-mact="copy">${esc(t('Скопировать текст'))}</button>`+
-    (m.details?`<button type="button" data-mact="copylog">${esc(t('Скопировать лог'))}</button>`:'')+
-    (go?`<button type="button" data-mact="open">${esc(go)}</button>`:'')+
-    `<button type="button" data-mact="pin">${esc(m.pinned?t('Открепить'):t('Закрепить'))}</button><span class="sp"></span>`+
-    `<button type="button" class="pri" data-mact="read">${esc(t('Отметить прочитанным'))}</button>`;
-}
+// ── окно сообщения целиком (/message?id=N): отдельное окно с рамкой, как настройки ──
 function openFull(id){
-  const m=msgs.get(id); if(!m) return;
-  hideMenu(); modalId=id; modalBack=document.activeElement;
-  drawFull(m); modal.hidden=false; $('mBody').scrollTop=0;
-  modal.querySelector('.mx').focus();
+  if(!msgs.has(id)) return;
+  hideMenu();
+  if(host) host.postMessage('message:'+id);
+  else window.open('/message?id='+id,'messhub-message','width=900,height=640');
 }
-function closeFull(){
-  modal.hidden=true; modalId=null;
-  try{if(modalBack&&modalBack.focus)modalBack.focus();}catch(e){}
-}
-modal.addEventListener('click',async e=>{
-  if(e.target===modal){closeFull();return;}                  // клик мимо окна
-  const b=e.target.closest('[data-mact]'); if(!b) return;
-  const act=b.dataset.mact, id=modalId, m=msgs.get(id);
-  if(act==='close'||!m){closeFull();return;}
-  if(act==='copy'||act==='copylog'){
-    const ok=await copyText(act==='copy'?(m.message||''):(m.details||''));
-    toast(ok?t('Скопировано'):t('Не скопировалось'),{err:!ok});
-  } else if(act==='open') openSource(m);
-  else if(act==='pin'){await togglePin(id);const mm=msgs.get(id);if(mm&&modalId===id)drawFull(mm);}
-  else if(act==='read'){closeFull();readIds([id]);}
-});
+// окно сообщения говорит доске, что его прочитали или закрепили (сверка раз в 15 с догонит и без этого)
+try{
+  new BroadcastChannel('messhub').onmessage=e=>{
+    const d=e.data||{}, m=msgs.get(d.id); if(!m) return;
+    if(d.type==='read') dropIds([d.id]);
+    else if(d.type==='pin'){m.pinned=d.pinned?1:0;renderKeys([m.src]);}
+  };
+}catch(e){}
 
 // ── всплывающее меню (отложить, профиль, почему, закрыть колонку) ──
 let menuFor=null, menuKind=null;
@@ -875,7 +810,7 @@ function applyPriv(){
 eye.addEventListener('click',()=>{priv=!priv;applyPriv();});
 $('gear').addEventListener('click',()=>{if(host)host.postMessage('settings');else window.open('/settings','_blank');});
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){if(!modal.hidden)closeFull();else if(!menu.hidden)hideMenu();return;}    // окно виджета по Esc не закрывается
+  if(e.key==='Escape'){if(!menu.hidden)hideMenu();return;}    // окно виджета по Esc не закрывается
   if(e.ctrlKey||e.metaKey||e.altKey)return;
   if(e.key==='b'||e.key==='B'||e.key==='и'||e.key==='И'){priv=!priv;applyPriv();}
   if(e.key==='f'||e.key==='F'||e.key==='а'||e.key==='А')setFocus(!focus);
@@ -944,8 +879,10 @@ async function sync(){
     const gone=[...msgs.keys()].filter(id=>id<=r.max_id&&!want.has(id));
     const back=r.ids.filter(id=>!msgs.has(id)&&!skipped.has(id)&&id<=lastId);
     // тематические колонки: «починилось» пришло после показа — перерисовать карточку на месте
-    const fixedKeys=new Set();
+    const fixedKeys=new Set(), pins=new Set(r.pinned||[]);
     for(const [id,at] of Object.entries(r.resolved||{})){const m=msgs.get(+id);if(m&&m.resolved_at!==at){m.resolved_at=at;fixedKeys.add(m.src);}}
+    // закрепили или открепили не здесь (окно сообщения, другое окно доски)
+    for(const id of want){const m=msgs.get(id);if(m&&!!m.pinned!==pins.has(id)){m.pinned=pins.has(id)?1:0;fixedKeys.add(m.src);}}
     if(fixedKeys.size) renderKeys(fixedKeys);
     if(gone.length) dropIds(gone);
     if(back.length) await fetchBack(back);

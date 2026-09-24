@@ -19,6 +19,7 @@ GTK + WebKit2:
     в обход страницы (Alt+перетаскивание в mutter) — оно возвращается на место;
   - колонки делят ширину окна поровну сами (flex: 1 на странице);
   - видно на всех рабочих столах, не мозолит в панели задач;
+  - ⤢ на плашке (или «Показать целиком») — отдельное окно СООБЩЕНИЯ (/message?id=N): текст и лог целиком;
   - кнопка-«шестерёнка» открывает отдельное окно НАСТРОЕК (/settings): источники и
     правила, что показывать в виджете (см. rules.py);
   - кнопка-«глаз» на странице размывает все сообщения (для показа экрана);
@@ -82,6 +83,7 @@ DEFAULT_STATE = paths.WIDGET_STATE       # ~/.config/<APP_ID>/widget-state.json
 
 MIN_W, MIN_H = 260, 140      # меньше мышкой не сжать
 SETTINGS_W, SETTINGS_H = 1000, 680   # окно настроек по умолчанию
+MESSAGE_W, MESSAGE_H = 900, 640      # окно одного сообщения (/message?id=N)
 GEOM_KEYS = ("x", "y", "w", "h")
 
 # край/угол, за который тянут на странице → край окна для оконного менеджера
@@ -177,6 +179,7 @@ class Widget(Gtk.Window):
         u = urlsplit(url)
         self.base_url = f"{u.scheme}://{u.netloc}"   # тот же сервер отдаёт и /settings
         self.settings_win = None
+        self.message_win = None
         self.saved = None if reset else load_state(state_path)   # что сейчас в файле
         self.locked = bool(self.saved and self.saved["locked"])  # --reset снимает и замок
         self.below = below
@@ -292,6 +295,9 @@ class Widget(Gtk.Window):
         if cmd == "settings" or cmd.startswith("settings:"):
             self._open_settings(cmd.partition(":")[2])
             return
+        if cmd.startswith("message:") and cmd[8:].isdigit():
+            self._open_message(int(cmd[8:]))
+            return
         if cmd.startswith("open:"):
             try:
                 req = json.loads(cmd[5:])
@@ -377,13 +383,14 @@ class Widget(Gtk.Window):
         Gtk.main_quit()
 
     # ── перейти в приложение-источник ──
-    def _page_toast(self, key, params=None, err=True):
-        """Подсказка на странице виджета: key — русская фраза-ключ перевода (i18n.js)."""
+    def _page_toast(self, key, params=None, err=True, web=None):
+        """Подсказка на странице (доски или окна сообщения): key — русская фраза-ключ перевода (i18n.js)."""
         js = (f"window.hostToast && hostToast({json.dumps(key)}, {json.dumps(params or {})}, "
               f"{'true' if err else 'false'})")
-        self.web.evaluate_javascript(js, -1, None, None, None, None)
+        (web or self.web).evaluate_javascript(js, -1, None, None, None, None)
 
-    def _open_source(self, app, site):
+    def _open_source(self, app, site, web=None):
+        toast = lambda key, params=None: self._page_toast(key, params, web=web)  # noqa: E731
         if site:
             if not _RE_SITE.match(site):
                 return
@@ -393,7 +400,7 @@ class Widget(Gtk.Window):
                 try:
                     Gio.AppInfo.launch_default_for_uri(uri, None)
                 except GLib.Error as e:
-                    self._page_toast("Не удалось открыть {site}: {e}", {"site": site, "e": e.message})
+                    toast("Не удалось открыть {site}: {e}", {"site": site, "e": e.message})
             return
         win = find_window(app) if self.x11 else None
         if win is not None:
@@ -414,10 +421,10 @@ class Widget(Gtk.Window):
                 try:
                     info.launch([], self.get_display().get_app_launch_context())
                 except GLib.Error as e:
-                    self._page_toast("Не удалось запустить: {e}", {"e": e.message})
+                    toast("Не удалось запустить: {e}", {"e": e.message})
             return
         log(f"не нашёл ни окна, ни ярлыка для «{app}»")
-        self._page_toast("Не нашёл окно «{app}» — приложение закрыто?", {"app": app})
+        toast("Не нашёл окно «{app}» — приложение закрыто?", {"app": app})
 
     # ── окно настроек ──
     def _open_settings(self, section=""):
@@ -446,6 +453,48 @@ class Widget(Gtk.Window):
         win.show_all()
         self.settings_win = win
         log("открыл настройки")
+
+    # ── окно одного сообщения ──
+    def _open_message(self, mid):
+        """Сообщение и лог целиком — обычное окно с рамкой, как настройки. Одно на всех: уже открыто —
+        показать в нём другое сообщение и поднять. Страница шлёт open:{…} (перейти в приложение) и close."""
+        url = f"{self.base_url}/message?id={mid}"
+        if self.message_win is not None:
+            self.message_win.get_child().load_uri(url)
+            self.message_win.present()
+            return
+        win = Gtk.Window(title=version.APP_NAME)
+        geo = self.get_display().get_monitor_at_window(self.get_window()).get_geometry()
+        win.set_default_size(min(MESSAGE_W, geo.width - 80), min(MESSAGE_H, geo.height - 80))
+        win.set_position(Gtk.WindowPosition.CENTER)
+        ucm = WebKit2.UserContentManager()
+        web = WebKit2.WebView.new_with_user_content_manager(ucm)
+
+        def on_msg(_ucm, res):
+            try:
+                cmd = res.get_js_value().to_string()
+            except Exception:
+                return
+            if cmd == "close":
+                win.destroy()
+            elif cmd.startswith("open:"):
+                try:
+                    req = json.loads(cmd[5:])
+                    self._open_source(str(req.get("app") or ""), str(req.get("site") or ""), web=web)
+                except ValueError:
+                    pass
+        ucm.connect("script-message-received::widget", on_msg)
+        ucm.register_script_message_handler("widget")
+        web.set_background_color(Gdk.RGBA(0.09, 0.10, 0.13, 1))
+        web.connect("decide-policy", self._on_policy)        # ссылки из сообщения — в браузер
+        web.connect("notify::title", lambda w, _p: w.get_title() and win.set_title(w.get_title()))
+        web.load_uri(url)
+        win.add(web)
+        win.connect("destroy", lambda *_: setattr(self, "message_win", None))
+        win.connect("key-press-event", lambda w, ev: ev.keyval == Gdk.KEY_Escape and w.destroy())
+        win.show_all()
+        self.message_win = win
+        log(f"открыл сообщение #{mid}")
 
     # ── расстановка ──
     def _schedule_place(self):

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>messhub</title>
+<style>
+  /* окно одного сообщения (/message?id=N): полный текст и весь лог — тем же языком, что доска */
+  :root {
+    --bg: #171a21; --bar: #12151b; --line: rgba(255,255,255,.08); --line2: rgba(255,255,255,.14);
+    --text: #eef1f6; --muted: #98a1b2; --faint: #6d7586; --surface: rgba(255,255,255,.035); --surface2: rgba(255,255,255,.07);
+    --accent: #6aa2ff; --accent-bg: rgba(106,162,255,.14); --ok: #43d69a; --ok-bg: rgba(67,214,154,.13);
+    --warn: #f2b25a; --bad: #ff7a7a; --mark: rgba(242,178,90,.32); --log: rgba(0,0,0,.28);
+    color-scheme: dark;
+  }
+  body.light {
+    --bg: #f6f7fa; --bar: #eceef3; --line: rgba(0,0,0,.09); --line2: rgba(0,0,0,.16);
+    --text: #1b1f27; --muted: #5d6574; --faint: #8a91a0; --surface: rgba(0,0,0,.03); --surface2: rgba(0,0,0,.06);
+    --accent: #2f6fe0; --accent-bg: rgba(47,111,224,.12); --ok: #16935f; --ok-bg: rgba(22,147,95,.12);
+    --warn: #b9771f; --bad: #d64545; --mark: rgba(242,178,90,.45); --log: rgba(0,0,0,.05);
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--text); display: flex; flex-direction: column;
+    font: 13.5px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+  header { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--line);
+    background: var(--bar); flex: 0 0 auto; }
+  header .ico { font-size: 20px; }
+  header .who { flex: 1 1 auto; min-width: 0; }
+  header .chat { font-weight: 650; font-size: 15px; }
+  header .sender { color: var(--accent); }
+  header .src { color: var(--muted); font-size: 12px; }
+  header .when { color: var(--muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .pills { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 3px; }
+  .pill { font-size: 11px; font-weight: 600; border-radius: 999px; padding: 0 8px; }
+  .pill.pin { color: var(--accent); background: var(--accent-bg); }
+  .pill.read { color: var(--muted); background: var(--surface2); }
+  .pill.urg { color: var(--bad); background: rgba(255,122,122,.13); }
+  .pill.fixed { color: var(--ok); background: var(--ok-bg); }
+
+  main { flex: 1 1 auto; overflow: auto; padding: 16px 18px 22px; }
+  .text { white-space: pre-wrap; word-break: break-word; font-size: 14px; line-height: 1.6; max-width: 90ch; }
+  .text mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1px; }
+  .text a { color: var(--accent); text-underline-offset: 2px; }
+  h2 { font-size: 12px; font-weight: 600; color: var(--muted); margin: 20px 0 6px; display: flex; gap: 8px; align-items: baseline; }
+  pre.log { margin: 0; padding: 10px 12px; border-radius: 9px; background: var(--log); border: 1px solid var(--line);
+    font: 12px/1.55 ui-monospace, "DejaVu Sans Mono", Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
+  .state { color: var(--muted); padding: 40px 0; text-align: center; }
+  .blurred .text, .blurred pre.log, .blurred header .who { filter: blur(9px); }
+  .veil { display: none; margin: 0 0 12px; color: var(--muted); }
+  .blurred .veil { display: block; }
+
+  footer { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 18px; border-top: 1px solid var(--line);
+    background: var(--bar); flex: 0 0 auto; }
+  footer .sp { flex: 1; }
+  .btn { border: 1px solid var(--line2); border-radius: 8px; background: var(--surface2); padding: 5px 12px; cursor: pointer; }
+  .btn:hover { border-color: var(--muted); }
+  .btn.pri { background: var(--ok-bg); border-color: transparent; color: var(--ok); font-weight: 600; }
+  .btn.ghost { background: none; border-color: transparent; color: var(--muted); }
+  .btn.ghost:hover { color: var(--text); background: var(--surface2); }
+  .btn:disabled { opacity: .5; pointer-events: none; }
+  #toast { position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%); background: var(--bar); border: 1px solid var(--line2);
+    border-radius: 999px; padding: 5px 14px; font-size: 12px; opacity: 0; pointer-events: none; transition: opacity .15s; }
+  #toast.show { opacity: 1; }
+  #toast.err { color: var(--bad); }
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb { background: rgba(128,128,128,.3); border-radius: 6px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+<script src="/i18n.js"></script>
+</head>
+<body>
+<header><span class="ico" id="ico"></span><div class="who" id="who"></div><span class="when" id="when"></span></header>
+<main id="main"><div class="state" data-t="Загружаю…">Загружаю…</div></main>
+<footer id="foot"></footer>
+<div id="toast" role="status" aria-live="polite"></div>
+<script>
+// ошибки страницы — в журнал программы (настройки → «Логи»)
+(()=>{let n=0;window.addEventListener('error',e=>{if(++n>10)return;
+  fetch('/api/logs/client',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({page:'message',msg:String(e.message).slice(0,1000),where:(e.filename||'').split('/').pop()+':'+e.lineno})}).catch(()=>{});});})();
+const $ = id => document.getElementById(id);
+const QS = new URLSearchParams(location.search), ID = +QS.get('id') || 0;
+// окно-хозяин: GTK+WebKit (widget.py) или pywebview (winwidget.py, адрес с ?host=pywebview); в браузере — нет
+const PYW = QS.get('host') === 'pywebview', pywQueue = [];
+const host = (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.widget) ||
+  (PYW ? {postMessage: m => { if (window.pywebview && window.pywebview.api) window.pywebview.api.post(m); else pywQueue.push(m); }} : null);
+if (PYW) window.addEventListener('pywebviewready', () => { while (pywQueue.length) window.pywebview.api.post(pywQueue.shift()); });
+// доска в соседнем окне узнаёт о «прочитано»/«закреплено» сразу, не дожидаясь сверки
+let bc = null; try { bc = new BroadcastChannel('messhub'); } catch (e) {}
+
+function esc(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
+const attr = s => esc(s).replace(/"/g,'&quot;');
+function escRe(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
+let mentionRe=null;
+function buildMentionRe(list){
+  const n=[...new Set((list||[]).map(s=>s.trim()).filter(Boolean))].sort((a,b)=>b.length-a.length);
+  return n.length?new RegExp('(?<![\\p{L}\\p{N}_])(?:'+n.map(escRe).join('|')+')','giu'):null;
+}
+function marks(s){
+  if(!mentionRe) return esc(s);
+  let out='', last=0, m; mentionRe.lastIndex=0;
+  while((m=mentionRe.exec(s))){if(!m[0]){mentionRe.lastIndex++;continue;}
+    out+=esc(s.slice(last,m.index))+'<mark>'+esc(m[0])+'</mark>'; last=m.index+m[0].length;}
+  return out+esc(s.slice(last));
+}
+const URL_RE = /https?:\/\/[^\s<>"'«»]+[^\s<>"'«».,;:!?)\]]/g;
+function rich(s){
+  let out='', last=0, m; URL_RE.lastIndex=0;
+  while((m=URL_RE.exec(s))){
+    out+=marks(s.slice(last,m.index))+`<a href="${attr(m[0])}" target="_blank" rel="noopener noreferrer">${esc(m[0])}</a>`;
+    last=m.index+m[0].length;
+  }
+  return out+marks(s.slice(last));
+}
+let toastT=0;
+function toast(text, err){const el=$('toast');el.textContent=text;el.className='show'+(err?' err':'');
+  clearTimeout(toastT);toastT=setTimeout(()=>el.className='',2200);}
+window.hostToast=(k,p,err)=>toast(t(k,p),err);
+async function post(path, body){
+  const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  return r.json();
+}
+async function copyText(s){
+  try{await navigator.clipboard.writeText(s);return true;}
+  catch(e){const ta=document.createElement('textarea');ta.value=s;ta.style.cssText='position:fixed;opacity:0';
+    document.body.appendChild(ta);ta.select();let ok=false;try{ok=document.execCommand('copy');}catch(_){}ta.remove();return ok;}
+}
+function closeWin(){ if(host) host.postMessage('close'); else window.close(); }
+function when(iso){if(!iso)return'';const x=iso.replace('T',' ');return x.length>=16?x.slice(8,10)+'.'+x.slice(5,7)+'.'+x.slice(0,4)+' '+x.slice(11,16):x;}
+
+let msg=null;
+function draw(){
+  const m=msg;
+  document.title=`${m.chat||m.src_name} — ${m.src_name}`;
+  $('ico').textContent=m.src_ico||'🔔';
+  const pills=(m.pinned?`<span class="pill pin">${esc(t('Закреплено'))}</span>`:'')+
+    (m.urgency>=2?`<span class="pill urg">${esc(t('Важное'))}</span>`:'')+
+    (m.resolved_at?`<span class="pill fixed">${esc(t('✓ Починилось в {hm}',{hm:m.resolved_at.slice(11,16)}))}</span>`:'')+
+    (m.is_read?`<span class="pill read">${esc(t('Прочитано'))}</span>`:'');
+  $('who').innerHTML=`<div><span class="chat">${esc(m.chat||m.src_name)}</span>${m.sender&&m.sender!==m.chat?` · <span class="sender">${esc(m.sender)}</span>`:''}</div>
+    <div class="src">${esc(m.src_name)}${m.site?' · '+esc(m.site):''}</div>${pills?`<div class="pills">${pills}</div>`:''}`;
+  $('when').textContent=when(m.event_iso);
+  const n=m.details?m.details.split('\n').length:0;
+  $('main').innerHTML=`<p class="veil">${esc(t('Содержимое скрыто для показа экрана.'))} <button class="btn ghost" type="button" id="unveil">${esc(t('Показать'))}</button></p>
+    <div class="text">${rich(m.message||'')}</div>
+    ${m.details?`<h2>${esc(t('Лог'))} · ${esc(tp(n,...W.line))}</h2><pre class="log">${esc(m.details)}</pre>`:''}`;
+  const unveil=$('unveil'); if(unveil) unveil.onclick=()=>document.body.classList.remove('blurred');
+  // перейти можно только в приложение с окном: не у писем из ящиков и не у тематических колонок
+  const go=m.app==='mail-imap'||/^messhub-/.test(m.app||'')?'':m.site?t('Открыть {site}',{site:m.site}):host?t('Перейти в {app}',{app:m.src_name}):'';
+  $('foot').innerHTML=`<button class="btn" type="button" id="bCopy">${esc(t('Скопировать текст'))}</button>
+    ${m.details?`<button class="btn" type="button" id="bLog">${esc(t('Скопировать лог'))}</button>`:''}
+    ${go?`<button class="btn" type="button" id="bGo">${esc(go)}</button>`:''}
+    <button class="btn" type="button" id="bPin">${esc(m.pinned?t('Открепить'):t('Закрепить'))}</button>
+    <span class="sp"></span>
+    ${m.is_read?'':`<button class="btn pri" type="button" id="bRead">${esc(t('Отметить прочитанным'))}</button>`}
+    <button class="btn ghost" type="button" id="bClose" title="Esc">${esc(t('Закрыть'))}</button>`;
+  const copy=async s=>{const ok=await copyText(s);toast(ok?t('Скопировано'):t('Не скопировалось'),!ok);};
+  $('bCopy').onclick=()=>copy(m.message||'');
+  if($('bLog')) $('bLog').onclick=()=>copy(m.details||'');
+  if($('bGo')) $('bGo').onclick=()=>{
+    if(host) host.postMessage('open:'+JSON.stringify({app:m.app,site:m.site||''}));
+    else if(m.site) window.open('https://'+m.site,'_blank','noopener');
+  };
+  $('bPin').onclick=async()=>{
+    try{await post('/api/pin',{ids:[m.id],pinned:!m.pinned});m.pinned=m.pinned?0:1;
+      if(bc)bc.postMessage({type:'pin',id:m.id,pinned:m.pinned});
+      toast(m.pinned?t('Закреплено: не прочитается само'):t('Откреплено'));draw();}
+    catch(e){toast(t('Не удалось закрепить — сервер не отвечает'),true);}
+  };
+  if($('bRead')) $('bRead').onclick=async()=>{
+    try{await post('/api/read',{ids:[m.id]});if(bc)bc.postMessage({type:'read',id:m.id});closeWin();}
+    catch(e){toast(t('Не удалось отметить прочитанным — сервер не отвечает'),true);}
+  };
+  $('bClose').onclick=closeWin;
+}
+
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeWin();});
+(async()=>{
+  try{
+    const p=await(await fetch('/api/prefs')).json();
+    setLang(p._lang); translateDom();
+    document.body.classList.toggle('light',p.theme==='light');
+    mentionRe=buildMentionRe(p.mentions);
+    try{if(localStorage.getItem('privacy')==='1')document.body.classList.add('blurred');}catch(e){}   // глаз на доске
+    const rows=ID?await(await fetch('/api/messages?limit=1&ids='+ID)).json():[];
+    if(!rows.length){
+      $('main').innerHTML=`<div class="state">${esc(t('Сообщения нет: его удалили по сроку хранения или вручную.'))}</div>`;
+      $('foot').innerHTML=`<span class="sp"></span><button class="btn ghost" type="button" id="bClose">${esc(t('Закрыть'))}</button>`;
+      $('bClose').onclick=closeWin; return;
+    }
+    msg=rows[0]; draw(); $('bClose').focus();
+  }catch(e){
+    $('main').innerHTML=`<div class="state">${esc(t('Сервер виджета не отвечает — сообщение не загрузилось.'))}</div>`;
+  }
+})();
+</script>
+</body>
+</html>

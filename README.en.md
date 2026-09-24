@@ -52,9 +52,9 @@ place and keep it below other windows. On every card: ✓ - read, ⏰ - snooze, 
 ⓘ - "why is this here?", ⤢ - open in full. Click a name to open the app, double-click the text to
 copy it, links open in the browser.
 
-**A long message or a big log** - a card shows up to 10 lines and a "Show in full" link. It opens a
-window with the full text and log: copy them, pin the message or mark it read from there. Esc or a
-click outside closes it.
+**A long message or a big log** - a card shows up to 10 lines and a "Show in full" link. It (or ⤢ on
+the card) opens the message in its own window, like settings: the full text and the whole log; copy
+them, pin the message or mark it read from there. Esc closes it.
 
 **Snooze** - the message disappears and comes back in an hour, in the evening or tomorrow morning.
 
@@ -99,7 +99,7 @@ same through Event intake (the `key` field and `status: "resolved"`).
 
 ![Themed columns on the board](docs/screens/en/widget-it.png)
 
-![The full log](docs/screens/en/widget-full.png)
+![The message and its log in full, in a separate window](docs/screens/en/message.png)
 
 ![Themed column settings](docs/screens/en/settings-themed.png)
 

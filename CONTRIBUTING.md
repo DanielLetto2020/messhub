@@ -4,7 +4,7 @@
 
 ```
 app/            программа целиком - это и ставится (в пакетах - в /usr/lib/messhub)
-  web/          страницы: доска (widget.html), настройки (settings.html), переводы (i18n.js)
+  web/          страницы: доска (widget.html), настройки (settings.html), окно сообщения (message.html), переводы (i18n.js)
   icons/        значок (tools/make_icons.py)
   hooks/        хук терминала «долгая команда закончилась»
 packaging/      сборка: linux/ (команда messhub, ярлык), windows/ (msi, bat, зависимости), systemd/

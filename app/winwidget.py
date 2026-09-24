@@ -8,7 +8,7 @@ window.pywebview.api.post(…):
   geom-start:<move|n|s|e|w|ne|…> → geom:<dx>,<dy> → geom-end — перетащить или растянуть окно
       (у окна без рамки на Windows нет системного перетаскивания — сдвиг считает страница);
   lock:1 / lock:0 — замок: не двигать, не менять размер, держать под остальными окнами;
-  settings / settings:<раздел> — окно настроек;
+  settings / settings:<раздел> — окно настроек;  message:<id> — окно одного сообщения (/message?id=N);
   open:{"app","site"} — сайт открыть в браузере, приложение — по его AUMID (shell:AppsFolder).
 
 Прозрачных окон WebView2 не умеет — подложка сплошная (класс pyw на странице). Место, размер
@@ -53,7 +53,7 @@ class Api:
     def __init__(self, base_url, state_path):
         self._base, self._state_path = base_url, state_path
         self._state = _load_state(state_path)
-        self._win = self._settings = None
+        self._win = self._settings = self._message = None
         self._g0 = None
         self._save_timer = None
 
@@ -90,6 +90,8 @@ class Api:
             self._keep_below()
         elif msg == "settings" or msg.startswith("settings:"):
             self._open_settings(msg.split(":", 1)[1] if ":" in msg else "")
+        elif msg.startswith("message:") and msg[8:].isdigit():
+            self._open_message(int(msg[8:]))
         elif msg.startswith("open:"):
             self._open(json.loads(msg[5:]))
 
@@ -161,10 +163,45 @@ class Api:
                                                background_color="#16181d", min_size=(760, 480))
         self._settings.events.closed += lambda: setattr(self, "_settings", None)
 
+    def _open_message(self, mid):
+        """Сообщение и лог целиком — отдельное окно, одно на всех (уже открыто — показать в нём другое)."""
+        import webview
+        url = f"{self._base}/message?id={mid}&host=pywebview"
+        if self._message:
+            try:
+                self._message.load_url(url)
+                self._message.restore()
+                self._message.show()
+                return
+            except Exception:  # noqa: BLE001 — окно уже закрыли
+                self._message = None
+        bridge = MessageApi(self)
+        self._message = webview.create_window(version.APP_NAME, url, js_api=bridge, width=900, height=640,
+                                              background_color="#171a21", min_size=(480, 320))
+        bridge._win = self._message
+        self._message.events.closed += lambda: setattr(self, "_message", None)
+
     def _on_loaded(self):
         locked = "true" if self._state.get("locked") else "false"
         self._win.evaluate_js(f"window.hostSetLocked && hostSetLocked({locked})")
         self._keep_below()
+
+
+class MessageApi:
+    """Мост окна сообщения: close — закрыть окно, open:{…} — перейти в приложение (как с доски)."""
+
+    def __init__(self, main):
+        self._main, self._win = main, None
+
+    def post(self, msg):
+        try:
+            msg = str(msg)
+            if msg == "close" and self._win:
+                self._win.destroy()
+            elif msg.startswith("open:"):
+                self._main._open(json.loads(msg[5:]))
+        except Exception as e:  # noqa: BLE001 — ошибка одной команды не роняет окно
+            print(f"окно сообщения: {msg!r}: {e!r}", flush=True)
 
 
 def _default_geometry():
