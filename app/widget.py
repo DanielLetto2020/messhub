@@ -67,6 +67,7 @@ except (ValueError, ImportError):
 
 import applog  # noqa: E402
 import paths  # noqa: E402
+import screen  # noqa: E402
 import version  # noqa: E402
 
 # для тестов: не переключать окна и не запускать приложения, только писать в лог
@@ -152,6 +153,17 @@ def find_window(app):
     return None
 
 
+def window_titles():
+    """Заголовки чужих окон (X11, libwnck) — для «идёт ли показ экрана»."""
+    if Wnck is None:
+        return []
+    scr = Wnck.Screen.get_default()
+    scr.force_update()
+    me = os.getpid()
+    return [w.get_name() or "" for w in scr.get_windows() if w.get_pid() != me] + \
+        [w.get_class_instance_name() or "" for w in scr.get_windows() if w.get_pid() != me]
+
+
 def load_state(path):
     try:
         with open(path, encoding="utf-8") as f:
@@ -182,6 +194,7 @@ class Widget(Gtk.Window):
         self.base_url = f"{u.scheme}://{u.netloc}"   # тот же сервер отдаёт и /settings
         self.settings_win = None
         self.page_wins = {}          # отдельные окна страниц: message, assistant (по одному каждого)
+        self.share = {"on": False, "patterns": [], "active": False, "tick": 0, "id": 0}
         self.saved = None if reset else load_state(state_path)   # что сейчас в файле
         self.locked = bool(self.saved and self.saved["locked"])  # --reset снимает и замок
         self.below = below
@@ -296,6 +309,15 @@ class Widget(Gtk.Window):
             return
         if cmd == "settings" or cmd.startswith("settings:"):
             self._open_settings(cmd.partition(":")[2])
+            return
+        if cmd.startswith("share:"):         # страница: следить ли за показом экрана и по каким признакам
+            try:
+                cfg = json.loads(cmd[6:])
+            except ValueError:
+                return
+            self.share.update(on=bool(cfg.get("on")), patterns=[str(x) for x in cfg.get("patterns") or []])
+            if self.share["on"] and not self.share["id"]:
+                self.share["id"] = GLib.timeout_add_seconds(3, self._check_share)
             return
         if self._page_cmd(cmd):
             return
@@ -454,6 +476,27 @@ class Widget(Gtk.Window):
         win.show_all()
         self.settings_win = win
         log("открыл настройки")
+
+    # ── показ экрана на созвоне → доска размывается сама ──
+    def _check_share(self):
+        sh = self.share
+        if not sh["on"]:
+            sh["id"] = 0
+            if sh["active"]:
+                sh["active"] = False
+                self.web.evaluate_javascript("window.hostSetShare && hostSetShare(false)", -1, None, None, None, None)
+            return False
+        sh["tick"] += 1
+        hit = screen.title_match(window_titles(), sh["patterns"]) if self.x11 else ""
+        if not hit and sh["tick"] % 2 == 0:          # PipeWire (Wayland, портал) — через раз: pw-dump тяжелее
+            hit = "pipewire" if screen.pipewire_sharing() else ""
+        active = bool(hit) or (sh["active"] and sh["tick"] % 2 == 1)   # не мигать между проверками PipeWire
+        if active != sh["active"]:
+            sh["active"] = active
+            log(f"показ экрана: {'начался' if active else 'кончился'}")
+            self.web.evaluate_javascript(f"window.hostSetShare && hostSetShare({'true' if active else 'false'})",
+                                         -1, None, None, None, None)
+        return True
 
     # ── отдельные окна страниц: сообщение целиком, ассистент ──
     def _page_cmd(self, cmd, web=None, win=None):

@@ -350,6 +350,7 @@
       <button type="button" data-nav="sources"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg><span data-t="Источники">Источники</span><span class="n" id="navN"></span></button>
       <button type="button" data-nav="rules"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg><span data-t="Правила для всех">Правила для всех</span></button>
       <button type="button" data-nav="profiles"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span data-t="Профили">Профили</span></button>
+      <button type="button" data-nav="quiet"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><span data-t="Тихие часы">Тихие часы</span></button>
       <button type="button" data-nav="mentions"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/></svg><span data-t="Упоминания">Упоминания</span></button>
       <button type="button" data-nav="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><span data-t="Поиск">Поиск</span></button>
       <div class="gap"></div>
@@ -547,7 +548,7 @@ const newEd=(src,action)=>({src,conds:null,cond:0,chat:'',sender:'',text:'',text
   action:action||'hide',param:action==='highlight'?'orange':'',profile:'',err:''});
 
 // ── маршрут ──
-const ROUTES={sources:showSources,rules:showGlobalRules,profiles:showProfiles,mentions:showMentions,search:showSearch,
+const ROUTES={sources:showSources,rules:showGlobalRules,profiles:showProfiles,quiet:showQuiet,mentions:showMentions,search:showSearch,
   look:showLook,stats:showStats,data:showData,mail:showMail,themed:showThemed,forward:showForward,ingest:showIngest,
   system:showSystem,logs:showLogs,help:showHelp};
 let pageTimer=0;           // автообновление раздела (журнал, состояние колонок) — гасится при уходе
@@ -990,7 +991,13 @@ async function showLook(){
       <label>${esc(t('Плотность'))}</label><div class="ctl">${seg('compact',[['0','Обычная'],['1','Компактная']],p.compact?1:0)}</div>
       <label>${esc(t('Сообщения одного чата'))}</label><div class="ctl">${seg('group_by_chat',[['1','Сворачивать в одну плашку'],['0','Показывать по отдельности']],p.group_by_chat?1:0)}</div>
       <label>${esc(t('Аватары'))}</label><div class="ctl">${seg('avatars',[['1','Показывать'],['0','Не показывать']],p.avatars?1:0)}</div>
+      <label>${esc(t('Время в тексте'))}</label><div class="ctl">${seg('time_hints',[['1','Предлагать напомнить ⏰'],['0','Не показывать']],p.time_hints?1:0)}</div>
+      <label>${esc(t('Показ экрана'))}</label><div class="ctl">${seg('share_blur',[['1','Размывать доску сама'],['0','Не трогать']],p.share_blur?1:0)}</div>
     </div>
+    <p class="hint">${esc(t('«Время в тексте»: если в сообщении есть «в 15:00», «завтра в 10» или «к пятнице», на плашке появится ⏰ — по клику можно завести напоминание.'))}</p>
+    <p class="hint">${esc(t('«Показ экрана»: пока идёт демонстрация (Zoom, Meet и другие сайты в Chrome, Firefox, портал PipeWire), доска размывается, а потом возвращается. Свои признаки — части заголовков окон через запятую:'))}</p>
+    <div class="erow"><input class="inp" id="lShare" value="${attr((p.share_patterns||[]).join(', '))}" placeholder="${attr(t('например: Screen sharing, Демонстрация'))}" style="width:420px">
+      <button class="btn" type="button" id="lShareSave">${esc(t('Сохранить'))}</button></div>
     <h3>${esc(t('Колонки'))}</h3>
     <p class="hint">${esc(t('Порядок колонок меняется перетаскиванием прямо в виджете. Скрытые колонки:'))}</p>
     <div class="tags" id="hidCols">${p.hidden_cols.length?p.hidden_cols.map(k=>`<span class="tagx">${esc(nameOf(k))}<button type="button" data-show="${attr(k)}" aria-label="${attr(t('Показать'))}">↩</button></span>`).join(''):`<span class="muted">${esc(t('скрытых нет'))}</span>`}</div>
@@ -1008,6 +1015,56 @@ async function showLook(){
   page.querySelectorAll('[data-show]').forEach(b=>b.onclick=async()=>{
     try{PREFS=await api('/api/prefs',{hidden_cols:p.hidden_cols.filter(k=>k!==b.dataset.show)});toast(t('Сохранено'));showLook();}catch(e){toast(e.message,true);}});
   if($('resetOrder'))$('resetOrder').onclick=async()=>{await api('/api/prefs',{col_order:[]});toast(t('Порядок сброшен'));showLook();};
+  $('lShareSave').onclick=async()=>{try{PREFS=await api('/api/prefs',{share_patterns:$('lShare').value});toast(t('Сохранено'));}catch(e){toast(e.message,true);}};
+}
+
+// ── Тихие часы ──
+async function showQuiet(){
+  page.innerHTML=`<div class="state">${esc(t('Загружаю…'))}</div>`;
+  let d;try{d=await api('/api/quiet');}catch(e){failed(showQuiet);return;}
+  let q=JSON.parse(JSON.stringify(d.prefs));
+  const sw=(key,label,hint)=>`<div class="erow"><label class="switch"><input type="checkbox" data-q="${key}"${q[key]?' checked':''}> ${esc(t(label))}</label>
+    ${hint?`<span class="muted">${esc(t(hint))}</span>`:''}</div>`;
+  const draw=()=>{
+    const why={schedule:t('по расписанию'),manual:t('включено вручную'),dnd:t('включено «Не беспокоить»')}[d.reason]||'';
+    page.innerHTML=`<h1>${esc(t('Тихие часы'))}</h1>
+      <p class="lead">${esc(t('Пока тихо, сообщения копятся как обычно, но правила не играют звук, а в шапке доски горит луна. Когда тихие часы кончатся, в колонку «Сводки» придёт одна карточка: сколько пришло, откуда, сколько упоминаний.'))}</p>
+      <div class="warnbox" style="${d.active?'':'display:none'}">🌙 ${esc(t('Сейчас тихо'))}${d.until?' '+esc(t('до {hm}',{hm:d.until})):''}${why?' · '+esc(why):''}</div>
+      <div class="erow"><label class="switch"><input type="checkbox" id="qOn"${q.enabled?' checked':''}> <b>${esc(t('По расписанию'))}</b></label></div>
+      <div id="qSlots"></div>
+      <button class="btn ghost" type="button" id="qAdd">${esc(t('Добавить время'))}</button>
+      <h3>${esc(t('Что делать, пока тихо'))}</h3>
+      ${sw('sound','Всё равно играть звук правил')}
+      ${sw('forward','Пересылать в Telegram по правилам','обычно полезно, если тебя нет за компьютером')}
+      ${sw('summary','Сводка, когда тихие часы кончились')}
+      <h3>${esc(t('«Не беспокоить» GNOME'))}</h3>
+      ${d.dnd===null||d.dnd===undefined?`<p class="hint">${esc(t('Не нашёл настройку «Не беспокоить» — это не GNOME или Windows.'))}</p>`:''}
+      ${sw('follow_dnd','Считать тихими часами, когда включено «Не беспокоить»')}
+      ${sw('set_dnd','Включать «Не беспокоить» на время тихих часов','тогда и всплывающие уведомления системы молчат')}
+      <div class="erow" style="margin-top:14px"><button class="btn primary" type="button" id="qSave">${esc(t('Сохранить'))}</button></div>`;
+    const slots=$('qSlots');
+    q.schedule.forEach((sl,k)=>{
+      const el=document.createElement('div');el.className='slot';
+      el.innerHTML=`<span class="days">${DOW.map((dd,di)=>`<label><input type="checkbox" data-d="${di}"${sl.days.includes(di)?' checked':''}><span>${esc(t(dd))}</span></label>`).join('')}</span>
+        <span class="muted">${esc(t('с'))}</span><input class="inp" type="time" data-from value="${attr(sl.from)}">
+        <span class="muted">${esc(t('до'))}</span><input class="inp" type="time" data-to value="${attr(sl.to==='24:00'?'23:59':sl.to)}">
+        <button class="btn ghost" type="button" data-rm aria-label="${attr(t('Удалить'))}">✕</button>`;
+      el.querySelectorAll('[data-d]').forEach(cb=>cb.onchange=()=>{const di=+cb.dataset.d;
+        sl.days=cb.checked?[...new Set([...sl.days,di])].sort():sl.days.filter(x=>x!==di);});
+      el.querySelector('[data-from]').onchange=e=>{sl.from=e.target.value;};
+      el.querySelector('[data-to]').onchange=e=>{sl.to=e.target.value==='23:59'?'24:00':e.target.value;};
+      el.querySelector('[data-rm]').onclick=()=>{q.schedule.splice(k,1);draw();};
+      slots.appendChild(el);
+    });
+    if(!q.schedule.length) slots.innerHTML=`<p class="hint">${esc(t('Интервала ещё нет. Например: будни с 22:00 до 08:00 — интервал может идти через полночь.'))}</p>`;
+    $('qAdd').onclick=()=>{q.schedule.push({days:[0,1,2,3,4,5,6],from:'22:00',to:'08:00'});draw();};
+    $('qOn').onchange=e=>{q.enabled=e.target.checked;};
+    page.querySelectorAll('[data-q]').forEach(cb=>cb.onchange=()=>{q[cb.dataset.q]=cb.checked;});
+    $('qSave').onclick=async()=>{try{const p=await api('/api/prefs',{quiet:{enabled:q.enabled,schedule:q.schedule,sound:q.sound,forward:q.forward,
+      summary:q.summary,follow_dnd:q.follow_dnd,set_dnd:q.set_dnd}});PREFS=p;q=JSON.parse(JSON.stringify(p.quiet));toast(t('Сохранено'));
+      d=await api('/api/quiet');draw();}catch(e){toast(e.message,true);}};
+  };
+  draw();
 }
 
 // ── Статистика ──
@@ -1337,7 +1394,11 @@ async function showIngest(){
       <div class="erow"><input class="inp" id="iBind" value="${attr(c.bind)}" placeholder="0.0.0.0:8766 — ${attr(t('выключен'))}" style="width:240px">
         <button class="btn" type="button" id="iBindSave">${esc(t('Сохранить'))}</button>
         <button class="btn ghost" type="button" id="iRestart">${esc(t('Перезапустить сбор'))}</button></div>
-      <p class="hint">${esc(t('Применится после перезапуска сбора.'))}</p>`;
+      <p class="hint">${esc(t('Применится после перезапуска сбора.'))}</p>
+      <h3>${esc(t('Свои источники: скрипты'))}</h3>
+      <p class="hint">${esc(t('Положи скрипт в папку — программа будет запускать его по расписанию, а каждую напечатанную им строку-JSON (те же поля, что выше, плюс key и status) превращать в карточку. Колонки можно добавлять без правки программы.'))}</p>
+      <div id="scBox"><div class="state">${esc(t('Загружаю…'))}</div></div>`;
+    loadScripts();
     if($('iShow'))$('iShow').onclick=()=>{shown=!shown;draw();};
     const mk=async()=>{try{const r=await api('/api/ingest/token',{});c.token=r.token;shown=true;toast(t('Ключ создан'));draw();}catch(e){toast(e.message,true);}};
     if(c.token)confirmBtn($('iNew'),t('Старый ключ перестанет работать. Нажми ещё раз'),mk);else $('iNew').onclick=mk;
@@ -1367,6 +1428,9 @@ async function showThemed(){
       if(x.running)return stRow('ok',t('{e}: слушаю события',{e}));
       if(x.error)return stRow('warn',t('{e}: {err}',{e,err:x.error}));
       return stRow('info',t('{e}: запускается…',{e}));}).join('');
+    const r=d.prefs.resources, lw=d.prefs.logwatch, cal=d.prefs.calendar, rs=d.resources||{}, cs=d.calendar||{};
+    const resStat=!r.enabled?'':rs.error?stRow('warn',rs.error):rs.running?stRow('ok',Object.entries(rs.values||{}).map(([k,v])=>`${k} ${v}`).join(' · ')||t('проверяю')):stRow('info',t('запускается…'));
+    const calStat=!cal.enabled?'':cs.error?stRow('warn',cs.error):cs.running?stRow('ok',t('календарей: {n}, событий на ближайшие сутки: {e}',{n:cs.sources||0,e:cs.events||0})):stRow('info',t('запускается…'));
     const s=d.services;
     const svcStat=!s.found?stRow('info',t(win?'Журнал событий Windows недоступен':'systemctl не найден')):
       !sv.enabled?'':s.error?stRow('warn',s.error):s.running?stRow('ok',t(win?'проверяю раз в минуту':'проверяю раз в 30 секунд')+
@@ -1390,6 +1454,30 @@ async function showThemed(){
         ${d.commands.hook?`<div class="erow always"><span class="lbl">${esc(t('Без обёртки'))}</span></div><pre>${esc(d.commands.hook)}</pre>
           <p class="hint">${esc(t('Хук терминала: о любой команде дольше минуты — всплывашка и карточка (строка в ~/.bashrc или ~/.zshrc, либо ./install.sh --terminal-hook).'))}</p>`:''}
         ${linesSel('commands',t('Хвост вывода'))}`)}
+      ${card('resources','📊',t('Ресурсы'),t('Диск заполнен, память или swap на пределе, перегрелись процессор или видеокарта NVIDIA. Проверка раз в минуту; когда отпустило — «починилось». К карточке о диске прикладывается, сколько занимают образы и контейнеры.'),resStat,
+        `<div class="erow"><span class="lbl">${esc(t('Диск, % занято'))}</span><input class="inp" type="number" min="50" max="99" data-num="resources:disk_pct" value="${r.disk_pct}" style="width:80px">
+          <span class="lbl">${esc(t('Память, %'))}</span><input class="inp" type="number" min="50" max="99" data-num="resources:mem_pct" value="${r.mem_pct}" style="width:80px">
+          <span class="lbl">${esc(t('Swap, %'))}</span><input class="inp" type="number" min="10" max="100" data-num="resources:swap_pct" value="${r.swap_pct}" style="width:80px"></div>
+        <div class="erow"><span class="lbl">${esc(t('Процессор, °C'))}</span><input class="inp" type="number" min="50" max="110" data-num="resources:cpu_temp" value="${r.cpu_temp}" style="width:80px">
+          <span class="lbl">${esc(t('Видеокарта, °C'))}</span><input class="inp" type="number" min="50" max="110" data-num="resources:gpu_temp" value="${r.gpu_temp}" style="width:80px"></div>
+        <div class="erow"><span class="lbl">${esc(t('Ещё папки'))}</span><input class="inp" id="resPaths" value="${attr(r.paths.join(', '))}" placeholder="${attr(t('другие диски, через запятую: /mnt/data'))}" style="width:320px">
+          <button class="btn" type="button" id="resPathsSave">${esc(t('Сохранить'))}</button></div>`)}
+      ${card('logwatch','📜',t('Журналы'),t('Строки логов по своему шаблону: файл (как tail -F) или служба journald. Совпадения за час собираются в одну карточку со счётчиком, последние строки — в логе под ней.'),'',
+        `<div id="lwList">${lw.watches.length?lw.watches.map((w,i)=>{const st=(d.logwatch||{})[w.id]||{};
+          return `<div class="acc${lw.enabled?'':' off'}"><span class="st ${st.error?'bad':st.running?'ok':'info'}">${st.error?'✕':st.running?'✓':'·'}</span>
+            <span class="ai"><span class="nm">${esc(w.name)}</span> <span class="muted">${esc(w.kind==='unit'?t('служба')+' '+w.target+(w.scope==='user'?' (user)':''):w.target)}</span><br>
+              <span class="sub${st.error?' err':''}"><code>${esc(w.pattern)}</code>${st.error?' · '+esc(st.error):st.matches?' · '+esc(t('совпадений: {n}, последнее в {t}',{n:st.matches,t:st.last})):''}</span></span>
+            <span class="btns"><button class="btn ghost" type="button" data-lwedit="${i}">${esc(t('Изменить'))}</button><button class="btn danger" type="button" data-lwdel="${i}">${esc(t('Удалить'))}</button></span></div>`;}).join(''):
+          `<div class="empty-note">${esc(t('Наблюдений пока нет.'))}</div>`}</div>
+        <div id="lwEd"></div>
+        <div class="erow always" style="margin-top:8px"><button class="btn" type="button" id="lwAdd">${esc(t('Добавить наблюдение'))}</button></div>`)}
+      ${card('calendar','📅',t('Календарь'),t('События из календарей на этом компьютере: GNOME Календарь и Evolution (в том числе подключённые аккаунты) и свои файлы .ics. За несколько минут до начала — карточка, утром — план на день.'),calStat,
+        `<div class="erow"><span class="lbl">${esc(t('Напоминать за'))}</span><input class="inp" type="number" min="0" max="240" data-num="calendar:before" value="${cal.before}" style="width:80px"><span class="muted">${esc(t('минут'))}</span></div>
+        <div class="erow"><label class="switch"><input type="checkbox" id="calAg"${cal.agenda?' checked':''}> ${esc(t('План на день в'))}</label>
+          <input class="inp" type="time" id="calAgT" value="${attr(cal.agenda_time)}"></div>
+        <div class="erow"><span class="lbl">${esc(t('Свои .ics'))}</span><input class="inp" id="calFiles" value="${attr(cal.files.join(', '))}" placeholder="${attr(t('файлы или папки с .ics, через запятую'))}" style="width:360px">
+          <button class="btn" type="button" id="calFilesSave">${esc(t('Сохранить'))}</button></div>
+        ${(d.calendar.files||[]).length?`<p class="hint">${esc(t('Нашёл календари:'))}<br>${d.calendar.files.map(f=>`<code>${esc(f)}</code>`).join('<br>')}</p>`:''}`)}
       <p class="hint">${esc(t('Хвосты логов и вывода хранятся только в базе на этом компьютере: в виджете они свёрнуты, а правило «Переслать в Telegram» отправляет только текст карточки. Колонка появится на доске с первым событием.'))}</p>`;
     const save=async(col,patch)=>{try{const p=await api('/api/prefs',{themed:{[col]:patch}});d.prefs=p.themed;PREFS=p;toast(t('Сохранено'));}
       catch(e){toast(e.message,true);}draw();};
@@ -1398,11 +1486,47 @@ async function showThemed(){
     $('cSS').onchange=()=>save('containers',{startstop:$('cSS').checked});
     $('cIgnSave').onclick=()=>save('containers',{ignore:$('cIgn').value});
     if($('sSys')){$('sSys').onchange=()=>save('services',{system:$('sSys').checked});$('sUser').onchange=()=>save('services',{user:$('sUser').checked});}
+    page.querySelectorAll('[data-num]').forEach(el=>el.onchange=()=>{const [col,key]=el.dataset.num.split(':');save(col,{[key]:+el.value});});
+    $('resPathsSave').onclick=()=>save('resources',{paths:$('resPaths').value});
+    $('calFilesSave').onclick=()=>save('calendar',{files:$('calFiles').value});
+    $('calAg').onchange=()=>save('calendar',{agenda:$('calAg').checked});
+    $('calAgT').onchange=()=>save('calendar',{agenda_time:$('calAgT').value});
+    // наблюдения за логами: список, редактор, проверка шаблона на последних строках
+    const lwSave=list=>save('logwatch',{watches:list});
+    page.querySelectorAll('[data-lwdel]').forEach(b=>confirmBtn(b,t('Нажми ещё раз — удалить'),()=>lwSave(lw.watches.filter((_,i)=>i!==+b.dataset.lwdel))));
+    const lwEditor=(w,idx)=>{
+      $('lwEd').innerHTML=`<div class="editor standalone">
+        <div class="erow"><span class="lbl">${esc(t('Название'))}</span><input class="inp" id="lwName" value="${attr(w.name||'')}" style="width:240px" placeholder="${attr(t('например: nginx ошибки'))}"></div>
+        <div class="erow"><span class="lbl">${esc(t('Откуда'))}</span><span class="seg" id="lwKind"><button type="button" data-k="file" aria-pressed="${w.kind!=='unit'}">${esc(t('файл'))}</button>${d.platform==='windows'?'':`<button type="button" data-k="unit" aria-pressed="${w.kind==='unit'}">${esc(t('служба journald'))}</button>`}</span>
+          <input class="inp" id="lwTarget" value="${attr(w.target||'')}" style="width:300px" placeholder="${attr(t('/var/log/nginx/error.log или имя службы'))}">
+          ${d.platform==='windows'?'':`<label class="muted"><input type="checkbox" id="lwUser"${w.scope==='user'?' checked':''}> ${esc(t('служба пользователя'))}</label>`}</div>
+        <div class="erow"><span class="lbl">${esc(t('Шаблон'))}</span><input class="inp" id="lwPat" value="${attr(w.pattern||'ERROR|CRITICAL|Traceback')}" style="width:300px">
+          <label class="muted"><input type="checkbox" id="lwIc"${w.icase!==false?' checked':''}> ${esc(t('без учёта регистра'))}</label></div>
+        <div class="ehint" style="margin-left:0">${esc(t('Регулярное выражение Python. Проверка берёт последние 500 строк и показывает, что совпало бы.'))}</div>
+        <div id="lwPrev"></div>
+        <div class="actions"><button class="btn primary" type="button" id="lwOk">${esc(t('Сохранить'))}</button>
+          <button class="btn" type="button" id="lwTest">${esc(t('Проверить на последних строках'))}</button>
+          <button class="btn ghost" type="button" id="lwCancel">${esc(t('Отмена'))}</button></div></div>`;
+      let kind=w.kind||'file';
+      $('lwKind').querySelectorAll('button').forEach(b=>b.onclick=()=>{kind=b.dataset.k;$('lwKind').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));});
+      const cur=()=>({...w,name:$('lwName').value.trim(),kind,target:$('lwTarget').value.trim(),scope:$('lwUser')&&$('lwUser').checked?'user':'system',
+        pattern:$('lwPat').value,icase:$('lwIc').checked});
+      $('lwCancel').onclick=()=>{$('lwEd').innerHTML='';};
+      $('lwTest').onclick=async()=>{try{const r2=await api('/api/logwatch/preview',{watch:cur()});
+        $('lwPrev').innerHTML=`<p class="hint">${esc(t('Проверено строк: {c}, совпало: {m}',{c:r2.checked,m:r2.matches}))}</p>${r2.sample.length?`<pre>${esc(r2.sample.join('\n'))}</pre>`:''}`;}
+        catch(e){$('lwPrev').innerHTML=`<p class="eerr" style="margin-left:0">${esc(e.message)}</p>`;}};
+      $('lwOk').onclick=()=>{const list=[...lw.watches];if(idx==null)list.push(cur());else list[idx]=cur();lwSave(list);};
+    };
+    $('lwAdd').onclick=()=>lwEditor({},null);
+    page.querySelectorAll('[data-lwedit]').forEach(b=>b.onclick=()=>lwEditor(lw.watches[+b.dataset.lwedit],+b.dataset.lwedit));
   };
   draw();
   // состояние слушателей меняется в фоне (движок найден, начал слушать) — подтягиваем, пока раздел открыт
-  pageTimer=setInterval(async()=>{if(document.activeElement&&document.activeElement.id==='cIgn')return;
-    try{const n=await api('/api/themed');d.containers=n.containers;d.services=n.services;draw();}catch(e){}},5000);
+  // (не перерисовываем, пока что-то вводят или открыт редактор наблюдения)
+  pageTimer=setInterval(async()=>{const a=document.activeElement;
+    if(a&&['INPUT','SELECT','TEXTAREA'].includes(a.tagName)||($('lwEd')&&$('lwEd').innerHTML))return;
+    try{const n=await api('/api/themed');Object.assign(d,{containers:n.containers,services:n.services,resources:n.resources,
+      logwatch:n.logwatch,calendar:n.calendar});draw();}catch(e){}},5000);
 }
 
 // ── Логи: журнал работы программы ──
@@ -1454,6 +1578,35 @@ async function showLogs(){
 }
 function navBadge(n){const el=$('navLogs');if(!el)return;el.textContent=n?String(n):'';el.classList.toggle('bad',!!n);
   el.title=n?t('ошибок за сутки: {n}',{n}):'';}
+
+// свои источники (scripts.py): папка sources.d, расписание, итог последнего запуска
+async function loadScripts(){
+  const box=$('scBox'); if(!box) return;
+  let d;try{d=await api('/api/scripts');}catch(e){box.innerHTML=`<p class="eerr" style="margin-left:0">${esc(e.message)}</p>`;return;}
+  const win=d.platform==='windows';
+  box.innerHTML=`<div class="erow"><span class="lbl">${esc(t('Папка'))}</span><code>${esc(d.dir)}</code>
+      <button class="btn ghost" type="button" id="scOpen">${esc(t('Открыть папку'))}</button>
+      <button class="btn ghost" type="button" id="scEx">${esc(t('Создать пример'))}</button>
+      <label class="switch"><input type="checkbox" id="scOn"${d.enabled?' checked':''}> ${esc(t('запускать скрипты'))}</label></div>
+    ${d.items.length?`<div class="list">${d.items.map(it=>`<div class="acc${it.enabled?'':' off'}"><span class="st ${it.error?'bad':it.last?'ok':'info'}">${it.error?'✕':it.last?'✓':'·'}</span>
+      <span class="ai"><span class="nm">${esc(it.name)}</span> <span class="muted">${esc(t('раз в {n} с',{n:it.interval}))}</span><br>
+        <span class="sub${it.error?' err':''}">${it.last?esc(t('запускался {w}',{w:when(it.last)}))+' · '+esc(t('карточек: {n}',{n:it.cards||0}))+(it.error?' · '+esc(it.error):''):esc(t('ещё не запускался'))}</span></span>
+      <span class="btns"><input class="inp" type="number" min="10" max="86400" value="${it.interval}" data-scint="${attr(it.name)}" style="width:90px" aria-label="${attr(t('Интервал, секунд'))}">
+        <label class="switch"><input type="checkbox" data-scon="${attr(it.name)}"${it.enabled?' checked':''}></label>
+        <button class="btn ghost" type="button" data-scrun="${attr(it.name)}">${esc(t('Запустить'))}</button></span></div>`).join('')}</div>`
+      :`<div class="empty-note">${esc(t(d.exists?'В папке пока нет скриптов.':'Папки ещё нет — «Создать пример» создаст её и файл-образец.'))}</div>`}
+    <p class="hint">${esc(t(win?'Годятся .bat, .cmd, .ps1 и .py. Интервал можно задать и строкой «# messhub: interval=60» в начале файла.'
+      :'Годятся исполняемые файлы (chmod +x) и .py. Интервал можно задать и строкой «# messhub: interval=60» в начале файла. Пример выключен (.off в конце имени): переименуй и сделай исполняемым.'))}</p>
+    <pre>${esc('{"source": "Бэкапы", "chat": "nas", "text": "Бэкап не прошёл", "key": "backup:nas", "urgency": 2}\n{"source": "Бэкапы", "key": "backup:nas", "status": "resolved"}')}</pre>`;
+  const upd=async patch=>{try{await api('/api/prefs',{scripts:patch});toast(t('Сохранено'));loadScripts();}catch(e){toast(e.message,true);}};
+  $('scOn').onchange=e=>upd({enabled:e.target.checked});
+  $('scOpen').onclick=async()=>{try{await api('/api/scripts/open',{});}catch(e){toast(e.message,true);}};
+  $('scEx').onclick=async()=>{try{const r=await api('/api/scripts/example',{});toast(t('Создан пример: {p}',{p:r.path}));loadScripts();}catch(e){toast(e.message,true);}};
+  box.querySelectorAll('[data-scon]').forEach(cb=>cb.onchange=()=>upd({items:{[cb.dataset.scon]:{enabled:cb.checked,interval:+box.querySelector(`[data-scint="${CSS.escape(cb.dataset.scon)}"]`).value}}}));
+  box.querySelectorAll('[data-scint]').forEach(el=>el.onchange=()=>upd({items:{[el.dataset.scint]:{interval:+el.value,enabled:box.querySelector(`[data-scon="${CSS.escape(el.dataset.scint)}"]`).checked}}}));
+  box.querySelectorAll('[data-scrun]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{const r=await api('/api/scripts/run',{name:b.dataset.scrun});
+    toast(r.error?r.error:t('Карточек: {n}',{n:r.cards}),!!r.error);}catch(e){toast(e.message,true);}loadScripts();});
+}
 
 // ── Система: проверки и автозапуск ──
 async function showSystem(){

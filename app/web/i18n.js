@@ -347,6 +347,74 @@ const EN = {
   'Сообщения нет: его удалили по сроку хранения или вручную.': 'The message is gone: it was removed by the retention period or by hand.',
   'Сервер виджета не отвечает — сообщение не загрузилось.': 'The widget server is not responding, so the message could not load.',
 
+  // ── доска: напоминания, тихие часы, ассистент, показ экрана ──
+  'Ассистент: вопросы по сообщениям на модели на этом компьютере': 'Assistant: ask about your messages, on a model on this computer',
+  'В {hm}': 'At {hm}', 'За 10 минут': '10 minutes before', 'За 30 минут': '30 minutes before', 'За час': 'An hour before',
+  'Утром в {hm}': 'In the morning at {hm}', 'Накануне в 18:00': 'The day before at 18:00',
+  'Напоминание {w}': 'Reminder {w}', 'Напомнить: {w}': 'Remind: {w}', 'Напомню {w}': 'Will remind {w}', 'напомню {w}': 'reminder {w}',
+  'Напомнить об этом': 'Remind me about this', 'Напоминание заведено — нажми, чтобы отменить': 'Reminder set — click to cancel',
+  'Отменить напоминание': 'Cancel the reminder', 'Напоминание отменено': 'Reminder cancelled', 'Это время уже прошло': 'That time has passed',
+  'Не удалось завести напоминание — сервер не отвечает': 'Could not set the reminder — the server is not responding',
+  'Не удалось отменить — сервер не отвечает': 'Could not cancel — the server is not responding',
+  'сегодня': 'today', 'завтра': 'tomorrow', 'пн': 'Mon', 'вт': 'Tue', 'ср': 'Wed', 'чт': 'Thu', 'пт': 'Fri', 'сб': 'Sat', 'вс': 'Sun',
+  'Тихие часы': 'Quiet hours', 'Тихие часы: звуки правил выключены': 'Quiet hours: rule sounds are off',
+  'Сейчас тихо': 'Quiet now', 'Сейчас не тихо': 'Not quiet now', 'до {hm}': 'until {hm}', 'тихо': 'quiet',
+  'по расписанию': 'by schedule', 'включено вручную': 'turned on by hand', 'включено «Не беспокоить»': '“Do Not Disturb” is on',
+  'Тихо на час': 'Quiet for an hour', 'До утра': 'Until morning', 'Выключить сейчас': 'Turn off now',
+  'Расписание и настройки…': 'Schedule and settings…', 'Тихо до {hm}': 'Quiet until {hm}', 'Тихие часы выключены': 'Quiet hours are off',
+  'Идёт показ экрана — доска размыта': 'Screen sharing is on — the board is blurred', 'Показ экрана кончился': 'Screen sharing ended',
+
+  // ── настройки: ресурсы, журналы, календарь, тихие часы, скрипты ──
+  'Ресурсы': 'Resources', 'Журналы': 'Log watch', 'Календарь': 'Calendar',
+  'Диск заполнен, память или swap на пределе, перегрелись процессор или видеокарта NVIDIA. Проверка раз в минуту; когда отпустило — «починилось». К карточке о диске прикладывается, сколько занимают образы и контейнеры.':
+    'A disk is full, memory or swap is nearly exhausted, the CPU or an NVIDIA GPU is overheating. Checked every minute; when it eases — “fixed”. A full-disk card also shows how much images and containers take.',
+  'Диск, % занято': 'Disk, % used', 'Память, %': 'Memory, %', 'Swap, %': 'Swap, %', 'Процессор, °C': 'CPU, °C', 'Видеокарта, °C': 'GPU, °C',
+  'Ещё папки': 'More folders', 'другие диски, через запятую: /mnt/data': 'other disks, separated by commas: /mnt/data', 'проверяю': 'checking',
+  'Строки логов по своему шаблону: файл (как tail -F) или служба journald. Совпадения за час собираются в одну карточку со счётчиком, последние строки — в логе под ней.':
+    'Log lines matching your pattern: a file (like tail -F) or a journald unit. Matches within an hour go into one card with a counter; the latest lines are in its log.',
+  'служба': 'unit', 'совпадений: {n}, последнее в {t}': 'matches: {n}, last at {t}', 'Наблюдений пока нет.': 'No watches yet.',
+  'Добавить наблюдение': 'Add a watch', 'например: nginx ошибки': 'e.g. nginx errors', 'Откуда': 'Source', 'файл': 'file',
+  'служба journald': 'journald unit', '/var/log/nginx/error.log или имя службы': '/var/log/nginx/error.log or a unit name',
+  'служба пользователя': 'user unit', 'Шаблон': 'Pattern', 'без учёта регистра': 'ignore case',
+  'Регулярное выражение Python. Проверка берёт последние 500 строк и показывает, что совпало бы.':
+    'A Python regular expression. The check takes the last 500 lines and shows what would match.',
+  'Проверить на последних строках': 'Test on the latest lines', 'Проверено строк: {c}, совпало: {m}': 'Lines checked: {c}, matched: {m}',
+  'События из календарей на этом компьютере: GNOME Календарь и Evolution (в том числе подключённые аккаунты) и свои файлы .ics. За несколько минут до начала — карточка, утром — план на день.':
+    'Events from calendars on this computer: GNOME Calendar and Evolution (including connected accounts) and your own .ics files. A card a few minutes before the start, and a plan for the day in the morning.',
+  'Напоминать за': 'Remind', 'минут': 'minutes before', 'План на день в': 'Plan for the day at', 'Свои .ics': 'Own .ics',
+  'файлы или папки с .ics, через запятую': '.ics files or folders, separated by commas', 'Нашёл календари:': 'Calendars found:',
+  'календарей: {n}, событий на ближайшие сутки: {e}': 'calendars: {n}, events in the next day: {e}',
+  'Время в тексте': 'Time in text', 'Предлагать напомнить ⏰': 'Offer a reminder ⏰', 'Показ экрана': 'Screen sharing',
+  'Размывать доску сама': 'Blur the board automatically', 'Не трогать': 'Leave as is',
+  '«Время в тексте»: если в сообщении есть «в 15:00», «завтра в 10» или «к пятнице», на плашке появится ⏰ — по клику можно завести напоминание.':
+    '“Time in text”: if a message says “at 3 pm”, “tomorrow at 10” or “by Friday”, the card gets ⏰ — click it to set a reminder.',
+  '«Показ экрана»: пока идёт демонстрация (Zoom, Meet и другие сайты в Chrome, Firefox, портал PipeWire), доска размывается, а потом возвращается. Свои признаки — части заголовков окон через запятую:':
+    '“Screen sharing”: while you share your screen (Zoom, Meet and other sites in Chrome, Firefox, the PipeWire portal), the board blurs and comes back afterwards. Your own signs — parts of window titles, separated by commas:',
+  'например: Screen sharing, Демонстрация': 'e.g. Screen sharing, Presenting',
+  'Пока тихо, сообщения копятся как обычно, но правила не играют звук, а в шапке доски горит луна. Когда тихие часы кончатся, в колонку «Сводки» придёт одна карточка: сколько пришло, откуда, сколько упоминаний.':
+    'While it is quiet, messages pile up as usual, but rules play no sound and a moon shows in the board header. When quiet hours end, one card lands in the Digests column: how much arrived, from where, how many mentions.',
+  'По расписанию': 'By schedule', 'Что делать, пока тихо': 'While it is quiet', '«Не беспокоить» GNOME': 'GNOME “Do Not Disturb”',
+  'Всё равно играть звук правил': 'Play rule sounds anyway', 'Пересылать в Telegram по правилам': 'Forward to Telegram by rules',
+  'обычно полезно, если тебя нет за компьютером': 'usually useful when you are away from the computer',
+  'Сводка, когда тихие часы кончились': 'A digest when quiet hours end',
+  'Считать тихими часами, когда включено «Не беспокоить»': 'Treat “Do Not Disturb” as quiet hours',
+  'Включать «Не беспокоить» на время тихих часов': 'Turn on “Do Not Disturb” during quiet hours',
+  'тогда и всплывающие уведомления системы молчат': 'then system pop-ups stay silent too',
+  'Не нашёл настройку «Не беспокоить» — это не GNOME или Windows.': 'Could not find “Do Not Disturb” — this is not GNOME, or it is Windows.',
+  'Интервала ещё нет. Например: будни с 22:00 до 08:00 — интервал может идти через полночь.': 'No interval yet. For example, weekdays 22:00 to 08:00 — an interval may cross midnight.',
+  'Свои источники: скрипты': 'Your own sources: scripts',
+  'Положи скрипт в папку — программа будет запускать его по расписанию, а каждую напечатанную им строку-JSON (те же поля, что выше, плюс key и status) превращать в карточку. Колонки можно добавлять без правки программы.':
+    'Put a script into the folder: the app runs it on a schedule and turns every JSON line it prints (the same fields as above, plus key and status) into a card. New columns without touching the app.',
+  'Открыть папку': 'Open folder', 'Создать пример': 'Create an example', 'запускать скрипты': 'run scripts',
+  'раз в {n} с': 'every {n}s', 'запускался {w}': 'ran {w}', 'карточек: {n}': 'cards: {n}', 'ещё не запускался': 'has not run yet',
+  'Интервал, секунд': 'Interval, seconds', 'Запустить': 'Run', 'В папке пока нет скриптов.': 'No scripts in the folder yet.',
+  'Папки ещё нет — «Создать пример» создаст её и файл-образец.': 'The folder does not exist yet — “Create an example” makes it and a sample file.',
+  'Годятся .bat, .cmd, .ps1 и .py. Интервал можно задать и строкой «# messhub: interval=60» в начале файла.':
+    '.bat, .cmd, .ps1 and .py work. The interval can also be set with a “# messhub: interval=60” line at the top of the file.',
+  'Годятся исполняемые файлы (chmod +x) и .py. Интервал можно задать и строкой «# messhub: interval=60» в начале файла. Пример выключен (.off в конце имени): переименуй и сделай исполняемым.':
+    'Executable files (chmod +x) and .py work. The interval can also be set with a “# messhub: interval=60” line at the top of the file. The example is off (.off at the end of its name): rename it and make it executable.',
+  'Создан пример: {p}': 'Example created: {p}', 'Карточек: {n}': 'Cards: {n}',
+
   // ── логи ──
   'Логи': 'Logs',
   'Журнал работы самой программы: запуск, ошибки, фоновые задачи, что сделали правила. Тексты твоих сообщений сюда не пишутся. Журнал лежит только на этом компьютере.':

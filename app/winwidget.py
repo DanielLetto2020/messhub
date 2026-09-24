@@ -23,6 +23,7 @@ import time
 import webbrowser
 
 import paths
+import screen
 import version
 import wincatcher
 
@@ -56,6 +57,7 @@ class Api:
         self._state = _load_state(state_path)
         self._win = self._settings = None
         self._pages = {}             # отдельные окна страниц: message, assistant
+        self._share, self._share_thread = {"on": False}, None     # показ экрана → размыть доску
         self._g0 = None
         self._save_timer = None
 
@@ -92,6 +94,12 @@ class Api:
             self._keep_below()
         elif msg == "settings" or msg.startswith("settings:"):
             self._open_settings(msg.split(":", 1)[1] if ":" in msg else "")
+        elif msg.startswith("share:"):
+            cfg = json.loads(msg[6:])
+            self._share = {"on": bool(cfg.get("on")), "patterns": [str(x) for x in cfg.get("patterns") or []]}
+            if self._share["on"] and not self._share_thread:
+                self._share_thread = threading.Thread(target=self._share_loop, name="share", daemon=True)
+                self._share_thread.start()
         elif msg.startswith("message:") and msg[8:].isdigit():
             self._open_page("message", f"/message?id={int(msg[8:])}&host=pywebview", 900, 640)
         elif msg == "assistant":
@@ -188,10 +196,45 @@ class Api:
         self._pages[kind] = win
         win.events.closed += lambda: self._pages.pop(kind, None)
 
+    def _share_loop(self):
+        """Раз в 3 с: окна-индикаторы показа экрана (заголовки через EnumWindows) → hostSetShare."""
+        active = False
+        while self._share.get("on"):
+            hit = screen.title_match(_window_titles(), self._share.get("patterns") or [])
+            if bool(hit) != active and self._win:
+                active = bool(hit)
+                self._win.evaluate_js(f"window.hostSetShare && hostSetShare({'true' if active else 'false'})")
+            time.sleep(3)
+        if active and self._win:
+            self._win.evaluate_js("window.hostSetShare && hostSetShare(false)")
+        self._share_thread = None
+
     def _on_loaded(self):
         locked = "true" if self._state.get("locked") else "false"
         self._win.evaluate_js(f"window.hostSetLocked && hostSetLocked({locked})")
         self._keep_below()
+
+
+def _window_titles():
+    """Заголовки видимых окон верхнего уровня (Windows)."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+    except ImportError:
+        return []
+    user32, out = ctypes.windll.user32, []
+    proto = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    def cb(hwnd, _l):
+        if user32.IsWindowVisible(hwnd):
+            n = user32.GetWindowTextLengthW(hwnd)
+            if n:
+                buf = ctypes.create_unicode_buffer(n + 1)
+                user32.GetWindowTextW(hwnd, buf, n + 1)
+                out.append(buf.value)
+        return True
+    user32.EnumWindows(proto(cb), 0)
+    return out
 
 
 class PageApi:

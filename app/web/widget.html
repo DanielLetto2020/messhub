@@ -145,6 +145,14 @@
   .msg > .body { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 10; overflow: hidden; }
   .compact .msg > .body { -webkit-line-clamp: 6; }
   .more { display: inline-block; margin-top: 2px; font-size: 10.5px; font-weight: 600; color: var(--accent); cursor: pointer; }
+  /* время из текста → «напомнить»; заведённое напоминание — колокольчик */
+  .tchip { display: inline-flex; align-items: center; gap: 3px; margin: 3px 6px 0 0; font-size: 10.5px; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; cursor: pointer; }
+  .tchip:hover { color: var(--text); border-color: var(--muted); }
+  .tchip.on { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, transparent); }
+  /* тихие часы в шапке */
+  .bar .ib.quiet { font-size: 11px; padding: 3px 5px; }
+  .bar .ib.quiet.on { opacity: 1; color: #b79cff; background: rgba(183,156,255,.14); padding-right: 7px; }
   .more:hover { text-decoration: underline; text-underline-offset: 2px; }
 
   .msg.copied::after, .msg.copyfail::after { position: absolute; right: 8px; bottom: 6px; font-size: 10px;
@@ -241,6 +249,9 @@
     <span class="ib prof" id="profBtn" hidden data-t-title="Профиль">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span id="profName"></span>
     </span>
+    <span class="ib quiet" id="quietBtn" data-t-title="Тихие часы">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><span id="quietTxt"></span>
+    </span>
     <span class="ib" id="focusBtn" data-t-title="Фокус: показывать только важное — закреплённое, подсвеченное, упоминания · клавиша F">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
     </span>
@@ -258,6 +269,9 @@
     <a class="ib gh" id="gh" href="https://github.com/DanielLetto2020/messhub" target="_blank" rel="noopener noreferrer" data-t-title="messhub на GitHub">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
     </a>
+    <span class="ib" id="aiBtn" data-t-title="Ассистент: вопросы по сообщениям на модели на этом компьютере">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
+    </span>
     <span class="ib gear" id="gear" data-t-title="Настройки">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     </span>
@@ -417,6 +431,8 @@ function cardHtml(m, withChat){
   const det=m.details?`<div class="det${dOpen?' open':''}"><span class="dt" data-act="det">${ICON.chev}${esc(t('Лог'))} · ${esc(tp(nLines,...W.line))}</span><span class="dfull" data-act="full">${esc(t('целиком'))}</span>${
     dOpen?`<pre class="log" title="${attr(t('Двойной клик — скопировать лог'))}">${esc(m.details)}</pre>`:''}</div>`:'';
   const fixed=m.resolved_at?`<div class="fixed">${esc(t('✓ Починилось в {hm}',{hm:m.resolved_at.slice(11,16)}))}</div>`:'';
+  const tchip=m.remind_at?`<div><span class="tchip on" data-act="remind" title="${attr(t('Напоминание заведено — нажми, чтобы отменить'))}">🔔 ${esc(t('напомню {w}',{w:whenLabel(m.remind_at)}))}</span></div>`
+    :(m.times&&m.times.length)?`<div>${m.times.slice(0,2).map((x,i)=>`<span class="tchip" data-act="remind" data-ti="${i}" title="${attr(t('Напомнить об этом'))}">⏰ ${esc(whenLabel(x.at,x.date_only))}</span>`).join('')}</div>`:'';
   const go=goTitle(m);
   const goAttr=go?` data-act="open" title="${attr(go)}"`:'';
   return `<div class="${cls}" data-id="${m.id}"><div class="top"><span class="who${go?'':' nogo'}"${goAttr}>${avatar(m)}${b}${who}</span><span class="time">${esc(fmtTime(m.event_iso))}</span>
@@ -424,7 +440,16 @@ function cardHtml(m, withChat){
     <span class="ab" data-act="snooze" title="${attr(t('Отложить'))}">${ICON.clock}</span>
     <span class="ab${m.pinned?' on':''}" data-act="pin" title="${attr(m.pinned?t('Открепить'):t('Закрепить — не прочитается само через 24 ч'))}">${ICON.pin}</span></span>
     <span class="ab read" data-act="read" title="${attr(t('Прочитано — скрыть'))}">${ICON.check}</span></div>
-    <div class="body" title="${attr(t('Двойной клик — скопировать текст'))}">${rich(m.message||'')}</div>${det}${fixed}</div>`;
+    <div class="body" title="${attr(t('Двойной клик — скопировать текст'))}">${rich(m.message||'')}</div>${det}${tchip}${fixed}</div>`;
+}
+// «2026-09-25 15:00» → «15:00» / «завтра 10:00» / «пт 02.10 11:30» (date_only — без часов)
+function whenLabel(at, dateOnly){
+  const d=new Date(at.replace(' ','T')), now=new Date();
+  const day=x=>new Date(x.getFullYear(),x.getMonth(),x.getDate()).getTime();
+  const diff=Math.round((day(d)-day(now))/864e5), hm=at.slice(11,16);
+  const dname=diff===0?t('сегодня'):diff===1?t('завтра'):`${t(['пн','вт','ср','чт','пт','сб','вс'][(d.getDay()+6)%7])} ${at.slice(8,10)}.${at.slice(5,7)}`;
+  if(dateOnly) return dname;
+  return diff===0?hm:`${dname} ${hm}`;
 }
 function groupHtml(key, chat, list){
   const g=key+'\u0001'+chat, isOpen=open.has(g), last=list[0];
@@ -551,6 +576,7 @@ board.addEventListener('click',e=>{
   else if(act==='close-col') openClose(a,col.dataset.key);
   else if(act==='det'){openDet.has(id)?openDet.delete(id):openDet.add(id);renderCol(col.dataset.key);}
   else if(act==='full') openFull(id);
+  else if(act==='remind') openRemind(a,id,+(a.dataset.ti||0));
 });
 function dropCol(key){
   const c=cols.get(key); if(!c) return null;
@@ -651,6 +677,74 @@ try{
   };
 }catch(e){}
 
+// ── напоминания по времени из текста (сервер: reminders.py) ──
+const pad=n=>String(n).padStart(2,'0');
+const fmtAt=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+function openRemind(btn,id,ti){
+  const m=msgs.get(id); if(!m) return;
+  if(m.remind_at){
+    showMenu(btn,`<div class="h">${esc(t('Напоминание {w}',{w:whenLabel(m.remind_at)}))}</div>
+      <button type="button" data-rcancel="1"><span>${esc(t('Отменить напоминание'))}</span></button>`,'remind',id);
+    return;
+  }
+  const x=(m.times||[])[ti]; if(!x) return;
+  const at=new Date(x.at.replace(' ','T')), now=Date.now(), opts=[];
+  const push=(d,label)=>{if(+d>now+30e3)opts.push({at:fmtAt(d),label});};
+  if(x.date_only){
+    push(at,t('Утром в {hm}',{hm:x.at.slice(11,16)}));
+    const eve=new Date(+at-864e5); eve.setHours(18,0,0,0); push(eve,t('Накануне в 18:00'));
+  } else {
+    push(new Date(+at-10*6e4),t('За 10 минут'));
+    push(new Date(+at-30*6e4),t('За 30 минут'));
+    push(new Date(+at-60*6e4),t('За час'));
+    push(at,t('В {hm}',{hm:x.at.slice(11,16)}));
+  }
+  if(!opts.length){toast(t('Это время уже прошло'));return;}
+  showMenu(btn,`<div class="h">${esc(t('Напомнить: {w}',{w:x.text}))}</div>`+opts.map(o=>
+    `<button type="button" data-rat="${attr(o.at)}" data-rev="${attr(x.at)}"><span>${esc(o.label)}</span><span>${esc(whenLabel(o.at))}</span></button>`).join(''),'remind',id);
+}
+async function setRemind(id,at,eventAt){
+  const m=msgs.get(id); if(!m) return;
+  try{const r=await post('/api/remind',{id,at,event_at:eventAt});m.remind_at=r.at;renderKeys([m.src]);
+    toast(t('Напомню {w}',{w:whenLabel(r.at)}));}
+  catch(e){toast(t('Не удалось завести напоминание — сервер не отвечает'),{err:true});}
+}
+async function cancelRemind(id){
+  const m=msgs.get(id); if(!m) return;
+  try{await post('/api/remind/cancel',{id});m.remind_at='';renderKeys([m.src]);toast(t('Напоминание отменено'));}
+  catch(e){toast(t('Не удалось отменить — сервер не отвечает'),{err:true});}
+}
+
+// ── тихие часы: луна в шапке (состояние — заголовок X-Quiet каждого ответа /api/messages) ──
+let quietNow={active:false,reason:'',until:''};
+function applyQuiet(h){
+  if(h==null) return;
+  const [a,reason,until]=String(h).split(';');
+  quietNow={active:a==='1',reason:reason||'',until:until||''};
+  const b=$('quietBtn'); b.classList.toggle('on',quietNow.active);
+  $('quietTxt').textContent=quietNow.active?(quietNow.until?t('до {hm}',{hm:quietNow.until}):t('тихо')):'';
+  b.title=quietNow.active?t('Тихие часы: звуки правил выключены'):t('Тихие часы');
+}
+$('quietBtn').addEventListener('click',()=>{
+  const why={schedule:t('по расписанию'),manual:t('включено вручную'),dnd:t('включено «Не беспокоить»')}[quietNow.reason]||'';
+  showMenu($('quietBtn'),`<div class="h">${esc(t('Тихие часы'))}</div>
+    <div class="p">${esc(quietNow.active?t('Сейчас тихо')+(quietNow.until?' '+t('до {hm}',{hm:quietNow.until}):'')+(why?' · '+why:''):t('Сейчас не тихо'))}</div>
+    <button type="button" data-q="hour"><span>${esc(t('Тихо на час'))}</span></button>
+    <button type="button" data-q="morning"><span>${esc(t('До утра'))}</span><span>08:00</span></button>
+    ${quietNow.active?`<button type="button" data-q="off"><span>${esc(t('Выключить сейчас'))}</span></button>`:''}<hr>
+    <button type="button" data-qsetup="1"><span>${esc(t('Расписание и настройки…'))}</span></button>`,'quiet',null);
+});
+
+// ── ассистент: отдельное окно, как настройки ──
+$('aiBtn').addEventListener('click',()=>{if(host)host.postMessage('assistant');else window.open('/assistant','messhub-assistant','width=1120,height=760');});
+
+// ── показ экрана: окно (widget.py / winwidget.py) замечает индикаторы и говорит странице ──
+let autoPriv=false;
+window.hostSetShare=v=>{
+  if(v&&prefs.share_blur&&!priv){priv=true;autoPriv=true;applyPriv();toast(t('Идёт показ экрана — доска размыта'));}
+  else if(!v&&autoPriv){autoPriv=false;priv=false;applyPriv();toast(t('Показ экрана кончился'));}
+};
+
 // ── всплывающее меню (отложить, профиль, почему, закрыть колонку) ──
 let menuFor=null, menuKind=null;
 function showMenu(anchor, html, kind, forId){
@@ -734,6 +828,16 @@ menu.addEventListener('click',async e=>{
   } else if(menuKind==='close'){
     const key=menuFor; hideMenu();
     if(b.dataset.close) closeCol(key); else if(b.dataset.hide) hideCol(key);
+  } else if(menuKind==='remind'){
+    const id=menuFor; hideMenu();
+    if(b.dataset.rcancel) cancelRemind(id); else if(b.dataset.rat) setRemind(id,b.dataset.rat,b.dataset.rev);
+  } else if(menuKind==='quiet'){
+    hideMenu();
+    if(b.dataset.qsetup){if(host)host.postMessage('settings:quiet');else window.open('/settings#quiet','_blank');return;}
+    try{const r=await post('/api/quiet',{action:b.dataset.q});
+      applyQuiet(`${r.active?1:0};${r.reason||''};${r.until||''}`);
+      toast(r.active?t('Тихо до {hm}',{hm:r.until||'…'}):t('Тихие часы выключены'));}
+    catch(e){toast(t('Не удалось обновить — сервер не отвечает'),{err:true});}
   }
 });
 
@@ -826,6 +930,7 @@ function applyPrefs(p){
   document.documentElement.style.setProperty('--fs',p.font_size+'px');
   mentionRe=buildMentionRe(p.mentions);
   renderProf();
+  if(host) host.postMessage('share:'+JSON.stringify({on:!!p.share_blur,patterns:p.share_patterns||[]}));
 }
 
 // ── загрузка, опрос новых и сверка ──
@@ -842,7 +947,7 @@ async function initial(){
     const p=await(await fetch('/api/prefs')).json();
     const srcs=await(await fetch('/api/sources?rules=1')).json();
     const r=await fetch('/api/messages?unread=1&rules=1&limit=300');
-    const rows=await r.json();
+    const rows=await r.json(); applyQuiet(r.headers.get('X-Quiet'));
     rulesVer=r.headers.get('X-Rules-Ver'); prefsVer=r.headers.get('X-Prefs-Ver');
     // новое состояние целиком — и только потом перерисовка (без мигания пустой доской)
     applyPrefs(p); msgs.clear(); fresh.clear(); skipped.clear(); lastId=0;
@@ -864,6 +969,7 @@ async function poll(){
     const sv=r.headers.get('X-App-Version');
     if(appVer&&sv&&sv!==appVer){location.reload();return;}
     // правила, профиль или настройки поменяли — перечитываем доску целиком
+    applyQuiet(r.headers.get('X-Quiet'));
     if(r.headers.get('X-Rules-Ver')!==rulesVer||r.headers.get('X-Prefs-Ver')!==prefsVer){await initial();return;}
     const rows=await r.json();
     if(rows.length){const keys=new Set();for(const m of rows){if(m.id>lastId)lastId=m.id;if(addMsg(m)){fresh.add(m.id);keys.add(m.src);}}renderKeys(keys);}
