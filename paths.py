@@ -14,7 +14,7 @@
 Уважаются XDG_DATA_HOME / XDG_CONFIG_HOME / XDG_CACHE_HOME; для тестов всё можно
 увести в одну папку переменной <APP_ID>_HOME (MESSHUB_HOME).
 
-migrate_legacy() переносит файлы версий до 1.1.0, лежавшие рядом с кодом.
+migrate_legacy() переносит файлы первых сборок (до публикации), лежавшие рядом с кодом.
 """
 
 import os
@@ -113,7 +113,7 @@ def migrate_old_app_dirs(log=print):
 
 
 def move_legacy_file(name, dst, private=False):
-    """Файл версий до 1.1.0 рядом с кодом → новое место (если там ещё пусто)."""
+    """Файл первых сборок рядом с кодом → новое место (если там ещё пусто)."""
     src = os.path.join(HERE, name)
     if os.path.exists(src) and not os.path.exists(dst):
         os.makedirs(os.path.dirname(dst), exist_ok=True)
@@ -125,7 +125,7 @@ def move_legacy_file(name, dst, private=False):
 
 
 def migrate_legacy(log=print):
-    """До 1.1.0 база, состояние виджета и токен лежали рядом с кодом. Переносим:
+    """В первых сборках база, состояние виджета и токен лежали рядом с кодом. Переносим:
     базу — копией через backup API со сверкой числа записей (старая копия уходит
     в backups/, из папки с кодом файлы убираются), остальное — перемещением.
     Если в новом месте уже есть база — ничего не трогаем. Сначала — папки прежних имён."""

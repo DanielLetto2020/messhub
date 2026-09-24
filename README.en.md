@@ -156,7 +156,7 @@ You need Linux with the GNOME desktop (Ubuntu, Fedora, Debian and others). The a
    ```
 2. Download the app and run the installer:
    ```bash
-   git clone https://github.com/<owner>/messhub.git
+   git clone https://github.com/DanielLetto2020/messhub.git
    cd messhub
    ./install.sh
    ```

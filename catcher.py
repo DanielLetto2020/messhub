@@ -327,7 +327,7 @@ def migrate(conn):
 def migrate_after(conn):
     """ПОСЛЕ schema.sql: перенести правила из старой таблицы и разобрать заново
     сайт/почту у записей, сохранённых до появления этого разбора (site IS NULL)."""
-    for old in ("rules_v1", "rules_old"):          # rules_v1 — имя из версии 1.0.0
+    for old in ("rules_v1", "rules_old"):          # rules_v1 — имя из самых первых сборок (до публикации)
         if conn.execute("SELECT 1 FROM sqlite_master WHERE name = ?", (old,)).fetchone():
             new_cols = {r[1] for r in conn.execute("PRAGMA table_info(rules)")}
             common = [r[1] for r in conn.execute(f"PRAGMA table_info({old})") if r[1] in new_cols]

@@ -159,7 +159,7 @@ Telegram.
    ```
 2. Скачай программу и запусти установку:
    ```bash
-   git clone https://github.com/<владелец>/messhub.git
+   git clone https://github.com/DanielLetto2020/messhub.git
    cd messhub
    ./install.sh
    ```

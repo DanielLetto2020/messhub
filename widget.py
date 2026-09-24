@@ -484,7 +484,7 @@ def main():
     ap.add_argument("--version", action="version", version=version.version_line())
     args = ap.parse_args()
     log(version.version_line())
-    # до 1.1.0 место виджета лежало рядом с кодом; базу переносит сбор, а свой файл — сам виджет
+    # в первых сборках место виджета лежало рядом с кодом; базу переносит сбор, а свой файл — сам виджет
     if args.state == DEFAULT_STATE and paths.move_legacy_file("widget-state.json", DEFAULT_STATE):
         log(f"перенёс widget-state.json → {DEFAULT_STATE}")
 
