@@ -6,8 +6,9 @@ messhub для Windows 10/11 — одним процессом (так соби�
 
     messhub.exe                 запустить; второй запуск ничего не ломает — окно уже открыто
     messhub.exe --no-widget     только сбор и страница http://127.0.0.1:8765
-    messhub.exe --selftest      проверить сборку без окна и выйти (так её проверяет CI)
-    messhub.exe --capture-test  подождать своё тестовое уведомление Windows и выйти (CI)
+    messhub.exe --selftest [--out файл.json]           проверить сборку без окна и выйти (так её проверяет CI)
+    messhub.exe --capture-test ТЕКСТ [--out файл.json] дождаться тестового уведомления Windows (CI)
+У оконной сборки нет консоли — результат проверок пишется в --out (и в журнал messhub.log).
 
 Переносная версия: файл portable.txt рядом с messhub.exe — данные в папке data рядом с ним
 (а не в %LOCALAPPDATA%\\\\messhub), так что всё помещается на флешку.
@@ -68,7 +69,15 @@ def _message(text):
         print(text)
 
 
-def selftest(port):
+def _report(out, path):
+    text = json.dumps(out, ensure_ascii=False, indent=1)
+    print(text, flush=True)
+    if path:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+
+
+def selftest(port, out_path=None):
     """Без окна: сервер отвечает, страницы отдаются, WinRT и pywebview на месте. → код выхода."""
     import urllib.request
     import version
@@ -90,12 +99,13 @@ def selftest(port):
         out["pywebview_error"] = repr(e)
     out["winrt"] = wincatcher._winrt() is not None
     out["access"] = wincatcher.access_status()
-    print(json.dumps(out, ensure_ascii=False, indent=1), flush=True)
     ok = "error" not in out and out["api"].get("id") == "messhub" and out["widget_bytes"] > 1000
+    out["ok"] = ok
+    _report(out, out_path)
     return 0 if ok else 1
 
 
-def capture_test(db, marker, timeout=30):
+def capture_test(db, marker, out_path=None, timeout=40):
     """Дождаться, пока тестовое уведомление с текстом marker окажется в базе. → код выхода."""
     import sqlite3
     t = time.time()
@@ -106,13 +116,14 @@ def capture_test(db, marker, timeout=30):
                             (f"%{marker}%", f"%{marker}%")).fetchone()
             c.close()
             if row:
-                print(json.dumps({"captured": row}, ensure_ascii=False), flush=True)
+                import wincatcher
+                _report({"captured": row, "status": wincatcher.status}, out_path)
                 return 0
         except sqlite3.Error:
             pass
         time.sleep(1)
     import wincatcher
-    print(json.dumps({"captured": None, "status": wincatcher.status}, ensure_ascii=False), flush=True)
+    _report({"captured": None, "status": wincatcher.status, "access": wincatcher.access_status()}, out_path)
     return 2
 
 
@@ -127,6 +138,7 @@ def main():
     ap.add_argument("--no-widget", action="store_true", help="без окна доски")
     ap.add_argument("--selftest", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--capture-test", metavar="ТЕКСТ", help=argparse.SUPPRESS)
+    ap.add_argument("--out", help=argparse.SUPPRESS)
     ap.add_argument("--wait-port", action="store_true", help=argparse.SUPPRESS)   # перезапуск из настроек
     ap.add_argument("--version", action="version", version=version.version_line())
     a = ap.parse_args()
@@ -160,14 +172,14 @@ def main():
     httpd = ThreadingHTTPServer((host, a.port), serve.make_handler(a.db))
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     if a.selftest:
-        return selftest(a.port)
+        return selftest(a.port, a.out)
 
     if wincatcher.access_status() == "unspecified":       # первый запуск — Windows спросит разрешение
         wincatcher.request_access()
     stop = wincatcher.start(a.db, on_insert=collect.on_insert, skip=collect.make_skip(a.db))
     try:
         if a.capture_test:
-            return capture_test(a.db, a.capture_test)
+            return capture_test(a.db, a.capture_test, a.out)
         if a.no_widget:
             while True:
                 time.sleep(3600)

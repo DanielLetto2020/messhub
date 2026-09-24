@@ -1,0 +1,163 @@
+name: packages
+# Сборка и проверка пакетов. По тегу vX.Y.Z — ещё и выпуск на GitHub с этими файлами.
+#   Linux:   .deb, .rpm, .tar.gz — ставятся на чистый Ubuntu, проверяется команда и сервер
+#   Windows: messhub.exe → portable zip, установщик .bat, .msi — ставятся, запускаются, удаляются
+on:
+  push:
+    tags: ["v*"]
+    branches: [main, contrib]
+    paths:
+      - "win*.py"
+      - "messhub_win.py"
+      - "packaging/**"
+      - "tools/build*.py"
+      - "requirements-windows.txt"
+      - ".github/workflows/packages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # номер версии = число коммитов
+      - name: Номер версии совпадает с тегом
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: test "v$(python3 version.py)" = "${GITHUB_REF_NAME}" || { echo "тег ${GITHUB_REF_NAME}, а коммит — v$(python3 version.py)"; exit 1; }
+      - name: Инструменты сборки
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq rpm
+      - name: Сборка .deb, .rpm, .tar.gz
+        run: python3 tools/build.py linux
+      - name: Установка .deb на чистый Ubuntu и проверка
+        run: |
+          sudo apt-get install -y -qq ./dist/messhub_*_all.deb
+          test "$(messhub --version)" = "$(python3 version.py)"
+          python3 -c 'import gi; gi.require_version("WebKit2", "4.1"); from gi.repository import WebKit2'
+          python3 /usr/lib/messhub/serve.py --db /tmp/t.db --port 8799 & sleep 3
+          curl -fsS http://127.0.0.1:8799/api/version
+          sudo apt-get remove -y -qq messhub && test ! -e /usr/lib/messhub/serve.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/messhub*
+
+  windows:
+    runs-on: windows-latest
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Зависимости (pywebview, winrt, PyInstaller, WiX)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-windows.txt pyinstaller
+          dotnet tool install --global wix --version 5.0.2
+      - name: Тесты
+        run: python -m unittest discover -s tests -t tests -v
+      - name: Сборка exe, zip, bat, msi
+        run: python tools/build.py windows
+      - name: Проверка сборки (без окна)
+        run: |
+          $env:MESSHUB_HOME = "$env:RUNNER_TEMP\mh-selftest"
+          $p = Start-Process dist\win\messhub\messhub.exe -ArgumentList "--selftest","--out","$env:RUNNER_TEMP\selftest.json" -Wait -PassThru
+          Get-Content "$env:RUNNER_TEMP\selftest.json"
+          if ($p.ExitCode -ne 0) { exit 1 }
+      - name: Установка .msi, запуск, удаление
+        run: |
+          $msi = (Get-ChildItem dist\*.msi).FullName
+          $p = Start-Process msiexec -ArgumentList "/i `"$msi`" /qn /l*v `"$env:RUNNER_TEMP\msi.log`"" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\msi.log" -Tail 60; exit 1 }
+          $exe = "$env:LOCALAPPDATA\Programs\messhub\messhub.exe"
+          if (!(Test-Path $exe)) { "нет $exe"; exit 1 }
+          Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Run -Name messhub
+          $env:MESSHUB_HOME = "$env:RUNNER_TEMP\mh-msi"
+          $t = Start-Process $exe -ArgumentList "--selftest","--out","$env:RUNNER_TEMP\msi-selftest.json" -Wait -PassThru
+          Get-Content "$env:RUNNER_TEMP\msi-selftest.json"
+          if ($t.ExitCode -ne 0) { exit 1 }
+          $p = Start-Process msiexec -ArgumentList "/x `"$msi`" /qn" -Wait -PassThru
+          if (Test-Path $exe) { "не удалился"; exit 1 }
+      - name: Установка через .bat, удаление
+        run: |
+          $dir = "$env:RUNNER_TEMP\bat"; New-Item -ItemType Directory $dir | Out-Null
+          Copy-Item dist\*-windows-setup.bat, dist\*-windows-portable.zip $dir
+          $bat = (Get-ChildItem "$dir\*.bat").FullName
+          cmd /c "`"$bat`" /quiet"
+          $exe = "$env:LOCALAPPDATA\Programs\messhub\messhub.exe"
+          if (!(Test-Path $exe)) { "bat не поставил"; exit 1 }
+          if (Test-Path "$env:LOCALAPPDATA\Programs\messhub\portable.txt") { "в установленной копии остался portable.txt"; exit 1 }
+          cmd /c "`"$bat`" /uninstall"
+          if (Test-Path $exe) { "bat не удалил"; exit 1 }
+      - name: Чтение уведомлений Windows (проверка по возможности)
+        continue-on-error: true
+        shell: powershell       # Windows PowerShell 5.1: в нём есть типы WinRT для тестового уведомления
+        run: |
+          $exe = (Resolve-Path dist\win\messhub\messhub.exe).Path
+          # согласие на доступ к уведомлениям для программы без пакета (так его хранит Windows)
+          $key = "HKCU:\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\userNotificationListener\NonPackaged\" + ($exe -replace '\\','#')
+          New-Item -Path $key -Force | Out-Null
+          Set-ItemProperty -Path $key -Name Value -Value Allow
+          $env:MESSHUB_HOME = "$env:RUNNER_TEMP\mh-capture"
+          $marker = "messhub-ci-" + (Get-Random)
+          $p = Start-Process $exe -ArgumentList "--capture-test",$marker,"--out","$env:RUNNER_TEMP\capture.json" -PassThru
+          Start-Sleep -Seconds 6
+          [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+          $xml = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+          $t = $xml.GetElementsByTagName("text")
+          $t.Item(0).AppendChild($xml.CreateTextNode("messhub CI")) | Out-Null
+          $t.Item(1).AppendChild($xml.CreateTextNode($marker)) | Out-Null
+          $aumid = "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe"
+          [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($aumid).Show([Windows.UI.Notifications.ToastNotification]::new($xml))
+          $p.WaitForExit(60000) | Out-Null
+          Get-Content "$env:RUNNER_TEMP\capture.json" -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0) { "уведомление не поймано (на сервере CI доступа к уведомлениям может не быть)"; exit 1 }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            dist/*.zip
+            dist/*.bat
+            dist/*.msi
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Заметки к выпуску — раздел этой версии из CHANGELOG.md
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          python3 - "$V" > notes.md <<'EOF'
+          import re, sys
+          v = sys.argv[1]
+          s = open("CHANGELOG.md", encoding="utf-8").read()
+          m = re.search(r"## \[" + re.escape(v) + r"\].*?\n(.*?)(?=\n## )", s, re.S)
+          print(m.group(1).strip() if m else f"messhub {v}")
+          import os
+          print(f"\n---\nУстановка / Install: https://github.com/{os.environ['REPO']}#readme")
+          EOF
+          (cd dist && sha256sum messhub* > SHA256SUMS.txt)
+      - name: Выпуск на GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" --title "messhub ${GITHUB_REF_NAME#v}" --notes-file notes.md dist/*
+          fi
