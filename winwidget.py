@@ -187,7 +187,7 @@ def _visible(x, y, w, h):
     return False
 
 
-def run(base_url, state_path=paths.WIDGET_STATE, only=""):
+def run(base_url, state_path=paths.WIDGET_STATE, only="", open_settings=False):
     """Открыть доску и крутить окна до закрытия (главный поток). → когда окно закрыли."""
     import webview
     api = Api(base_url, state_path)
@@ -210,6 +210,8 @@ def run(base_url, state_path=paths.WIDGET_STATE, only=""):
         api._remember()
         api._win = None
     win.events.closed += closed
+    if open_settings:
+        api._open_settings("")
     storage = os.path.join(paths.CACHE_DIR, "webview")         # localStorage страницы (фокус, размытие)
     os.makedirs(storage, exist_ok=True)
     webview.start(gui="edgechromium", private_mode=False, storage_path=storage,

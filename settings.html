@@ -1358,6 +1358,12 @@ ru: [
 <p>Нужна локальная <b>Ollama</b> — это программа, которая запускает модели прямо на компьютере:</p>
 <pre>curl -fsSL https://ollama.com/install.sh | sh</pre>
 <p>Потом «Поиск → Умный поиск → Установить и включить»: скачается модель векторов (bge-m3, около 1,2 ГБ), и сообщения начнут индексироваться в фоне. Для ответов на вопросы нужна любая чат-модель в Ollama (<code>ollama pull …</code>). Данные с компьютера не уходят.</p>`],
+['Windows 10 и 11', `
+<p>На Windows messhub читает уведомления через системный «доступ к уведомлениям» — тот же, что у приложений-компаньонов для часов и телефонов.</p>
+<ol><li>При первом запуске Windows спросит, можно ли messhub читать уведомления, — разреши. Если отказался: <b>Параметры → Конфиденциальность и защита → Уведомления</b> (в Windows 10 — «Конфиденциальность → Уведомления») и включи доступ для messhub.</li>
+<li>Уведомление должно попадать в центр уведомлений Windows: если у приложения выключено «Показывать в центре уведомлений», messhub его не увидит.</li>
+<li>Telegram Desktop на Windows по умолчанию показывает системные уведомления; если у него включены «свои» окна — переключи в его настройках уведомлений.</li></ol>
+<p>Установка: <b>.msi</b> (меню «Пуск», запуск вместе с Windows), <b>setup.bat</b> (то же без установщика) или <b>переносной zip</b> — данные тогда лежат в папке data рядом с messhub.exe. Прозрачной доска на Windows не бывает, закрыть её — через панель задач. Windows 7 не поддерживается: там нет центра уведомлений.</p>`],
 ['Wayland', `
 <p>Программа полностью работает в сеансе X11 («GNOME on Xorg»). В Wayland приложение не может само ставить своё окно на место, держать его под другими окнами и переключать на чужие окна. Поэтому там: окно двигается и тянется мышкой, но место после перезапуска не восстанавливается; замок только фиксирует размер; «перейти в приложение» запускает его по ярлыку.</p>`],
 ['Клавиши и приёмы в виджете', `
@@ -1399,6 +1405,12 @@ en: [
 <p>You need a local <b>Ollama</b>:</p>
 <pre>curl -fsSL https://ollama.com/install.sh | sh</pre>
 <p>Then “Search → Smart search → Install and enable”: an embedding model is downloaded (bge-m3, about 1.2 GB) and messages are indexed in the background. Answers need any chat model in Ollama (<code>ollama pull …</code>). Nothing leaves the computer.</p>`],
+['Windows 10 and 11', `
+<p>On Windows messhub reads notifications through the system “notification access” — the same one companion apps for watches and phones use.</p>
+<ol><li>On first start Windows asks whether messhub may read notifications — allow it. If you declined: <b>Settings → Privacy &amp; security → Notifications</b> and turn access on for messhub.</li>
+<li>A notification must reach the Windows notification center: if an app has “Show notifications in notification center” off, messhub can't see it.</li>
+<li>Telegram Desktop uses native Windows notifications by default; if it shows its own pop-ups, switch that in its notification settings.</li></ol>
+<p>Install with the <b>.msi</b> (Start menu, starts with Windows), <b>setup.bat</b> (the same without an installer) or the <b>portable zip</b> — then data lives in the data folder next to messhub.exe. The board is not translucent on Windows; close it from the taskbar. Windows 7 is not supported: it has no notification center.</p>`],
 ['Wayland', `
 <p>The app fully works in an X11 session. On Wayland an app cannot place its own window, keep it below others or switch to other apps' windows. There the widget can be moved and resized by mouse, but its position isn't restored; the lock only fixes the size; “go to app” launches it via its launcher.</p>`],
 ['Keys and tricks in the widget', `

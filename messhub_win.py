@@ -6,6 +6,7 @@ messhub для Windows 10/11 — одним процессом (так соби�
 
     messhub.exe                 запустить; второй запуск ничего не ломает — окно уже открыто
     messhub.exe --no-widget     только сбор и страница http://127.0.0.1:8765
+    messhub.exe --settings      сразу открыть и окно настроек
     messhub.exe --selftest [--out файл.json]           проверить сборку без окна и выйти (так её проверяет CI)
     messhub.exe --capture-test ТЕКСТ [--out файл.json] дождаться тестового уведомления Windows (CI)
 У оконной сборки нет консоли — результат проверок пишется в --out (и в журнал messhub.log).
@@ -93,8 +94,12 @@ def selftest(port, out_path=None):
     except Exception as e:  # noqa: BLE001
         out["error"] = repr(e)
     try:
-        import webview
-        out["pywebview"] = getattr(webview, "__version__", "?")
+        import webview  # noqa: F401
+        from importlib.metadata import version as pkg_version
+        try:
+            out["pywebview"] = pkg_version("pywebview")
+        except Exception:  # noqa: BLE001 — в сборке PyInstaller метаданных пакета может не быть
+            out["pywebview"] = "есть"
     except Exception as e:  # noqa: BLE001
         out["pywebview_error"] = repr(e)
     out["winrt"] = wincatcher._winrt() is not None
@@ -136,6 +141,7 @@ def main():
     ap.add_argument("--db", default=paths.DB_PATH)
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-widget", action="store_true", help="без окна доски")
+    ap.add_argument("--settings", action="store_true", help="сразу открыть окно настроек")
     ap.add_argument("--selftest", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--capture-test", metavar="ТЕКСТ", help=argparse.SUPPRESS)
     ap.add_argument("--out", help=argparse.SUPPRESS)
@@ -184,7 +190,7 @@ def main():
             while True:
                 time.sleep(3600)
         import winwidget
-        winwidget.run(f"http://{host}:{a.port}")
+        winwidget.run(f"http://{host}:{a.port}", open_settings=a.settings)
     except KeyboardInterrupt:
         pass
     finally:

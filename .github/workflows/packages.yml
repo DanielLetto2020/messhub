@@ -101,10 +101,12 @@ jobs:
         shell: powershell       # Windows PowerShell 5.1: в нём есть типы WinRT для тестового уведомления
         run: |
           $exe = (Resolve-Path dist\win\messhub\messhub.exe).Path
-          # согласие на доступ к уведомлениям для программы без пакета (так его хранит Windows)
-          $key = "HKCU:\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\userNotificationListener\NonPackaged\" + ($exe -replace '\\','#')
-          New-Item -Path $key -Force | Out-Null
-          Set-ItemProperty -Path $key -Name Value -Value Allow
+          # согласие на доступ к уведомлениям: общее (HKLM и HKCU) и для программы без пакета — так его хранит Windows
+          $cs = "Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\userNotificationListener"
+          foreach ($k in @("HKLM:\$cs", "HKCU:\$cs", ("HKCU:\$cs\NonPackaged\" + ($exe -replace '\\','#')))) {
+            New-Item -Path $k -Force | Out-Null
+            Set-ItemProperty -Path $k -Name Value -Value Allow
+          }
           $env:MESSHUB_HOME = "$env:RUNNER_TEMP\mh-capture"
           $marker = "messhub-ci-" + (Get-Random)
           $p = Start-Process $exe -ArgumentList "--capture-test",$marker,"--out","$env:RUNNER_TEMP\capture.json" -PassThru
@@ -118,7 +120,27 @@ jobs:
           [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($aumid).Show([Windows.UI.Notifications.ToastNotification]::new($xml))
           $p.WaitForExit(60000) | Out-Null
           Get-Content "$env:RUNNER_TEMP\capture.json" -ErrorAction SilentlyContinue
-          if ($p.ExitCode -ne 0) { "уведомление не поймано (на сервере CI доступа к уведомлениям может не быть)"; exit 1 }
+          if ($p.ExitCode -ne 0) { "notification not captured (CI server may deny notification access)"; exit 1 }
+      - name: Снимок экрана — доска и настройки на демо-данных
+        continue-on-error: true
+        run: |
+          $env:MESSHUB_HOME = "$env:RUNNER_TEMP\mh-demo"
+          python tools/demo_data.py --home $env:MESSHUB_HOME --lang ru
+          $p = Start-Process dist\win\messhub\messhub.exe -ArgumentList "--settings" -PassThru
+          Start-Sleep -Seconds 20
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          New-Item -ItemType Directory dist\ci | Out-Null
+          $bmp.Save("dist\ci\screen-ru.png")
+          "screen: $($b.Width)x$($b.Height)"
+          Stop-Process -Id $p.Id -Force
+          Copy-Item "$env:MESSHUB_HOME\share\messhub.log" dist\ci\ -ErrorAction SilentlyContinue
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-ci-check
+          path: dist/ci
       - uses: actions/upload-artifact@v4
         with:
           name: windows
