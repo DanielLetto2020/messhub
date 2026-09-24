@@ -8,7 +8,8 @@
     MESSHUB_HOME=/tmp/messhub-demo python3 app/serve.py --db /tmp/messhub-demo/share/messages.db --port 8799
 
 Создаёт в --home (как MESSHUB_HOME) базу, настройки, правила, профили, два почтовых ящика
-(несуществующие адреса example.com), ключ приёма событий и резервную копию. Живые данные
+(несуществующие адреса example.com), ключ приёма событий, резервную копию, карточки
+тематических колонок (контейнеры, службы, команды) и журнал программы. Живые данные
 программы не трогает: всё, что пишется, — внутри --home. Имена, чаты и тексты придуманы;
 настоящие уведомления сюда класть нельзя (см. CONTRIBUTING.md, «Что можно публиковать»).
 """
@@ -42,7 +43,6 @@ RECENT = {
         ("mail-imap", "Работа", "Бухгалтерия\nРасчётный листок за сентябрь\nДобрый день! Во вложении расчётный листок.", 70, {"has_media": 1}),
         ("mail-imap", "Личная", "Интернет-провайдер\nСчёт за октябрь\nСумма к оплате — 650 ₽, срок до 10 числа.", 300, {}),
         ("CI", "CI: main", "Сборка #413 прошла за 6 мин", 15, {}),
-        ("Терминал", "make release", "готово за 4 мин 12 с", 8, {}),
     ],
     "en": [
         ("eXpress", "Dev team", "Emma Wilson: Alex, could you look at the review before lunch?", 12, {}),
@@ -59,7 +59,68 @@ RECENT = {
         ("mail-imap", "Work", "Payroll\nYour September payslip\nHello! Your payslip is attached.", 70, {"has_media": 1}),
         ("mail-imap", "Personal", "Internet provider\nOctober invoice\nAmount due: $12, due by the 10th.", 300, {}),
         ("CI", "CI: main", "Build #413 passed in 6 min", 15, {}),
-        ("Terminal", "make release", "done in 4m 12s", 8, {}),
+    ],
+}
+
+# тематические колонки: (колонка, чат, отправитель, текст, минут назад, хвост лога, ключ, «починилось» минут назад)
+SHOP_LOG = """2026-09-24 18:41:07 INFO  shop-api: listening on :8080
+2026-09-24 18:41:09 INFO  connecting to postgres://shop-db:5432/shop
+2026-09-24 18:41:39 ERROR connection to shop-db timed out after 30s
+2026-09-24 18:41:39 FATAL cannot start without a database, exiting"""
+BACKUP_LOG = """2026-09-24T03:00:01 backup-nightly[4120]: rsync -a /srv/photos nas:/backup/photos
+2026-09-24T03:12:44 backup-nightly[4120]: rsync: write failed on "/backup/photos": No space left on device (28)
+2026-09-24T03:12:44 backup-nightly[4120]: rsync error: error in file IO (code 11)
+2026-09-24T03:12:44 systemd[1]: backup-nightly.service: Main process exited, status=23"""
+BUILD_LOG = """src/cart/Total.vue:41:7
+  error  'discount' is not defined  no-undef
+✖ 1 problem (1 error, 0 warnings)
+ERROR: build failed"""
+THEMED = {
+    "ru": [
+        ("containers", "shop-api", "shop", "упал с кодом 1 · 3-й раз за 10 минут", 3, SHOP_LOG, "container:podman:shop-api", None, 2),
+        ("containers", "shop-db", "shop", "healthcheck: нездоров (unhealthy)", 9, "", "container:podman:shop-db", 5, 2),
+        ("services", "backup-nightly.service", "системная служба",
+         "служба завершилась с кодом 23\nНочная копия фотографий на NAS", 400, BACKUP_LOG, "unit:system:backup-nightly.service", None, 2),
+        ("commands", "make release", "shop", "готово за 4 мин 12 с", 8, "", "", None, 1),
+        ("commands", "npm run build", "shop-web", "ошибка (код 1) через 38 с", 30, BUILD_LOG, "cmd:~/shop-web\nnpm run build", 14, 2),
+    ],
+    "en": [
+        ("containers", "shop-api", "shop", "crashed with code 1 · 3 times in 10 minutes", 3, SHOP_LOG, "container:podman:shop-api", None, 2),
+        ("containers", "shop-db", "shop", "healthcheck: unhealthy", 9, "", "container:podman:shop-db", 5, 2),
+        ("services", "backup-nightly.service", "system service",
+         "service exited with code 23\nNightly photo backup to the NAS", 400, BACKUP_LOG, "unit:system:backup-nightly.service", None, 2),
+        ("commands", "make release", "shop", "done in 4m 12s", 8, "", "", None, 1),
+        ("commands", "npm run build", "shop-web", "failed (code 1) after 38s", 30, BUILD_LOG, "cmd:~/shop-web\nnpm run build", 14, 2),
+    ],
+}
+
+# журнал программы (раздел «Логи»): (минут назад, уровень, процесс, текст)
+LOGS = {
+    "ru": [
+        (1440, "info", "collect", "messhub — сбор → ~/.local/share/messhub/messages.db"),
+        (1439, "info", "collect", "Контейнеры: слушаю события podman"),
+        (1439, "error", "collect", "Контейнеры: docker events завершился: permission denied while trying to connect to the Docker daemon socket"),
+        (1438, "info", "collect", "Службы: слежу за упавшими службами"),
+        (1437, "info", "widget", "[widget] messhub — окно доски"),
+        (720, "info", "collect", "Резервная копия: messages-auto.db"),
+        (95, "warn", "collect", "Почта «Личная»: сервер не отвечает (таймаут), попробую через 2 мин"),
+        (93, "info", "collect", "Почта «Личная»: новых писем 1"),
+        (70, "info", "collect", "Почта «Работа»: новых писем 1"),
+        (12, "info", "collect", "Правила для #412: highlight"),
+        (2, "info", "collect", "Правила для #431: pin"),
+    ],
+    "en": [
+        (1440, "info", "collect", "messhub — collector → ~/.local/share/messhub/messages.db"),
+        (1439, "info", "collect", "Containers: listening to podman events"),
+        (1439, "error", "collect", "Containers: docker events exited: permission denied while trying to connect to the Docker daemon socket"),
+        (1438, "info", "collect", "Services: watching for failed services"),
+        (1437, "info", "widget", "[widget] messhub — board window"),
+        (720, "info", "collect", "Backup: messages-auto.db"),
+        (95, "warn", "collect", "Mail “Personal”: server not responding (timeout), retrying in 2 min"),
+        (93, "info", "collect", "Mail “Personal”: 1 new message"),
+        (70, "info", "collect", "Mail “Work”: 1 new message"),
+        (12, "info", "collect", "Rules for #412: highlight"),
+        (2, "info", "collect", "Rules for #431: pin"),
     ],
 }
 
@@ -91,14 +152,12 @@ HISTORY = {
 }
 
 L10N = {
-    "ru": {"mentions": ["Алексей", "Лёша"], "names": {"other:ci": {"name": "Сборки", "ico": "🔔"},
-                                                   "other:терминал": {"name": "Терминал", "ico": "⌨️"}},
+    "ru": {"mentions": ["Алексей", "Лёша"], "names": {"other:ci": {"name": "Сборки", "ico": "🔔"}},
            "profiles": ("Работа", "Дом"), "flood": "Флуд", "boss": "Олег Никитин", "lead": "Ирина Соколова",
            "club": "Книжный клуб", "water": "отключат", "urgent": "срочно", "fail": "упала",
            "accounts": [("Работа", "alex@example.com", "imap.example.com"),
                         ("Личная", "alex.home@example.org", "imap.example.org")]},
-    "en": {"mentions": ["Alex"], "names": {"other:ci": {"name": "Builds", "ico": "🔔"},
-                                          "other:terminal": {"name": "Terminal", "ico": "⌨️"}},
+    "en": {"mentions": ["Alex"], "names": {"other:ci": {"name": "Builds", "ico": "🔔"}},
            "profiles": ("Work", "Home"), "flood": "Random", "boss": "Oliver Grant", "lead": "Emma Wilson",
            "club": "Book club", "water": "off tomorrow", "urgent": "urgent", "fail": "failed",
            "accounts": [("Work", "alex@example.com", "imap.example.com"),
@@ -196,6 +255,25 @@ def build(home, lang):
         put(app, summary, body, now - timedelta(minutes=ago), 0, extra)
     conn.commit()
 
+    # тематические колонки: контейнеры, службы, команды (одна карточка уже «починилась»)
+    import events
+    for col, chat, sender, text, ago, details, key, fixed, urg in THEMED[lang]:
+        mid = events.emit(conn, col, chat, text, sender=sender, details=details, key=key, urgency=urg)
+        when = now - timedelta(minutes=ago)
+        conn.execute("UPDATE messages SET received_at = ?, event_ts = ?, event_iso = ?, resolved_at = ? WHERE id = ?",
+                     (catcher.msk_time(ago / 60), when.timestamp(), when.isoformat(timespec="seconds"),
+                      catcher.msk_time(fixed / 60) if fixed is not None else None, mid))
+    conn.commit()
+
+    # журнал программы: несколько записей за сутки
+    os.makedirs(paths.LOG_DIR, exist_ok=True)
+    for src in ("collect", "widget"):
+        with open(os.path.join(paths.LOG_DIR, f"{src}.log"), "w", encoding="utf-8") as f:
+            for ago, lvl, s_, text in LOGS[lang]:
+                if s_ == src:
+                    t_ = (now - timedelta(minutes=ago)).strftime("%Y-%m-%d %H:%M:%S")
+                    f.write(json.dumps({"t": t_, "lvl": lvl, "src": src, "msg": text}, ensure_ascii=False) + "\n")
+
     # правила «как в почте» — вид в настройках и подсветка на доске
     def rule(**r):
         rules.save_rule(conn, rules.clean_rule(r))
@@ -213,7 +291,10 @@ def build(home, lang):
 
     rules.set_prefs(conn, {
         "language": lang, "mentions": t["mentions"], "source_names": t["names"],
-        "col_order": ["express", "telegram", "mail", "max", "whatsapp"],
+        "col_order": ["express", "telegram", "mail", "max", "whatsapp", "containers", "services", "commands"],
+        # общие снимки — без тематических колонок; для снимка ИТ-колонок screenshots.py скрывает остальные
+        "hidden_cols": ["containers", "services", "commands"],
+        "themed": {"containers": {"enabled": True}, "services": {"enabled": True}, "commands": {"enabled": True}},
         "profiles": [{"id": "work", "name": t["profiles"][0],
                       "schedule": [{"days": [0, 1, 2, 3, 4], "from": "09:00", "to": "18:00"}]},
                      {"id": "home", "name": t["profiles"][1],

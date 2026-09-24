@@ -25,6 +25,12 @@
     POST /api/restore   {ids} — вернуть в виджет (непрочитано, не отложено)
     POST /api/pin       {ids, pinned}      POST /api/snooze {ids, preset: 1h|3h|evening|tomorrow}
     POST /api/ingest    событие от скрипта/сервиса (ключ в Authorization: Bearer …), см. ingest.py
+    POST /api/event     итог команды от messhub run (run.py), только с этого компьютера
+
+  Тематические колонки и журнал:
+    GET /api/themed     настройки и состояние колонок «Контейнеры», «Службы», «Команды»
+    GET /api/logs       журнал программы: level=all|warn|error, q, src, limit (applog.py)
+    POST /api/logs/clear | /api/logs/export (в «Загрузки», домашняя папка → ~) | /api/logs/client (ошибки JS)
 
   Настройки: /api/settings/sources|source|rules, /api/rules(/delete), /api/source-mode,
     /api/prefs, /api/stats, /api/data, /api/purge, /api/export, /api/config/export|import,
@@ -33,8 +39,11 @@
     /api/diag, /api/autostart, /api/restart, /api/version, /api/update (новая версия на GitHub),
     /api/mail (ящики IMAP, см. mail.py) + /api/mail/channel|account|delete|test|check
 
-Все POST — только с Content-Type: application/json (чужая страница в браузере не
-пришлёт такой запрос на 127.0.0.1 без CORS-preflight, а на OPTIONS мы не отвечаем);
+Защита от чужих страниц в браузере: сервер отвечает, только если в Host стоит localhost или
+IP-адрес (так не пройдёт DNS rebinding — подмена имени сайта на 127.0.0.1), не отвечает на
+запросы с Sec-Fetch-Site: cross-site и с чужим Origin. Все POST — только с Content-Type:
+application/json (чужая страница не пришлёт такой запрос без CORS-preflight, а на OPTIONS
+мы не отвечаем);
 ошибки — {"error": "текст для человека"} на языке из настроек. Каждый ответ несёт
 X-App-Version — по нему виджет замечает обновление программы.
 
@@ -50,10 +59,12 @@ X-App-Version — по нему виджет замечает обновлени
 
 import argparse
 import csv
+import ipaddress
 import json
 import os
 import sqlite3
 import subprocess
+import sys
 import threading
 import time
 from datetime import datetime, timedelta
@@ -61,10 +72,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs, unquote
 
 import actions
+import applog
 import avatars
 import backup
 import catcher
+import containers
 import diag
+import events
 import i18n
 import ingest
 import mail
@@ -72,6 +86,7 @@ import paths
 import rag
 import report
 import rules
+import services
 import stats
 import updates
 import version
@@ -90,7 +105,8 @@ AUTO_READ_HOURS = 24      # лежит в БД дольше — считаетс
 TS = "%Y-%m-%d %H:%M:%S"
 
 FIELDS = ("id", "app", "site", "chat", "sender", "is_bot", "message", "has_media",
-          "urgency", "event_iso", "received_at", "is_read", "pinned", "snooze_until", "avatar")
+          "urgency", "event_iso", "received_at", "is_read", "pinned", "snooze_until", "avatar",
+          "resolved_at", "details")
 
 
 def open_db(path):
@@ -293,7 +309,9 @@ def visible_ids(db_path):
         return {"max_id": 0, "ids": []}
     max_id = read(db_path, lambda c: c.execute("SELECT COALESCE(MAX(id), 0) FROM messages").fetchone()[0])
     rows, _, _ = query(db_path, limit=10 ** 6, unread=True, widget=True, upto=max_id)
-    return {"max_id": max_id, "ids": [r["id"] for r in rows]}
+    # «починилось» у карточек тематических колонок — виджет перерисует их на месте
+    return {"max_id": max_id, "ids": [r["id"] for r in rows],
+            "resolved": {str(r["id"]): r["resolved_at"] for r in rows if r.get("resolved_at")}}
 
 
 def column_state(db_path, src):
@@ -556,7 +574,65 @@ def export_config(db_path):
     return path, len(data["rules"])
 
 
+def themed_info(db_path):
+    """Настройки и состояние тематических колонок — для раздела настроек."""
+    prefs = read(db_path, rules.get_prefs)
+    run_cmd = (f'"{os.path.join(os.path.dirname(os.path.abspath(sys.executable)), "messhub-run.exe")}" -- …'
+               if getattr(sys, "frozen", False) else
+               "messhub run -- …" if HERE.startswith("/usr/lib/") else f"python3 {os.path.join(HERE, 'run.py')} -- …")
+    hook = "" if os.name == "nt" else (
+        "source /usr/lib/messhub/hooks/long-command.sh" if HERE.startswith("/usr/lib/")
+        else f"source {os.path.join(HERE, 'hooks', 'long-command.sh')}")
+    demo = os.environ.get(f"{paths.ENV_PREFIX}_THEMED_DEMO") == "1"      # снимки экрана: без настоящих движков
+    cont = ({"podman": {"found": True, "running": True, "error": "", "events": 128},
+             "docker": {"found": True, "running": False, "events": 0,
+                        "error": containers.human_error("docker", "permission denied")}} if demo
+            else containers.public_status())
+    serv = (dict(services.public_status(), found=True, running=True, error="", failed=1) if demo
+            else services.public_status())
+    return {"prefs": rules.themed(prefs), "platform": "windows" if os.name == "nt" else "linux",
+            "containers": cont, "services": serv, "commands": {"run": run_cmd, "hook": hook},
+            "log_lines": list(rules.LOG_LINES)}
+
+
+def export_logs(level="all", q=""):
+    rows = applog.query(level, q, limit=10 ** 6)["rows"]
+    rows.reverse()
+    path = os.path.join(downloads_dir(), f"{version.APP_ID}-log-{_stamp()}.txt")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(f"{version.version_line()}\n\n" + applog.mask(applog.as_text(rows)) + "\n")
+    return path, len(rows)
+
+
 # ── HTTP ────────────────────────────────────────────────────────────────────
+
+def host_allowed(host):
+    """Host: localhost или IP-адрес (с портом или без). Имя сайта — нет: это DNS rebinding."""
+    h = (host or "").strip().lower()
+    if not h:
+        return False
+    if h.startswith("["):                                   # [::1]:8765
+        h = h[1:].split("]", 1)[0]
+    elif h.count(":") == 1:
+        h = h.split(":", 1)[0]
+    if h in ("localhost", "localhost."):
+        return True
+    try:
+        ipaddress.ip_address(h)
+        return True
+    except ValueError:
+        return False
+
+
+def origin_allowed(origin, host):
+    """Origin страницы, если он есть, должен совпадать с самим сервером."""
+    if not origin:
+        return True
+    o = origin.strip().lower()
+    return o in (f"http://{(host or '').strip().lower()}",) or \
+        any(o == f"http://{name}:{port}" for name in ("127.0.0.1", "localhost", "[::1]")
+            for port in [(host or "").rsplit(":", 1)[-1]] if port.isdigit())
+
 
 class BadRequest(ValueError):
     pass
@@ -611,7 +687,18 @@ def make_handler(db_path):
             except OSError:
                 self._send(404, b"not found", "text/plain; charset=utf-8")
 
+        def _guard(self):
+            """Чужие страницы в браузере сюда не ходят (см. докстринг модуля). → можно ли отвечать."""
+            host = self.headers.get("Host", "")
+            if not host_allowed(host) or self.headers.get("Sec-Fetch-Site", "") == "cross-site" \
+                    or not origin_allowed(self.headers.get("Origin"), host):
+                self._send(403, b"forbidden", "text/plain; charset=utf-8")
+                return False
+            return True
+
         def do_GET(self):
+            if not self._guard():
+                return
             parsed = urlparse(self.path)
             qs = parse_qs(parsed.query)
             arg = lambda k: (qs.get(k, [""])[0] or "").strip()  # noqa: E731
@@ -684,6 +771,11 @@ def make_handler(db_path):
                 elif p == "/api/ingest/config":
                     self._json({"token": ingest.load_token(),
                                 "bind": read(db_path, lambda c: rules.get_prefs(c)["ingest_bind"])})
+                elif p == "/api/themed":
+                    self._json(themed_info(db_path))
+                elif p == "/api/logs":
+                    self._json(applog.query(arg("level") or "all", arg("q"), arg("src"),
+                                            max(1, min(5000, num("limit", 1000)))))
                 elif p == "/api/diag":
                     self._json(diag.checks(db_path))
                 elif p == "/api/autostart":
@@ -694,6 +786,8 @@ def make_handler(db_path):
                 self._json({"error": str(e)}, 503)
 
         def do_POST(self):
+            if not self._guard():
+                return
             p = urlparse(self.path).path
             self._lang()
             if not (self.headers.get("Content-Type") or "").startswith("application/json"):
@@ -732,7 +826,18 @@ def make_handler(db_path):
                 n, until = write(db_path, set_snooze, _ids(payload), payload["preset"])
                 return {"updated": n, "until": until}
             if p == "/api/ingest":
-                return {"id": ingest.accept(db_path, payload)}
+                return ingest.accept_api(db_path, payload)
+            if p == "/api/event":
+                if payload.get("kind") != "command":
+                    raise BadRequest(L("Неизвестное событие", "Unknown event"))
+                return events.command(db_path, payload)
+            if p == "/api/logs/clear":
+                return {"cleared": applog.clear()}
+            if p == "/api/logs/export":
+                path, n = export_logs(str(payload.get("level") or "all"), str(payload.get("q") or ""))
+                return {"path": path, "rows": n}
+            if p == "/api/logs/client":
+                return {"ok": applog.client_error(payload)}
             if p == "/api/close-column":
                 return close_column(db_path, str(payload.get("src") or ""))
             if p == "/api/reopen-column":
@@ -847,7 +952,11 @@ def prepare(db_path):
         paths.migrate_legacy()
     else:
         os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
-    catcher.init_db(db_path).close()
+    conn = catcher.init_db(db_path)
+    try:
+        events.migrate(conn)
+    finally:
+        conn.close()
 
 
 def main():

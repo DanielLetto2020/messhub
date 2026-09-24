@@ -26,6 +26,9 @@ docs/screens/   картинки для README (только вымышленн�
 | `mail.py` | почта напрямую из ящиков (IMAP) |
 | `updates.py` | есть ли новая версия (раз в 12 ч спрашивает GitHub; выключается в настройках) |
 | `rag.py` | необязательный умный поиск через Ollama |
+| `events.py` | тематические колонки: карточки и «проблема → починилось» (ключ события), итог команд |
+| `containers.py`, `services.py`, `run.py` | колонки «Контейнеры» (события docker/podman), «Службы» (systemd, журнал событий Windows), обёртка `messhub run` |
+| `applog.py` | журнал программы для раздела «Логи»: вывод процессов, необработанные ошибки, ошибки страниц |
 | `backup.py`, `report.py`, `stats.py`, `ingest.py`, `diag.py`, `avatars.py` | копии, недельный отчёт, статистика, приём событий, самодиагностика, аватары |
 | `paths.py`, `version.py` | где лежат данные, имя, автор и номер версии |
 | `wincatcher.py`, `winwidget.py`, `messhub_win.py` | Windows 10/11: чтение уведомлений (UserNotificationListener), окно на WebView2, всё одним процессом `messhub.exe` |

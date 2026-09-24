@@ -39,6 +39,11 @@ jobs:
           python3 /usr/lib/messhub/serve.py --db /tmp/t.db --port 8799 & sleep 3
           curl -fsS http://127.0.0.1:8799/api/version
           for p in / /widget /settings /i18n.js; do curl -fsS -o /dev/null "http://127.0.0.1:8799$p" || { echo "нет страницы $p"; exit 1; }; done
+          # чужое имя сайта в Host (DNS rebinding) сервер не пускает
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.example:8799' http://127.0.0.1:8799/api/version)" = 403
+          # messhub run: команда выполняется, код выхода сохраняется
+          set +e; MESSHUB_PORT=8799 messhub run -- sh -c 'echo hi; exit 4'; code=$?; set -e
+          test "$code" = 4 || { echo "messhub run вернул $code"; exit 1; }
           sudo apt-get remove -y -qq messhub && test ! -e /usr/lib/messhub/serve.py
       - uses: actions/upload-artifact@v4
         with:
@@ -71,6 +76,13 @@ jobs:
           $p = Start-Process dist\win\messhub\messhub.exe -ArgumentList "--selftest","--out","$env:RUNNER_TEMP\selftest.json" -Wait -PassThru
           Get-Content "$env:RUNNER_TEMP\selftest.json"
           if ($p.ExitCode -ne 0) { exit 1 }
+          Get-Content "$env:MESSHUB_HOME\share\logs\collect.log" -ErrorAction SilentlyContinue
+      - name: "Обёртка messhub-run.exe: код выхода команды сохраняется"
+        run: |
+          $env:MESSHUB_PORT = "9"
+          & dist\win\messhub\messhub-run.exe -- cmd /c "echo hello & exit 3"
+          if ($LASTEXITCODE -ne 3) { "код выхода $LASTEXITCODE, а должен быть 3"; exit 1 }
+          exit 0
       - name: Установка .msi, запуск, удаление
         run: |
           $msi = (Get-ChildItem dist\*.msi).FullName
@@ -136,7 +148,7 @@ jobs:
           $bmp.Save("dist\ci\screen-ru.png")
           "screen: $($b.Width)x$($b.Height)"
           Stop-Process -Id $p.Id -Force
-          Copy-Item "$env:MESSHUB_HOME\share\messhub.log" dist\ci\ -ErrorAction SilentlyContinue
+          Copy-Item "$env:MESSHUB_HOME\share\logs\*.log" dist\ci\ -ErrorAction SilentlyContinue
       - uses: actions/upload-artifact@v4
         with:
           name: windows-ci-check

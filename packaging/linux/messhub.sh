@@ -4,6 +4,7 @@
 #   messhub settings   открыть настройки в браузере
 #   messhub stop       остановить сбор и доску
 #   messhub autostart off   не запускать при входе в систему (on — снова запускать)
+#   messhub run -- make build   выполнить команду, итог — в колонку «Команды» (код выхода сохраняется)
 #   messhub --version
 APP=/usr/lib/messhub
 PY=/usr/bin/python3
@@ -12,7 +13,8 @@ has_user_systemd() { command -v systemctl >/dev/null 2>&1 && systemctl --user sh
 
 case "${1:-}" in
   -V|--version) exec "$PY" "$APP/version.py" ;;
-  -h|--help) sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  -h|--help) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  run) shift; exec "$PY" "$APP/run.py" "$@" ;;
   settings) exec xdg-open http://127.0.0.1:8765/settings ;;
   stop) exec systemctl --user stop $UNITS ;;
   autostart)

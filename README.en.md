@@ -39,6 +39,9 @@ the screen anyway.
 - **You'd rather not hand your messages to a service.** Everything is stored and processed on your
   computer. Only what you turn on yourself goes out (for example, forwarding important messages to
   Telegram).
+- **For people in IT: a container, a service or a build failed.** Themed columns catch Docker and
+  Podman crashes, failed services and command results, with the log tail right on the card. When
+  things work again, the card marks itself "fixed".
 
 ## What it looks like
 
@@ -73,6 +76,26 @@ message. You can also hide it for good.
 **Light theme**, opacity and text size - in the settings.
 
 ![Light theme](docs/screens/en/widget-light.png)
+
+### Themed columns for IT
+
+Turned on in settings, each one separately; all are off by default. They stay out of the way for
+everyday users and save a trip to the terminal for people who work with code and servers.
+
+- **Containers** - Docker and Podman: a container crashed, ran out of memory, turned unhealthy or
+  keeps restarting. The app only listens to engine events; it never starts or stops anything.
+- **Services** - failed systemd services (a backup timer did not run, a service did not start); on
+  Windows, services from the event log.
+- **Commands** - `messhub run -- make build`: the command runs as usual, and its result with the exit
+  code and output tail lands on the board. A successful rerun clears the previous failure.
+
+When the problem is gone, the card fades and gets "✓ fixed". The log tail is collapsed under the card
+and stays with you: a Telegram forwarding rule sends only the card text. Your own scripts can do the
+same through Event intake (the `key` field and `status: "resolved"`).
+
+![Themed columns on the board](docs/screens/en/widget-it.png)
+
+![Themed column settings](docs/screens/en/settings-themed.png)
 
 ### Settings
 
@@ -144,6 +167,12 @@ over the network, with a key.
 **System** - the app checks itself and tells you what to fix. Autostart at login is here too.
 
 ![System](docs/screens/en/settings-system.png)
+
+**Logs** - the app's own log: start-up, errors, background jobs. Filter by level, search, clear and
+export to a file; the export replaces your home folder with "~", so you can attach it to a bug
+report. Message texts are never written to the log.
+
+![Logs](docs/screens/en/settings-logs.png)
 
 **Help** - instructions: getting Telegram to cooperate, sending your own events, Wayland notes.
 
@@ -247,6 +276,10 @@ keep the sender name and message preview on.
 - Only what you turn on leaves the computer: forwarding to Telegram, the weekly report and checking
   your own mailboxes (read-only). Smart search uses an AI model on your own computer.
 - Passwords and keys are stored in files only you can read and are never sent anywhere.
+- The board and settings pages are open only to this computer, and other websites in your browser
+  can't reach them: the server answers only its own pages.
+- Themed columns and the app log are stored locally too. Log tails are never forwarded, not even
+  by a "Forward to Telegram" rule.
 - Every 12 hours the app asks GitHub for the latest version number to show "a new version is out".
   Nothing about you is sent; turn it off under Settings → System.
 

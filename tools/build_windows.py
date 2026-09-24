@@ -6,7 +6,7 @@
 и WiX Toolset 5 (dotnet tool install --global wix) для .msi.
 
 Что получается в dist/:
-  messhub-<v>-windows-portable.zip   папка messhub с messhub.exe; данные — рядом (portable.txt)
+  messhub-<v>-windows-portable.zip   папка messhub с messhub.exe и messhub-run.exe; данные — рядом (portable.txt)
   messhub-<v>-windows-setup.bat      установка для себя без прав администратора (скачает zip)
   messhub-<v>-windows-x64.msi        обычный установщик: меню «Пуск», запуск вместе с Windows
 Зависимости — packaging/windows/requirements.txt.
@@ -41,6 +41,13 @@ def pyinstaller(src, v):
     app = os.path.join(DIST, "win", "messhub")
     if not os.path.exists(os.path.join(app, "messhub.exe")):
         raise SystemExit("PyInstaller не собрал messhub.exe")
+    # messhub-run.exe — консольная обёртка для колонки «Команды» (run.py, только stdlib), одним файлом
+    subprocess.run([sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onefile", "--console",
+                    "--name", "messhub-run", "--icon", os.path.join(src, "icons", "messhub.ico"),
+                    "--distpath", app, "--workpath", os.path.join(src, "_build_run"),
+                    "--specpath", os.path.join(src, "_build_run"), os.path.join(src, "run.py")], check=True, cwd=src)
+    if not os.path.exists(os.path.join(app, "messhub-run.exe")):
+        raise SystemExit("PyInstaller не собрал messhub-run.exe")
     return app
 
 

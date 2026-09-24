@@ -23,7 +23,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PAGES = ("app/web/widget.html", "app/web/settings.html")
-DICTS = ("ACT", "COLOR_NAMES", "HINTS", "MAIL_PRESETS", "SEC_NAMES", "ACT_WORD")
+DICTS = ("ACT", "COLOR_NAMES", "HINTS", "MAIL_PRESETS", "SEC_NAMES", "ACT_WORD", "LOG_LVL", "LOG_SRC", "LOG_FILTERS")
 LISTS = ("DOW", "DOW_LONG")
 KEY_RE = re.compile(r"(?:^|[{,\s])'((?:[^'\\]|\\.)*)'\s*:", re.M)
 

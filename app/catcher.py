@@ -301,7 +301,7 @@ def telegram_should_skip(rec):
 
 NEW_COLUMNS = (("is_read", "INTEGER DEFAULT 0"), ("read_at", "TEXT"),
                ("pinned", "INTEGER DEFAULT 0"), ("snooze_until", "TEXT"), ("site", "TEXT"),
-               ("avatar", "TEXT"))
+               ("avatar", "TEXT"), ("event_key", "TEXT"), ("resolved_at", "TEXT"), ("details", "TEXT"))
 RULES_NEWEST = ("text", "profile")    # колонки последней версии таблицы rules
 
 
@@ -360,12 +360,13 @@ def insert(conn, rec):
     cur = conn.execute(
         """INSERT INTO messages
            (app, chat, sender, is_bot, message, notification_id, urgency,
-            has_media, event_ts, event_iso, received_at, raw_summary, raw_body, site, avatar)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            has_media, event_ts, event_iso, received_at, raw_summary, raw_body, site, avatar,
+            event_key, details)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (rec["app"], rec["chat"], rec["sender"], rec["is_bot"], rec["message"],
          rec["notification_id"], rec["urgency"], rec["has_media"],
          rec["event_ts"], rec["event_iso"], msk_time(), rec["raw_summary"], rec["raw_body"],
-         rec.get("site", ""), rec.get("avatar")),
+         rec.get("site", ""), rec.get("avatar"), rec.get("event_key") or None, rec.get("details") or None),
     )
     conn.commit()
     return cur.lastrowid

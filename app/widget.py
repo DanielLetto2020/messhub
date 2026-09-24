@@ -63,6 +63,7 @@ try:
 except (ValueError, ImportError):
     Wnck = None
 
+import applog  # noqa: E402
 import paths  # noqa: E402
 import version  # noqa: E402
 
@@ -483,6 +484,7 @@ def main():
                     help="показывать только эти колонки (ключи источников через запятую: express,telegram)")
     ap.add_argument("--version", action="version", version=version.version_line())
     args = ap.parse_args()
+    applog.setup("widget", stderr_is_info=True)       # настройки → «Логи»
     log(version.version_line())
     # в первых сборках место виджета лежало рядом с кодом; базу переносит сбор, а свой файл — сам виджет
     if args.state == DEFAULT_STATE and paths.move_legacy_file("widget-state.json", DEFAULT_STATE):

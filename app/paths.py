@@ -5,6 +5,7 @@
 
     ~/.local/share/<APP_ID>/messages.db        база (переписка — приватные данные)
     ~/.local/share/<APP_ID>/backups/           резервные копии базы
+    ~/.local/share/<APP_ID>/logs/              журнал работы программы (раздел «Логи»)
     ~/.config/<APP_ID>/widget-state.json       место и размер виджета
     ~/.config/<APP_ID>/telegram-forward.json   токен бота для пересылки (права 600)
     ~/.config/<APP_ID>/ingest.json             ключ приёма событий по HTTP (права 600)
@@ -54,6 +55,7 @@ CACHE_DIR = _xdg("XDG_CACHE_HOME", "~/.cache")
 
 DB_PATH = os.path.join(DATA_DIR, "messages.db")
 BACKUP_DIR = os.path.join(DATA_DIR, "backups")
+LOG_DIR = os.path.join(DATA_DIR, "logs")
 WIDGET_STATE = os.path.join(CONFIG_DIR, "widget-state.json")
 FORWARD_CFG = os.path.join(CONFIG_DIR, "telegram-forward.json")
 INGEST_CFG = os.path.join(CONFIG_DIR, "ingest.json")
@@ -61,7 +63,7 @@ AVATAR_DIR = os.path.join(CACHE_DIR, "avatars")
 
 
 def ensure_dirs():
-    for d in (DATA_DIR, BACKUP_DIR, CONFIG_DIR, AVATAR_DIR):
+    for d in (DATA_DIR, BACKUP_DIR, LOG_DIR, CONFIG_DIR, AVATAR_DIR):
         os.makedirs(d, exist_ok=True)
     os.chmod(DATA_DIR, 0o700)
     os.chmod(CONFIG_DIR, 0o700)

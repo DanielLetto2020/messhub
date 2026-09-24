@@ -9,7 +9,7 @@ messhub для Windows 10/11 — одним процессом (так соби�
     messhub.exe --settings      сразу открыть и окно настроек
     messhub.exe --selftest [--out файл.json]           проверить сборку без окна и выйти (так её проверяет CI)
     messhub.exe --capture-test ТЕКСТ [--out файл.json] дождаться тестового уведомления Windows (CI)
-У оконной сборки нет консоли — результат проверок пишется в --out (и в журнал messhub.log).
+У оконной сборки нет консоли — результат проверок пишется в --out (и в журнал logs\\collect.log).
 
 Переносная версия: файл portable.txt рядом с messhub.exe — данные в папке data рядом с ним
 (а не в %LOCALAPPDATA%\\\\messhub), так что всё помещается на флешку.
@@ -33,19 +33,17 @@ def _portable():
 
 
 def _streams():
-    """В оконной сборке нет консоли (sys.stdout is None) — print пишет в журнал в папке данных.
-    В консоли — UTF-8 с заменой непечатного, чтобы русский текст не ронял программу."""
-    import paths
-    if sys.stdout is None or sys.stderr is None:
-        os.makedirs(paths.DATA_DIR, exist_ok=True)
-        log = open(os.path.join(paths.DATA_DIR, "messhub.log"), "a", encoding="utf-8", buffering=1)
-        sys.stdout = sys.stderr = log
-    else:
-        for s in (sys.stdout, sys.stderr):
+    """Всё, что печатаем, — в журнал программы (настройки → «Логи», файл logs/collect.log в папке
+    данных). В оконной сборке консоли нет (sys.stdout is None) — пишем только в журнал; в консоли —
+    ещё и на экран, в UTF-8 с заменой непечатного, чтобы русский текст не ронял программу."""
+    import applog
+    for s in (sys.stdout, sys.stderr):
+        if s is not None:
             try:
                 s.reconfigure(encoding="utf-8", errors="replace")
             except (AttributeError, ValueError):
                 pass
+    applog.setup("collect")
 
 
 def _port_busy(host, port):
@@ -168,13 +166,18 @@ def main():
 
     from http.server import ThreadingHTTPServer
     import collect
+    import containers
     import mail
     import serve
+    import services
     import wincatcher
     print(f"{version.version_line()} — сбор → {a.db}", flush=True)
     serve.prepare(a.db)
     serve.start_background(a.db)
     mail.start(a.db)
+    if not a.selftest:
+        containers.start(a.db)          # тематические колонки: пока включены в настройках
+        services.start(a.db)
     httpd = ThreadingHTTPServer((host, a.port), serve.make_handler(a.db))
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     if a.selftest:

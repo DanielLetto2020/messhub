@@ -171,11 +171,11 @@ class MailTest(unittest.TestCase):
     def test_channel_skip_and_mail_column(self):
         skip = collect.make_skip(self.db)
         tb = {"app": "thunderbird", "site": ""}
-        collect._mail_mode["t"] = 0
+        collect._mode["t"] = 0
         self.assertFalse(skip(tb))                                # канал — уведомления
         rules.set_prefs(self.conn, {"mail_channel": "imap"})
         self.conn.commit()
-        collect._mail_mode["t"] = 0
+        collect._mode["t"] = 0
         self.assertTrue(skip(tb))                                 # ящики — уведомления почты не пишем
         self.assertFalse(skip({"app": "telegram", "site": ""}))
         self.assertFalse(skip({"app": "yandex-browser", "site": "web.max.ru"}))

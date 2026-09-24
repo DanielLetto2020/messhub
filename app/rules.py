@@ -43,6 +43,10 @@ from i18n import L, lang
 
 SOURCES = (
     # (подстрока в app, ключ, название (рус, англ), иконка, порядок колонок) — порядок проверки важен
+    # тематические колонки (events.py, настройки → «Тематические колонки») — первыми, их app уникальны
+    ("messhub-containers", "containers", ("Контейнеры", "Containers"), "🐳", 7),
+    ("messhub-services", "services", ("Службы", "Services"), "⚙️", 7),
+    ("messhub-commands", "commands", ("Команды", "Commands"), "⌨️", 7),
     ("express", "express", ("eXpress", "eXpress"), "💬", 0),
     ("telegram", "telegram", ("Telegram", "Telegram"), "✈️", 1),
     ("max", "max", ("MAX", "MAX"), "🅼", 2),
@@ -106,10 +110,16 @@ PREF_DEFAULTS = {
     "rag": {"enabled": False, "model": "bge-m3", "chat_model": ""},  # умный поиск (rag.py)
     "ingest_bind": "",        # приём событий из сети: "0.0.0.0:8766"; "" — только локально
     "update_check": True,     # раз в 12 ч узнавать у GitHub номер последнего выпуска (updates.py)
+    # тематические колонки для ИТ (events.py): каждая включается отдельно, по умолчанию выключены
+    "themed": {
+        "containers": {"enabled": False, "startstop": False, "log_lines": 20, "ignore": []},
+        "services": {"enabled": False, "system": True, "user": True, "log_lines": 20},
+        "commands": {"enabled": False, "log_lines": 20},
+    },
     # служебное — не настройки, в выгрузку и в версию настроек не входит:
-    "backup_last": "", "report_last": "",
+    "backup_last": "", "report_last": "", "services_win_last": "",
 }
-STATE_PREFS = ("backup_last", "report_last")
+STATE_PREFS = ("backup_last", "report_last", "services_win_last")
 # от этих настроек зависит вид доски — по их хэшу (X-Prefs-Ver) виджет перечитывает её
 DISPLAY_PREFS = ("language", "opacity", "font_size", "compact", "theme", "group_by_chat",
                  "avatars", "col_order", "hidden_cols", "closed_cols", "mail_channel", "mentions",
@@ -335,6 +345,10 @@ def get_prefs(conn):
                 prefs[k].update(val)          # вложенные: новые ключи получают значения по умолчанию
             else:
                 prefs[k] = val
+    try:
+        prefs["themed"] = clean_themed(prefs["themed"])
+    except (ValueError, TypeError, AttributeError):
+        prefs["themed"] = json.loads(json.dumps(PREF_DEFAULTS["themed"]))
     return prefs
 
 
@@ -425,9 +439,41 @@ def _clean_pref(k, v):
         if v and not _RE_BIND.match(v):
             raise ValueError(L("Адрес — в виде 0.0.0.0:8766", "Address must look like 0.0.0.0:8766"))
         return v
+    if k == "themed":
+        return clean_themed(v)
     if k in STATE_PREFS:
         return str(v)[:40]
     raise ValueError(L(f"Неизвестная настройка «{k}»", f"Unknown setting “{k}”"))
+
+
+LOG_LINES = (0, 10, 20, 50)
+
+
+def clean_themed(v, base=None):
+    """Настройки тематических колонок: недостающее — по умолчанию (или из base — текущих)."""
+    base = base or PREF_DEFAULTS["themed"]
+    out = {}
+    for col, defaults in PREF_DEFAULTS["themed"].items():
+        cur = dict(defaults, **(base.get(col) or {}))
+        new = dict(v.get(col) or {}) if isinstance(v, dict) else {}
+        for key, dv in defaults.items():
+            val = new.get(key, cur.get(key, dv))
+            if isinstance(dv, bool):
+                val = bool(val)
+            elif key == "log_lines":
+                val = int(val)
+                if val not in LOG_LINES:
+                    raise ValueError(L("Строк лога — 0, 10, 20 или 50", "Log lines must be 0, 10, 20 or 50"))
+            elif key == "ignore":
+                items = val.split(",") if isinstance(val, str) else list(val)
+                val = [str(x).strip()[:80] for x in items if str(x).strip()][:30]
+            out.setdefault(col, {})[key] = val
+    return out
+
+
+def themed(prefs):
+    """Настройки тематических колонок с умолчаниями на месте (get_prefs вкладывает только верхний уровень)."""
+    return clean_themed(prefs.get("themed") or {})
 
 
 def set_prefs(conn, patch):
@@ -435,7 +481,8 @@ def set_prefs(conn, patch):
         raise ValueError(L("Ожидался объект настроек", "Expected a settings object"))
     for k, v in patch.items():
         try:
-            val = _clean_pref(k, v)
+            # тематические колонки меняют по одной настройке — остальное берём из сохранённого
+            val = clean_themed(v, get_prefs(conn)["themed"]) if k == "themed" else _clean_pref(k, v)
         except (TypeError, AttributeError, KeyError):
             raise ValueError(L(f"Неверное значение настройки «{k}»", f"Invalid value for setting “{k}”"))
         conn.execute("INSERT INTO prefs (key, value) VALUES (?, ?) "

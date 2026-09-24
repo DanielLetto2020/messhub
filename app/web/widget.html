@@ -125,6 +125,20 @@
   .body mark, .gprev mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1px; }
   a.lnk { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
   .msg.pinned { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+  /* тематические колонки: проблема ушла — карточка бледнеет, внизу «✓ починилось» */
+  .msg.resolved > .top, .msg.resolved > .body { opacity: .55; }
+  .fixed { margin-top: 4px; font-size: 10.5px; font-weight: 600; color: var(--ok); }
+  /* хвост лога — свёрнут, по клику раскрывается; двойной клик — скопировать лог */
+  .det { margin-top: 4px; }
+  .det .dt { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; color: var(--muted); cursor: pointer;
+    border-radius: 6px; padding: 0 5px 0 2px; user-select: none; }
+  .det .dt:hover { color: var(--text); background: var(--card-hover); }
+  .det .dt svg { transition: transform .15s; }
+  .det.open .dt svg { transform: rotate(90deg); }
+  .det pre { margin: 4px 0 0; max-height: 170px; overflow: auto; padding: 6px 8px; border-radius: 7px;
+    background: rgba(0,0,0,.28); font: 10.5px/1.45 ui-monospace, "DejaVu Sans Mono", Consolas, monospace;
+    white-space: pre-wrap; word-break: break-word; cursor: text; }
+  body.light .det pre { background: rgba(0,0,0,.06); }
   .msg.copied::after, .msg.copyfail::after { position: absolute; right: 8px; bottom: 6px; font-size: 10px;
     padding: 1px 7px; border-radius: 999px; background: var(--ok-bg); color: var(--ok); content: attr(data-note); }
   .msg.copyfail::after { color: var(--bad); background: rgba(255,122,122,.14); }
@@ -250,6 +264,11 @@
 <div class="rz se" data-edge="se"></div><div class="rz sw" data-edge="sw"></div>
 
 <script>
+// ошибки страницы — в журнал программы (настройки → «Логи»), не чаще 10 в минуту
+(()=>{let n=0,t0=Date.now();const send=(msg,where)=>{if(Date.now()-t0>6e4){n=0;t0=Date.now();}if(++n>10)return;
+  try{fetch('/api/logs/client',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({page:'widget',msg:String(msg).slice(0,1000),where})}).catch(()=>{});}catch(e){}};
+  window.addEventListener('error',e=>send(e.message,(e.filename||'').split('/').pop()+':'+e.lineno));
+  window.addEventListener('unhandledrejection',e=>send('Promise: '+((e.reason&&e.reason.message)||e.reason),''));})();
 const $ = id => document.getElementById(id);
 const board = $('board'), empty = $('empty'), dot = $('dot'), countEl = $('count'), menu = $('menu');
 const QS = new URLSearchParams(location.search);
@@ -288,6 +307,7 @@ const open = new Set();     // раскрытые группы: ключ ист�
 const fresh = new Set();    // только что пришедшие — мигнуть при отрисовке
 const gids = new Map(), gkeys = new Map();   // группа ↔ короткий номер для data-атрибута
 const skipped = new Set();  // пришли, но их колонка скрыта или вне ?only= — сверка их не возвращает
+const openDet = new Set();  // карточки с раскрытым хвостом лога
 let focus = false; try { focus = localStorage.getItem('focus') === '1'; } catch (e) {}
 
 function esc(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
@@ -380,7 +400,11 @@ function cardHtml(m, withChat){
   const who = withChat
     ? `<span class="chat">${esc(m.chat)}</span>`+(m.sender&&m.sender!==m.chat?` · <span class="sender">${esc(m.sender)}</span>`:'')
     : `<span class="sender">${esc(m.sender||m.chat)}</span>`;
-  const cls='msg'+(fresh.has(m.id)?' flash':'')+(m.highlight?' hl hl-'+m.highlight:'')+(m.pinned?' pinned':'');
+  const cls='msg'+(fresh.has(m.id)?' flash':'')+(m.highlight?' hl hl-'+m.highlight:'')+(m.pinned?' pinned':'')+(m.resolved_at?' resolved':'');
+  const nLines=m.details?m.details.split('\n').length:0, dOpen=openDet.has(m.id);
+  const det=m.details?`<div class="det${dOpen?' open':''}"><span class="dt" data-act="det">${ICON.chev}${esc(t('Лог'))} · ${esc(tp(nLines,...W.line))}</span>${
+    dOpen?`<pre class="log" title="${attr(t('Двойной клик — скопировать лог'))}">${esc(m.details)}</pre>`:''}</div>`:'';
+  const fixed=m.resolved_at?`<div class="fixed">${esc(t('✓ Починилось в {hm}',{hm:m.resolved_at.slice(11,16)}))}</div>`:'';
   // письма из ящиков (mail.py) приходят не из окна приложения — переходить некуда
   const go=m.app==='mail-imap'?'':m.site?t('Открыть {site}',{site:m.site}):t('Перейти в {app}',{app:m.src_name});
   const goAttr=go?` data-act="open" title="${attr(go)}"`:'';
@@ -389,7 +413,7 @@ function cardHtml(m, withChat){
     <span class="ab" data-act="snooze" title="${attr(t('Отложить'))}">${ICON.clock}</span>
     <span class="ab${m.pinned?' on':''}" data-act="pin" title="${attr(m.pinned?t('Открепить'):t('Закрепить — не прочитается само через 24 ч'))}">${ICON.pin}</span></span>
     <span class="ab read" data-act="read" title="${attr(t('Прочитано — скрыть'))}">${ICON.check}</span></div>
-    <div class="body" title="${attr(t('Двойной клик — скопировать текст'))}">${rich(m.message||'')}</div></div>`;
+    <div class="body" title="${attr(t('Двойной клик — скопировать текст'))}">${rich(m.message||'')}</div>${det}${fixed}</div>`;
 }
 function groupHtml(key, chat, list){
   const g=key+'\u0001'+chat, isOpen=open.has(g), last=list[0];
@@ -505,6 +529,7 @@ board.addEventListener('click',e=>{
   else if(act==='read-col'){const ids=readable(col.dataset.key);
     if(ids.length)readIds(ids,t('Прочитано: {n}',{n:ids.length}));}
   else if(act==='close-col') openClose(a,col.dataset.key);
+  else if(act==='det'){openDet.has(id)?openDet.delete(id):openDet.add(id);renderCol(col.dataset.key);}
 });
 function dropCol(key){
   const c=cols.get(key); if(!c) return null;
@@ -558,9 +583,10 @@ async function hideCol(key){
 }
 // двойной клик по тексту — скопировать сообщение целиком
 board.addEventListener('dblclick',e=>{
-  const body=e.target.closest('.body'); if(!body||e.target.closest('a')) return;
+  const log=e.target.closest('pre.log');
+  const body=log||e.target.closest('.body'); if(!body||e.target.closest('a')) return;
   const card=body.closest('[data-id]'), m=msgs.get(+card.dataset.id); if(!m) return;
-  copyText(m.message||'').then(ok=>{
+  copyText(log?(m.details||''):(m.message||'')).then(ok=>{
     try{window.getSelection().removeAllRanges();}catch(_){}
     card.dataset.note=ok?t('Скопировано'):t('Не скопировалось');
     card.classList.add(ok?'copied':'copyfail');setTimeout(()=>card.classList.remove('copied','copyfail'),1200);
@@ -815,6 +841,10 @@ async function sync(){
     const r=await(await fetch('/api/visible')).json(), want=new Set(r.ids);
     const gone=[...msgs.keys()].filter(id=>id<=r.max_id&&!want.has(id));
     const back=r.ids.filter(id=>!msgs.has(id)&&!skipped.has(id)&&id<=lastId);
+    // тематические колонки: «починилось» пришло после показа — перерисовать карточку на месте
+    const fixedKeys=new Set();
+    for(const [id,at] of Object.entries(r.resolved||{})){const m=msgs.get(+id);if(m&&m.resolved_at!==at){m.resolved_at=at;fixedKeys.add(m.src);}}
+    if(fixedKeys.size) renderKeys(fixedKeys);
     if(gone.length) dropIds(gone);
     if(back.length) await fetchBack(back);
   }catch(e){}

@@ -9,6 +9,8 @@
 Фоновым задачам (отчёт в Telegram) язык ставится из настроек.
 """
 
+import locale
+import os
 import threading
 
 _local = threading.local()
@@ -32,3 +34,21 @@ def pick(pref, accept_language=""):
         return pref
     first = (accept_language or "").split(",")[0].strip().lower()
     return "ru" if first.startswith(("ru", "uk", "be", "kk")) or not first else "en"
+
+
+def system_lang():
+    """Язык системы — для фоновых задач, когда в настройках «авто» (запроса с Accept-Language нет)."""
+    for var in ("LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"):
+        v = os.environ.get(var, "")
+        if v and v not in ("C", "POSIX") and not v.startswith("C."):
+            return "ru" if v.lower().startswith(("ru", "uk", "be", "kk")) else "en"
+    try:
+        loc = (locale.getlocale()[0] or "").lower()
+    except (ValueError, TypeError):
+        loc = ""
+    return "ru" if loc.startswith(("ru", "uk", "be", "kk", "russian", "ukrainian")) else "en" if loc else "ru"
+
+
+def background(pref):
+    """Язык для фоновых задач: из настроек, при «авто» — язык системы."""
+    return pref if pref in ("ru", "en") else system_lang()

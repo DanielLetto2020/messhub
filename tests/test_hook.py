@@ -32,11 +32,11 @@ class HookTest(unittest.TestCase):
 
     def test_failed_command(self):
         out = self.run_hook('__em_preexec "make build"; false; __em_precmd')
-        self.assertTrue(out.startswith("-a|Терминал|make build|ошибка (код 1)"), out)
+        self.assertTrue(out.startswith("-a|Терминал|-h|string:desktop-entry:messhub-commands|make build|ошибка (код 1)"), out)
 
     def test_ok_in_english(self):
         out = self.run_hook('__em_preexec "rsync -a x y"; true; __em_precmd', lang="en_US.UTF-8")
-        self.assertTrue(out.startswith("-a|Terminal|rsync -a x y|done in"), out)
+        self.assertTrue(out.startswith("-a|Terminal|-h|string:desktop-entry:messhub-commands|rsync -a x y|done in"), out)
 
     def test_interactive_programs_skipped(self):
         self.assertEqual(self.run_hook('__em_preexec "vim notes.txt"; true; __em_precmd'), "")

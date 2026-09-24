@@ -7,9 +7,12 @@
 # MESSHUB_LONG_CMD       — порог в секундах (по умолчанию 60)
 # MESSHUB_LONG_CMD_SKIP  — программы, о которых не сообщать (редакторы, пейджеры, ssh…)
 #
-# Работает через обычный notify-send, так что дальше действуют правила виджета
-# (колонка «Терминал» / «Terminal»). В bash, если подключён bash-preexec, хук
-# встаёт в его списки; иначе использует trap DEBUG + PROMPT_COMMAND.
+# Работает через обычный notify-send (всплывашка подписана «Терминал»), а на доске
+# попадает в тематическую колонку «Команды» (desktop-entry messhub-commands) — она
+# включается в настройках → «Тематические колонки». Дальше действуют правила виджета.
+# Итог с хвостом вывода и «починилось» — у обёртки: messhub run -- команда.
+# В bash, если подключён bash-preexec, хук встаёт в его списки; иначе использует
+# trap DEBUG + PROMPT_COMMAND.
 
 [ -n "${__EM_HOOK_LOADED:-}" ] && return 0
 __EM_HOOK_LOADED=1
@@ -42,7 +45,7 @@ __em_precmd() {
       if [ $(( dur / 60 )) -gt 0 ]; then took="$(( dur / 60 ))m $(( dur % 60 ))s"; else took="${dur}s"; fi
       if [ $code -eq 0 ]; then status="done in $took"; else status="failed (code $code) after $took"; fi ;;
   esac
-  notify-send -a "$app" "${__em_cmd:0:80}" "$status" 2>/dev/null
+  notify-send -a "$app" -h "string:desktop-entry:messhub-commands" "${__em_cmd:0:80}" "$status" 2>/dev/null
   return $code
 }
 

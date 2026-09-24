@@ -308,6 +308,55 @@ const EN = {
   'Ящик сохранён': 'Mailbox saved',
   'Ящик сохранён. Чтобы письма шли из него, выбери «Напрямую из ящиков».': 'Mailbox saved. To get mail from it, choose “Straight from mailboxes”.',
 
+  // ── тематические колонки ──
+  'Тематические колонки': 'Themed columns', 'Контейнеры': 'Containers', 'Службы': 'Services', 'Команды': 'Commands',
+  'Колонки для тех, кто работает с кодом и серверами. Каждая включается отдельно, а выключенная ничего не собирает. Всё остаётся на этом компьютере.':
+    'Columns for people who work with code and servers. Each one is turned on separately, and one that is off collects nothing. Everything stays on this computer.',
+  'Docker и Podman: контейнер упал, его убило по памяти, healthcheck стал «нездоров», контейнер перезапускается по кругу. Когда контейнер снова работает, карточка отмечается «починилось».':
+    'Docker and Podman: a container crashed, was killed for running out of memory, its healthcheck turned unhealthy, or it keeps restarting. When the container works again, the card is marked “fixed”.',
+  'Службы systemd, которые упали: не запустился сервис, не прошёл таймер бэкапа. Когда служба снова работает, карточка отмечается «починилось».':
+    'systemd services that failed: a service did not start, a backup timer did not run. When the service works again, the card is marked “fixed”.',
+  'Службы Windows, которые завершились с ошибкой или не запустились (по журналу событий). Если служба снова работает, карточка отмечается «починилось».':
+    'Windows services that stopped with an error or failed to start (from the event log). If the service runs again, the card is marked “fixed”.',
+  'Итог команды: код выхода, сколько шла и хвост вывода, если она упала. Удачный повторный запуск той же команды в той же папке отмечает прошлую ошибку «починилось».':
+    'The result of a command: exit code, how long it ran and the tail of its output if it failed. A successful rerun of the same command in the same folder marks the previous failure “fixed”.',
+  'включена': 'on', 'выключена': 'off',
+  '{e}: не найден': '{e}: not found', '{e}: найден': '{e}: found', '{e}: слушаю события': '{e}: listening to events',
+  '{e}: запускается…': '{e}: starting…', 'запускается…': 'starting…',
+  'systemctl не найден': 'systemctl not found', 'Журнал событий Windows недоступен': 'The Windows event log is not available',
+  'проверяю раз в 30 секунд': 'checking every 30 seconds', 'проверяю раз в минуту': 'checking every minute',
+  'сейчас упавших: {n}': 'failed right now: {n}',
+  'Показывать и обычный запуск и остановку': 'Also show normal starts and stops',
+  'Хвост лога': 'Log tail', 'Хвост журнала': 'Journal tail', 'Хвост вывода': 'Output tail', 'не сохранять': 'do not keep',
+  'Не следить за': 'Ignore', 'имена через запятую, можно test-*': 'names separated by commas, test-* works',
+  'Программа только слушает события движка: ничего не запускает, не останавливает и не удаляет. Rootless Podman видит только твои контейнеры, Docker — если у пользователя есть доступ к нему.':
+    'The app only listens to engine events: it never starts, stops or removes anything. Rootless Podman sees only your containers; Docker works if your user has access to it.',
+  'Системные службы': 'System services', 'Службы пользователя': 'User services',
+  'Обёртка': 'Wrapper', 'Без обёртки': 'Without the wrapper',
+  'Например: сборка, тесты, выгрузка. Вывод идёт в терминал как обычно, код выхода сохраняется — обёртку можно ставить и в скрипты.':
+    'For example a build, tests or an export. Output goes to the terminal as usual and the exit code is kept, so the wrapper works in scripts too.',
+  'Хук терминала: о любой команде дольше минуты — всплывашка и карточка (строка в ~/.bashrc или ~/.zshrc, либо ./install.sh --terminal-hook).':
+    'Terminal hook: any command longer than a minute gives a pop-up and a card (a line in ~/.bashrc or ~/.zshrc, or ./install.sh --terminal-hook).',
+  'Хвосты логов и вывода хранятся только в базе на этом компьютере: в виджете они свёрнуты, а правило «Переслать в Telegram» отправляет только текст карточки. Колонка появится на доске с первым событием.':
+    'Log and output tails are kept only in the database on this computer: they are collapsed in the widget, and the “Forward to Telegram” rule sends only the card text. A column appears on the board with its first event.',
+  'Лог': 'Log', 'Двойной клик — скопировать лог': 'Double-click to copy the log', '✓ Починилось в {hm}': '✓ Fixed at {hm}',
+
+  // ── логи ──
+  'Логи': 'Logs',
+  'Журнал работы самой программы: запуск, ошибки, фоновые задачи, что сделали правила. Тексты твоих сообщений сюда не пишутся. Журнал лежит только на этом компьютере.':
+    'The log of the app itself: start-up, errors, background jobs, what rules did. The text of your messages is never written here. The log stays on this computer.',
+  'Все': 'All', 'Внимание и ошибки': 'Warnings and errors', 'Только ошибки': 'Errors only',
+  'инфо': 'info', 'внимание': 'warning', 'ошибка': 'error',
+  'сбор': 'collector', 'доска': 'board', 'страница': 'page', 'просмотр': 'viewer',
+  'Поиск по журналу': 'Search the log', 'Обновлять само': 'Auto-refresh', 'Скопировать': 'Copy', 'Очистить': 'Clear',
+  'Записей: {n}': 'Entries: {n}', 'показаны последние {n}': 'showing the latest {n}', 'ошибок за сутки: {n}': 'errors in the last day: {n}',
+  'папка': 'folder', 'из {m} — старые записи удаляются сами': 'of {m}; old entries are removed automatically',
+  '{n} Б': '{n} B', '{n} КБ': '{n} KB', '{n} МБ': '{n} MB',
+  'Журнал пуст.': 'The log is empty.', 'Журнал очищен': 'Log cleared', 'Удалить все записи? Нажми ещё раз': 'Delete all entries? Click again',
+  'Сохранено: {p}': 'Saved: {p}',
+  'Чтобы сообщить об ошибке, выгрузи журнал: домашняя папка в выгрузке заменится на «~», имя пользователя — на <user>. Всё равно просмотри файл перед отправкой.':
+    'To report a bug, export the log: your home folder becomes “~” and your user name becomes <user>. Still, look through the file before sending it.',
+
   // ── справка ──
   'Инструкции по настройке. Если что-то не ловится — начни с раздела «Система»: он сам подскажет известные случаи.':
     'Setup instructions. If something is not captured, start with “System”: it points out known issues.',
@@ -336,6 +385,8 @@ const W = {
   senderFrom: [['отправителя', 'отправителей', 'отправителей'], ['sender', 'senders']],
   rule: [['правило', 'правила', 'правил'], ['rule', 'rules']],
   row: [['строка', 'строки', 'строк'], ['row', 'rows']],
+  line: [['строка', 'строки', 'строк'], ['line', 'lines']],
+  entry: [['запись', 'записи', 'записей'], ['entry', 'entries']],
   letter: [['письмо', 'письма', 'писем'], ['message', 'messages']],
   newMsg: [['новое сообщение', 'новых сообщения', 'новых сообщений'], ['new message', 'new messages']],
   pinnedMsg: [['закреплённое сообщение', 'закреплённых сообщения', 'закреплённых сообщений'], ['pinned message', 'pinned messages']],

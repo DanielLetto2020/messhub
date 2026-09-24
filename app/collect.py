@@ -22,31 +22,39 @@ import threading
 import time
 from http.server import ThreadingHTTPServer
 
+import applog
 import catcher
+import containers
 import ingest
 import mail
 import rules
 import serve
+import services
 import version
 
-_mail_mode = {"t": 0.0, "imap": False}
+_mode = {"t": 0.0, "imap": False, "commands": False}
 
 
 def make_skip(db_path):
-    """Когда почта берётся из ящиков (IMAP), уведомления почтовых программ и почтовых
-    сайтов не записываем — иначе каждое письмо было бы дважды. Режим перечитываем раз в 20 с."""
+    """Что не записывать:
+      - когда почта берётся из ящиков (IMAP), — уведомления почтовых программ и сайтов,
+        иначе каждое письмо было бы дважды;
+      - когда колонка «Команды» выключена, — уведомления хука терминала (messhub-commands).
+    Режимы перечитываем раз в 20 с."""
     def skip(rec):
-        if time.time() - _mail_mode["t"] > 20:
+        if time.time() - _mode["t"] > 20:
             try:
                 conn = sqlite3.connect(db_path, timeout=5)
                 try:
-                    _mail_mode["imap"] = mail.channel(conn) == "imap"
+                    _mode["imap"] = mail.channel(conn) == "imap"
+                    _mode["commands"] = rules.themed(rules.get_prefs(conn))["commands"]["enabled"]
                 finally:
                     conn.close()
             except sqlite3.Error:
                 pass                     # база занята — пока живём с прежним режимом
-            _mail_mode["t"] = time.time()
-        return _mail_mode["imap"] and rules.source_of(rec["app"], rec.get("site", ""))["key"] == "mail"
+            _mode["t"] = time.time()
+        key = rules.source_of(rec["app"], rec.get("site", ""))["key"]
+        return (_mode["imap"] and key == "mail") or (key == "commands" and not _mode["commands"])
     return skip
 
 
@@ -69,12 +77,16 @@ def main():
     ap.add_argument("--version", action="version", version=version.version_line())
     args = ap.parse_args()
 
+    applog.setup("collect")          # всё, что печатаем, — ещё и в журнал (настройки → «Логи»)
     # перенести файлы старых версий в XDG-папки и досоздать схему — до старта сервера
     serve.prepare(args.db)
     # фон: авто-прочтение, срок хранения, копии, недельный отчёт, векторы умного поиска
     serve.start_background(args.db)
     # почта из ящиков (IMAP) — работает, только если выбран такой канал почты
     mail.start(args.db)
+    # тематические колонки: контейнеры (docker/podman) и упавшие службы — пока включены в настройках
+    containers.start(args.db)
+    services.start(args.db)
     # приём событий из сети — отдельный сервер только для /api/ingest, если включён
     conn = sqlite3.connect(args.db)
     bind = rules.get_prefs(conn)["ingest_bind"]

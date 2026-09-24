@@ -22,9 +22,13 @@ CREATE TABLE IF NOT EXISTS messages (
     pinned          INTEGER DEFAULT 0,  -- 1 = закреплено: сверху колонки, само не прочитывается
     snooze_until    TEXT,               -- отложено до (МСК); до этого времени в виджете не видно
     site            TEXT,               -- для браузерных уведомлений — сайт (web.max.ru); '' = не сайт
-    avatar          TEXT                -- картинка из уведомления: имя файла в ~/.cache/<APP_ID>/avatars
+    avatar          TEXT,               -- картинка из уведомления: имя файла в ~/.cache/<APP_ID>/avatars
+    -- тематические колонки (events.py): одна «проблема» — один ключ; починилось — resolved_at
+    event_key       TEXT,               -- container:podman:web, unit:system:backup.service, cmd:… ; NULL — обычное
+    resolved_at     TEXT,               -- когда проблема ушла (МСК): карточка остаётся, но с «починилось»
+    details         TEXT                -- хвост лога / вывода команды: в виджете свёрнут, в Telegram не пересылается
 );
--- колонки после первой версии (is_read … avatar) в уже существующую БД досоздаёт catcher.migrate()
+-- колонки после первой версии (is_read … details) в уже существующую БД досоздаёт catcher.migrate()
 
 CREATE INDEX IF NOT EXISTS idx_messages_app         ON messages(app);
 CREATE INDEX IF NOT EXISTS idx_messages_chat        ON messages(chat);
@@ -32,6 +36,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_processed   ON messages(processed);
 CREATE INDEX IF NOT EXISTS idx_messages_event_ts    ON messages(event_ts);
 CREATE INDEX IF NOT EXISTS idx_messages_is_read     ON messages(is_read);
 CREATE INDEX IF NOT EXISTS idx_messages_received_at ON messages(received_at);
+CREATE INDEX IF NOT EXISTS idx_messages_event_key   ON messages(event_key);
 
 -- Правила («фильтры как в почте»), логика — rules.py.
 -- '' в chat/sender/text = «любой»; src = '*' — во всех источниках.

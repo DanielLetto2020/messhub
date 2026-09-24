@@ -33,6 +33,7 @@ PY = sys.executable
 DARK_DESK = ("document.documentElement.style.background='#0e1014';"
              "document.body.classList.remove('nohost');'ok'")
 W, S = (1640, 470), (1150, 800)        # размер окна: виджет и настройки
+IT = (1240, 470)                        # доска только с тематическими колонками
 LANG_Q = {"ru": {"search": "созвон"}, "en": {"search": "call"}}
 
 
@@ -68,11 +69,19 @@ def plan(lang):
         ("settings-forward", "/settings#forward", S, [900]),
         ("settings-ingest", "/settings#ingest", S, [900]),
         ("settings-system", "/settings#system", (1150, 1000), ["wait-for:.check", 600]),
+        ("settings-themed", "/settings#themed", (1150, 1240), ["wait-for:.tcard", 700]),
+        ("settings-logs", "/settings#logs", S, ["wait-for:.lg", 600]),
         ("settings-help", "/settings#help", S, [900]),
-        # последним: светлая тема меняет настройки демо-папки
+        # в конце — снимки, которые меняют настройки демо-папки: ИТ-колонки (остальные скрыты), светлая тема
+        ("widget-it", "/widget", IT, [
+            "fetch('/api/prefs',{method:'POST',headers:{'Content-Type':'application/json'},"
+            "body:JSON.stringify({hidden_cols:['express','telegram','mail','max','whatsapp','other:ci']})})"
+            ".then(()=>location.reload());'ok'", 2200, DARK_DESK,
+            "document.querySelector('.col[data-key=containers] .msg [data-act=det]').click();'ok'", 500]),
         ("widget-light", "/widget", W, [
             "fetch('/api/prefs',{method:'POST',headers:{'Content-Type':'application/json'},"
-            "body:JSON.stringify({theme:'light',opacity:0.9})}).then(()=>location.reload());'ok'", 2200,
+            "body:JSON.stringify({theme:'light',opacity:0.9,hidden_cols:['containers','services','commands']})})"
+            ".then(()=>location.reload());'ok'", 2200,
             "document.documentElement.style.background='#c9ced6';document.body.classList.remove('nohost');'ok'", 400]),
     ]
 
@@ -240,7 +249,8 @@ def shoot(lang, out_dir, only, display, ver):
     with open(os.path.join(app, "VERSION"), "w", encoding="utf-8") as f:
         f.write(ver + "\n")
     env = dict(os.environ, MESSHUB_HOME=home, OLLAMA_HOST="http://127.0.0.1:9", MESSHUB_UPDATE_URL=gh_url,
-               MESSHUB_TG_API="http://127.0.0.1:9", MESSHUB_EXPORT_DIR=os.path.join(home, "Downloads"))
+               MESSHUB_TG_API="http://127.0.0.1:9", MESSHUB_EXPORT_DIR=os.path.join(home, "Downloads"),
+               MESSHUB_THEMED_DEMO="1")     # состояние docker/podman/systemd — выдуманное, настоящие не спрашиваем
     for k in ("MESSHUB_MAIL_CFG", "MESSHUB_FORWARD_CFG"):
         env.pop(k, None)
     os.makedirs(env["MESSHUB_EXPORT_DIR"])

@@ -300,3 +300,10 @@ def _common_checks(add, db_path, prefs, accs):
         L("Резервные копии", "Backups"),
         (L("последняя: ", "latest: ") + bks[0]["at"]) if bks else L("ещё нет", "none yet"))
 
+    import applog
+    errs = applog.errors_last_day()
+    add("logs", "warn" if errs else "ok", L("Журнал", "Log"),
+        L(f"ошибок за сутки: {errs}", f"errors in the last day: {errs}") if errs
+        else L("за сутки ошибок нет", "no errors in the last day"),
+        L("Подробности — в разделе «Логи»", "Details are under “Logs”") if errs else "")
+

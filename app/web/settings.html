@@ -278,6 +278,34 @@
     border-radius: 8px; padding: 5px 9px; font-size: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.4); }
   .tip[hidden] { display: none; }
 
+  /* тематические колонки */
+  .tcard .ch { margin-bottom: 4px; }
+  .tcard .ti { font-size: 20px; width: 28px; text-align: center; }
+  .tcard .tn { font-size: 14.5px; font-weight: 650; }
+  .tcard .ch .switch { margin-left: auto; }
+  .tcard .td { color: var(--muted); margin: 0 0 10px 38px; max-width: 70ch; }
+  .tcard .tb { margin-left: 38px; }
+  .tcard.off .tb .erow:not(.always) { opacity: .55; }
+  .tstat { display: flex; flex-direction: column; gap: 3px; margin: 0 0 10px; }
+  .tstat .st { display: inline-block; width: 16px; text-align: center; font-weight: 700; }
+  .tcard pre { margin: 4px 0 10px; }
+
+  /* журнал */
+  .loglist { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
+  .lg { display: grid; grid-template-columns: 118px 74px 72px 1fr; gap: 10px; padding: 6px 12px; border-top: 1px solid var(--line);
+    font-size: 12px; align-items: baseline; }
+  .lg:first-child { border-top: 0; }
+  .lg .lt { color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .lg .ll { font-size: 10.5px; font-weight: 600; border-radius: 999px; padding: 0 7px; justify-self: start; white-space: nowrap; }
+  .lg.info .ll { color: var(--muted); background: var(--surface2); }
+  .lg.warn .ll { color: var(--warn); background: var(--warn-bg); }
+  .lg.error .ll { color: var(--off); background: var(--off-bg); }
+  .lg .ls { color: var(--muted); white-space: nowrap; }
+  .lg .lm { white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, "DejaVu Sans Mono", Consolas, monospace; font-size: 11.5px; }
+  .lg.error .lm { color: #ffc2b8; }
+  .nav .n.bad { color: var(--off); font-weight: 700; }
+  @media (max-width: 760px) { .lg { grid-template-columns: 1fr; gap: 2px; } }
+
   .result { margin-top: 10px; color: var(--on); overflow-wrap: anywhere; }
   .result.err { color: var(--off); }
   .warnbox { border: 1px solid rgba(242,178,90,.4); background: var(--warn-bg); border-radius: 10px;
@@ -330,9 +358,11 @@
       <button type="button" data-nav="data"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg><span data-t="Данные">Данные</span></button>
       <div class="gap"></div>
       <button type="button" data-nav="mail"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg><span data-t="Почта">Почта</span></button>
+      <button type="button" data-nav="themed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="18" rx="1.5"/><rect x="14" y="3" width="7" height="11" rx="1.5"/><line x1="14" y1="18" x2="21" y2="18"/><line x1="14" y1="21" x2="18" y2="21"/></svg><span data-t="Тематические колонки">Тематические колонки</span></button>
       <button type="button" data-nav="forward"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg><span data-t="Пересылка в Telegram">Пересылка в Telegram</span></button>
       <button type="button" data-nav="ingest"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span data-t="Приём событий">Приём событий</span></button>
       <button type="button" data-nav="system"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg><span data-t="Система">Система</span></button>
+      <button type="button" data-nav="logs"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg><span data-t="Логи">Логи</span><span class="n" id="navLogs"></span></button>
       <button type="button" data-nav="help"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span data-t="Справка">Справка</span></button>
     </nav>
     <p class="note" data-t="Правила меняют то, что видно в виджете, и что делать с новыми сообщениями. Сами сообщения сохраняются всегда, а если удалить правило, скрытое снова появится.">Правила меняют то, что видно в виджете, и что делать с новыми сообщениями. Сами сообщения сохраняются всегда, а если удалить правило, скрытое снова появится.</p>
@@ -344,6 +374,11 @@
 <div class="tip" id="tip" hidden></div>
 
 <script>
+// ошибки страницы — в журнал программы (раздел «Логи»), не чаще 10 в минуту
+(()=>{let n=0,t0=Date.now();const send=(msg,where)=>{if(Date.now()-t0>6e4){n=0;t0=Date.now();}if(++n>10)return;
+  try{fetch('/api/logs/client',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({page:'settings',msg:String(msg).slice(0,1000),where})}).catch(()=>{});}catch(e){}};
+  window.addEventListener('error',e=>send(e.message,(e.filename||'').split('/').pop()+':'+e.lineno));
+  window.addEventListener('unhandledrejection',e=>send('Promise: '+((e.reason&&e.reason.message)||e.reason),''));})();
 const $ = id => document.getElementById(id);
 const page = $('page');
 const I = {
@@ -513,8 +548,11 @@ const newEd=(src,action)=>({src,conds:null,cond:0,chat:'',sender:'',text:'',text
 
 // ── маршрут ──
 const ROUTES={sources:showSources,rules:showGlobalRules,profiles:showProfiles,mentions:showMentions,search:showSearch,
-  look:showLook,stats:showStats,data:showData,mail:showMail,forward:showForward,ingest:showIngest,system:showSystem,help:showHelp};
+  look:showLook,stats:showStats,data:showData,mail:showMail,themed:showThemed,forward:showForward,ingest:showIngest,
+  system:showSystem,logs:showLogs,help:showHelp};
+let pageTimer=0;           // автообновление раздела (журнал, состояние колонок) — гасится при уходе
 function route(){
+  clearInterval(pageTimer);pageTimer=0;
   const h=location.hash.slice(1);
   let sec='sources';
   if(h.startsWith('source='))showSource(decodeURIComponent(h.slice(7)));
@@ -1309,6 +1347,114 @@ async function showIngest(){
   draw();
 }
 
+// ── Тематические колонки: контейнеры, службы, команды ──
+async function showThemed(){
+  page.innerHTML=`<div class="state">${esc(t('Загружаю…'))}</div>`;
+  let d;try{d=await api('/api/themed');}catch(e){failed(showThemed);return;}
+  const win=d.platform==='windows', mark={ok:'✓',warn:'!',bad:'✕',info:'·'};
+  const stRow=(state,text)=>`<div><span class="st ${state}">${mark[state]}</span> ${esc(text)}</div>`;
+  const linesSel=(col,label)=>`<div class="erow"><span class="lbl">${esc(label)}</span><select class="inp" data-lines="${col}">${
+    d.log_lines.map(n=>`<option value="${n}"${d.prefs[col].log_lines===n?' selected':''}>${esc(n?tp(n,...W.line):t('не сохранять'))}</option>`).join('')}</select></div>`;
+  const card=(col,ico,name,desc,stat,body)=>{const on=d.prefs[col].enabled;
+    return `<div class="card tcard${on?'':' off'}" data-col="${col}"><div class="ch"><span class="ti">${ico}</span><span class="tn">${esc(name)}</span>
+      <label class="switch"><input type="checkbox" data-on="${col}"${on?' checked':''}> ${esc(t(on?'включена':'выключена'))}</label></div>
+      <p class="td">${esc(desc)}</p><div class="tb">${stat?`<div class="tstat">${stat}</div>`:''}${body}</div></div>`;};
+  const draw=()=>{
+    const c=d.prefs.containers, sv=d.prefs.services;
+    const engStat=['podman','docker'].map(e=>{const x=d.containers[e]||{};
+      if(!x.found)return stRow('info',t('{e}: не найден',{e}));
+      if(!c.enabled)return stRow('info',t('{e}: найден',{e}));
+      if(x.running)return stRow('ok',t('{e}: слушаю события',{e}));
+      if(x.error)return stRow('warn',t('{e}: {err}',{e,err:x.error}));
+      return stRow('info',t('{e}: запускается…',{e}));}).join('');
+    const s=d.services;
+    const svcStat=!s.found?stRow('info',t(win?'Журнал событий Windows недоступен':'systemctl не найден')):
+      !sv.enabled?'':s.error?stRow('warn',s.error):s.running?stRow('ok',t(win?'проверяю раз в минуту':'проверяю раз в 30 секунд')+
+        (win?'':' · '+t('сейчас упавших: {n}',{n:s.failed}))):stRow('info',t('запускается…'));
+    page.innerHTML=`<h1>${esc(t('Тематические колонки'))}</h1>
+      <p class="lead">${esc(t('Колонки для тех, кто работает с кодом и серверами. Каждая включается отдельно, а выключенная ничего не собирает. Всё остаётся на этом компьютере.'))}</p>
+      ${card('containers','🐳',t('Контейнеры'),t('Docker и Podman: контейнер упал, его убило по памяти, healthcheck стал «нездоров», контейнер перезапускается по кругу. Когда контейнер снова работает, карточка отмечается «починилось».'),engStat,
+        `<div class="erow"><label class="switch"><input type="checkbox" id="cSS"${c.startstop?' checked':''}> ${esc(t('Показывать и обычный запуск и остановку'))}</label></div>
+        ${linesSel('containers',t('Хвост лога'))}
+        <div class="erow"><span class="lbl">${esc(t('Не следить за'))}</span><input class="inp" id="cIgn" value="${attr(c.ignore.join(', '))}" placeholder="${attr(t('имена через запятую, можно test-*'))}" style="width:300px">
+          <button class="btn" type="button" id="cIgnSave">${esc(t('Сохранить'))}</button></div>
+        <p class="hint">${esc(t('Программа только слушает события движка: ничего не запускает, не останавливает и не удаляет. Rootless Podman видит только твои контейнеры, Docker — если у пользователя есть доступ к нему.'))}</p>`)}
+      ${card('services','⚙️',t('Службы'),win?t('Службы Windows, которые завершились с ошибкой или не запустились (по журналу событий). Если служба снова работает, карточка отмечается «починилось».')
+        :t('Службы systemd, которые упали: не запустился сервис, не прошёл таймер бэкапа. Когда служба снова работает, карточка отмечается «починилось».'),svcStat,
+        win?'':`<div class="erow"><label class="switch"><input type="checkbox" id="sSys"${sv.system?' checked':''}> ${esc(t('Системные службы'))}</label>
+          <label class="switch"><input type="checkbox" id="sUser"${sv.user?' checked':''}> ${esc(t('Службы пользователя'))}</label></div>
+        ${linesSel('services',t('Хвост журнала'))}`)}
+      ${card('commands','⌨️',t('Команды'),t('Итог команды: код выхода, сколько шла и хвост вывода, если она упала. Удачный повторный запуск той же команды в той же папке отмечает прошлую ошибку «починилось».'),'',
+        `<div class="erow always"><span class="lbl">${esc(t('Обёртка'))}</span></div><pre>${esc(d.commands.run)}</pre>
+        <p class="hint">${esc(t('Например: сборка, тесты, выгрузка. Вывод идёт в терминал как обычно, код выхода сохраняется — обёртку можно ставить и в скрипты.'))}</p>
+        ${d.commands.hook?`<div class="erow always"><span class="lbl">${esc(t('Без обёртки'))}</span></div><pre>${esc(d.commands.hook)}</pre>
+          <p class="hint">${esc(t('Хук терминала: о любой команде дольше минуты — всплывашка и карточка (строка в ~/.bashrc или ~/.zshrc, либо ./install.sh --terminal-hook).'))}</p>`:''}
+        ${linesSel('commands',t('Хвост вывода'))}`)}
+      <p class="hint">${esc(t('Хвосты логов и вывода хранятся только в базе на этом компьютере: в виджете они свёрнуты, а правило «Переслать в Telegram» отправляет только текст карточки. Колонка появится на доске с первым событием.'))}</p>`;
+    const save=async(col,patch)=>{try{const p=await api('/api/prefs',{themed:{[col]:patch}});d.prefs=p.themed;PREFS=p;toast(t('Сохранено'));}
+      catch(e){toast(e.message,true);}draw();};
+    page.querySelectorAll('[data-on]').forEach(cb=>cb.onchange=()=>save(cb.dataset.on,{enabled:cb.checked}));
+    page.querySelectorAll('[data-lines]').forEach(el=>el.onchange=()=>save(el.dataset.lines,{log_lines:+el.value}));
+    $('cSS').onchange=()=>save('containers',{startstop:$('cSS').checked});
+    $('cIgnSave').onclick=()=>save('containers',{ignore:$('cIgn').value});
+    if($('sSys')){$('sSys').onchange=()=>save('services',{system:$('sSys').checked});$('sUser').onchange=()=>save('services',{user:$('sUser').checked});}
+  };
+  draw();
+  // состояние слушателей меняется в фоне (движок найден, начал слушать) — подтягиваем, пока раздел открыт
+  pageTimer=setInterval(async()=>{if(document.activeElement&&document.activeElement.id==='cIgn')return;
+    try{const n=await api('/api/themed');d.containers=n.containers;d.services=n.services;draw();}catch(e){}},5000);
+}
+
+// ── Логи: журнал работы программы ──
+const LOG_LVL={info:'инфо',warn:'внимание',error:'ошибка'};
+const LOG_SRC={collect:'сбор',widget:'доска',page:'страница',view:'просмотр'};
+const LOG_FILTERS={all:'Все',warn:'Внимание и ошибки',error:'Только ошибки'};
+let logView={level:'all',q:'',auto:true};
+async function showLogs(){
+  page.innerHTML=`<h1>${esc(t('Логи'))}<span style="flex:1"></span>
+      <button class="btn" type="button" id="lgCopy">${esc(t('Скопировать'))}</button>
+      <button class="btn" type="button" id="lgExport">${esc(t('Выгрузить'))}</button>
+      <button class="btn danger" type="button" id="lgClear">${esc(t('Очистить'))}</button></h1>
+    <p class="lead">${esc(t('Журнал работы самой программы: запуск, ошибки, фоновые задачи, что сделали правила. Тексты твоих сообщений сюда не пишутся. Журнал лежит только на этом компьютере.'))}</p>
+    <div class="filters"><span class="seg" id="lgLvl">${['all','warn','error'].map(l=>`<button type="button" data-l="${l}" aria-pressed="${logView.level===l}">${esc(t(LOG_FILTERS[l]))}</button>`).join('')}</span>
+      <input class="inp" id="lgQ" placeholder="${attr(t('Поиск по журналу'))}" value="${attr(logView.q)}" style="width:240px">
+      <label class="switch"><input type="checkbox" id="lgAuto"${logView.auto?' checked':''}> ${esc(t('Обновлять само'))}</label></div>
+    <p class="hint" id="lgInfo"></p><div id="lgList"><div class="state">${esc(t('Загружаю…'))}</div></div>
+    <p class="hint" style="margin-top:12px">${esc(t('Чтобы сообщить об ошибке, выгрузи журнал: домашняя папка в выгрузке заменится на «~», имя пользователя — на <user>. Всё равно просмотри файл перед отправкой.'))}</p>`;
+  let last=[];
+  const load=async()=>{
+    let r;try{r=await api(`/api/logs?level=${logView.level}&q=${encodeURIComponent(logView.q)}&limit=800`);}
+    catch(e){$('lgList').innerHTML=`<div class="state">${esc(t('Сервер виджета не отвечает, поэтому настройки не загрузились.'))}</div>`;return;}
+    last=r.rows; navBadge(r.errors_day);
+    const dec=x=>LANG==='en'?x:x.replace('.',',');
+    const kb=n=>n<1024?t('{n} Б',{n}):n<1048576?t('{n} КБ',{n:(n/1024).toFixed(0)}):t('{n} МБ',{n:dec((n/1048576).toFixed(1))});
+    $('lgInfo').innerHTML=`${esc(t('Записей: {n}',{n:r.total}))}${r.total>r.rows.length?' · '+esc(t('показаны последние {n}',{n:r.rows.length})):''} · ${esc(t('ошибок за сутки: {n}',{n:r.errors_day}))}
+      · ${esc(t('папка'))} <code>${esc(r.dir)}</code> · ${esc(kb(r.bytes))} ${esc(t('из {m} — старые записи удаляются сами',{m:kb(r.max_bytes)}))}`;
+    const today=new Date().toISOString().slice(0,10);
+    $('lgList').innerHTML=r.rows.length?`<div class="loglist">${r.rows.map(x=>`<div class="lg ${x.lvl}"><span class="lt">${esc(x.t.slice(0,10)===today?x.t.slice(11):x.t.slice(5))}</span>
+      <span class="ll">${esc(t(LOG_LVL[x.lvl]||x.lvl))}</span><span class="ls">${esc(t(LOG_SRC[x.src]||x.src))}</span><span class="lm">${esc(x.msg)}</span></div>`).join('')}</div>`
+      :`<div class="empty-note">${esc(t(logView.level==='all'&&!logView.q?'Журнал пуст.':'Ничего не нашлось.'))}</div>`;
+  };
+  $('lgLvl').querySelectorAll('button').forEach(b=>b.onclick=()=>{logView.level=b.dataset.l;
+    $('lgLvl').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));load();});
+  let qT=0;$('lgQ').oninput=()=>{clearTimeout(qT);qT=setTimeout(()=>{logView.q=$('lgQ').value.trim();load();},250);};
+  $('lgAuto').onchange=()=>{logView.auto=$('lgAuto').checked;};
+  $('lgCopy').onclick=async()=>{
+    const text=[...last].reverse().map(x=>`${x.t}  ${x.lvl.toUpperCase()}  ${x.src}  ${x.msg}`).join('\n');
+    try{await navigator.clipboard.writeText(text);toast(t('Скопировано'));}
+    catch(e){const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();
+      const ok=document.execCommand('copy');ta.remove();toast(ok?t('Скопировано'):t('Не скопировалось'),!ok);}
+  };
+  $('lgExport').onclick=async()=>{try{const r=await api('/api/logs/export',{level:logView.level,q:logView.q});
+    toast(t('Сохранено: {p}',{p:r.path}));}catch(e){toast(e.message,true);}};
+  confirmBtn($('lgClear'),t('Удалить все записи? Нажми ещё раз'),async()=>{
+    try{await api('/api/logs/clear',{});toast(t('Журнал очищен'));load();}catch(e){toast(e.message,true);}});
+  await load();
+  pageTimer=setInterval(()=>{if(logView.auto)load();},5000);
+}
+function navBadge(n){const el=$('navLogs');if(!el)return;el.textContent=n?String(n):'';el.classList.toggle('bad',!!n);
+  el.title=n?t('ошибок за сутки: {n}',{n}):'';}
+
 // ── Система: проверки и автозапуск ──
 async function showSystem(){
   page.innerHTML=`<div class="state">${esc(t('Загружаю…'))}</div>`;
@@ -1359,10 +1505,19 @@ ru: [
 <pre>notify-send -a "Сборки" "CI: main" "Сборка #413 прошла"</pre>
 <p><code>-a</code> — колонка, заголовок — чат. Если текст начинается с «Кто: …», «Кто» станет отправителем. Колонку можно переименовать и дать ей значок в «Источники → … → Переименовать».</p>
 <p>Без notify-send (с других машин, из CI) — HTTP-запросом, см. раздел «Приём событий».</p>`],
+['Тематические колонки: контейнеры, службы, команды', `
+<p>В разделе «Тематические колонки» включаются колонки для тех, кто работает с кодом и серверами. Каждая — отдельно, по умолчанию все выключены.</p>
+<ul><li><b>Контейнеры</b> — Docker и Podman: упал, не хватило памяти, healthcheck «нездоров», перезапуск по кругу. Программа только слушает события движка.</li>
+<li><b>Службы</b> — упавшие службы systemd (на Windows — службы из журнала событий).</li>
+<li><b>Команды</b> — итог команды через обёртку <code>messhub run -- make build</code> (из исходников — <code>python3 app/run.py -- …</code>, на Windows — <code>messhub-run.exe -- …</code>).</li></ul>
+<p>Когда проблема ушла (контейнер снова работает, служба поднялась, команда прошла), карточка бледнеет и получает «✓ починилось». Хвост лога свёрнут под карточкой, двойной клик по нему копирует лог. Свои скрипты могут делать так же через «Приём событий»: поле <code>key</code> и <code>status: "resolved"</code>.</p>`],
 ['Долгие команды в терминале', `
-<p>Когда команда в терминале шла дольше минуты, в виджет падает «готово» с кодом выхода — удобно для сборок и выгрузок.</p>
+<p>Когда команда в терминале шла дольше минуты, приходит всплывашка «готово» с кодом выхода, а на доске — карточка в колонке «Команды» (включи её в «Тематических колонках»).</p>
 <pre>./install.sh --terminal-hook</pre>
 <p>или вручную — добавь в <code>~/.bashrc</code> или <code>~/.zshrc</code> строку <code>source &lt;папка программы&gt;/app/hooks/long-command.sh</code> (из пакета — <code>source /usr/lib/messhub/hooks/long-command.sh</code>). Порог — переменная <code>MESSHUB_LONG_CMD</code> (секунды, по умолчанию 60).</p>`],
+['Логи: если что-то не работает', `
+<p>Раздел «Логи» — журнал самой программы: запуск, ошибки, фоновые задачи. Тексты сообщений туда не пишутся. Число рядом с пунктом меню — ошибки за последние сутки.</p>
+<p>«Выгрузить» сохраняет журнал в «Загрузки», заменяя домашнюю папку на «~». Такой файл можно приложить к сообщению об ошибке на GitHub — но сначала просмотри его сам.</p>`],
 ['Второй виджет с отдельными колонками', `
 <p>Например, отдельное окно только для рабочего мессенджера на втором мониторе:</p>
 <pre>messhub widget --only express --state ~/.config/messhub/widget-work.json</pre>
@@ -1407,8 +1562,17 @@ en: [
 <p>Any command can post an event to the widget — it is a normal notification:</p>
 <pre>notify-send -a "Builds" "CI: main" "Build #413 passed"</pre>
 <p><code>-a</code> is the column, the title is the chat. Rename the column and give it an icon under “Sources → … → Rename”. Without notify-send (from other machines, CI) — use an HTTP request, see “Event intake”.</p>`],
+['Themed columns: containers, services, commands', `
+<p>“Themed columns” turns on columns for people who work with code and servers. Each one separately; all are off by default.</p>
+<ul><li><b>Containers</b> — Docker and Podman: crashed, out of memory, unhealthy, restart loop. The app only listens to engine events.</li>
+<li><b>Services</b> — failed systemd services (on Windows — services from the event log).</li>
+<li><b>Commands</b> — the result of a command run through <code>messhub run -- make build</code> (from source: <code>python3 app/run.py -- …</code>, on Windows: <code>messhub-run.exe -- …</code>).</li></ul>
+<p>When the problem is gone (the container runs again, the service is back, the command passed), the card fades and gets “✓ fixed”. The log tail is collapsed under the card; double-click it to copy. Your scripts can do the same through “Event intake”: the <code>key</code> field and <code>status: "resolved"</code>.</p>`],
+['Logs: when something does not work', `
+<p>“Logs” is the app's own log: start-up, errors, background jobs. Message texts are never written there. The number next to the menu item is errors in the last day.</p>
+<p>“Export” saves the log to Downloads with your home folder replaced by “~”. You can attach it to a bug report on GitHub, but look through it first.</p>`],
 ['Long terminal commands', `
-<p>When a terminal command runs longer than a minute, a “done” card with the exit code lands in the widget.</p>
+<p>When a terminal command runs longer than a minute, you get a “done” pop-up with the exit code and a card in the Commands column (turn it on under “Themed columns”).</p>
 <pre>./install.sh --terminal-hook</pre>
 <p>or add <code>source &lt;app folder&gt;/app/hooks/long-command.sh</code> (package: <code>/usr/lib/messhub/hooks/long-command.sh</code>) to <code>~/.bashrc</code> or <code>~/.zshrc</code>. Threshold: <code>MESSHUB_LONG_CMD</code> (seconds, default 60).</p>`],
 ['A second widget with its own columns', `
@@ -1456,6 +1620,7 @@ function showHelp(){
   try{const v=await api('/api/version');ABOUT=v;$('appVer').textContent=`${v.name} ${v.version}`;document.title=`${v.name} — ${t('Настройки').toLowerCase()}`;
     if(v.author)$('credit').innerHTML=`<a href="${attr(v.repo)}" target="_blank" rel="noopener noreferrer" title="${attr(v.email)}">© ${esc(v.author)}</a>`;}catch(e){}
   try{fwdReady=(await api('/api/forward')).configured;}catch(e){}
+  try{navBadge((await api('/api/logs?limit=1')).errors_day);}catch(e){}
   route();
 })();
 </script>

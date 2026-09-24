@@ -9,8 +9,13 @@
          -d '{"source": "Сборки", "chat": "CI: main", "text": "Сборка #413 прошла"}'
 
 Поля: source (обязательно — это колонка), text (обязательно), chat, sender,
-urgency (0/1/2). Дальше работают обычные правила (подсветить, закрепить, звук,
-переслать). Ключ — в ~/.config/<APP_ID>/ingest.json (права 600), выдаётся и
+urgency (0/1/2), details (длинный хвост лога — в виджете свёрнут, в Telegram не уходит).
+Дальше работают обычные правила (подсветить, закрепить, звук, переслать).
+
+«Проблема → починилось» (как у тематических колонок, events.py): key — ключ проблемы
+(например "backup:nas"). Новое событие с тем же ключом заменяет прежнюю карточку, а
+{"source": …, "key": "backup:nas", "status": "resolved"} без текста отмечает её
+«починилось» и новой карточки не создаёт. Ключ — в ~/.config/<APP_ID>/ingest.json (права 600), выдаётся и
 меняется в настройках. Без ключа запрос отклоняется.
 
 Из сети (с других машин) приём включается отдельно — настройка ingest_bind
@@ -28,6 +33,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import catcher
+import events
 import paths
 import rules
 from i18n import L
@@ -62,11 +68,31 @@ def _s(payload, key, limit, required=False):
     return v.strip()
 
 
-def accept(db_path, payload):
+def accept_api(db_path, payload):
+    """Приём события (см. докстринг): карточка → {"id"}, status=resolved → {"resolved": n}."""
+    if not isinstance(payload, dict):
+        raise ValueError(L("Ожидался JSON-объект", "Expected a JSON object"))
+    key = _s(payload, "key", 200)
+    status = payload.get("status", "problem")
+    if status not in ("problem", "resolved"):
+        raise ValueError(L("status — problem или resolved", "status must be problem or resolved"))
+    if status == "resolved":
+        if not key:
+            raise ValueError(L("Для status: resolved нужен key", "status: resolved needs a key"))
+        conn = sqlite3.connect(db_path, timeout=5)
+        try:
+            return {"resolved": events.resolve(conn, "ingest:" + key)}
+        finally:
+            conn.close()
+    return {"id": accept(db_path, payload, key=key)}
+
+
+def accept(db_path, payload, key=""):
     """Записать событие как уведомление и выполнить действия правил. → id записи."""
     if not isinstance(payload, dict):
         raise ValueError(L("Ожидался JSON-объект", "Expected a JSON object"))
     source, text = _s(payload, "source", 60, True), _s(payload, "text", 4000, True)
+    details = _s(payload, "details", 20000)
     chat = _s(payload, "chat", 200) or source
     sender = _s(payload, "sender", 200) or chat
     urgency = payload.get("urgency", 1)
@@ -76,9 +102,13 @@ def accept(db_path, payload):
     rec = {"app": source, "chat": chat, "sender": sender, "is_bot": catcher.guess_is_bot(sender),
            "message": text, "notification_id": 0, "urgency": urgency, "has_media": 0,
            "event_ts": ts, "event_iso": datetime.fromtimestamp(ts).isoformat(timespec="seconds"),
-           "raw_summary": chat, "raw_body": text, "site": "", "avatar": None}
+           "raw_summary": chat, "raw_body": text, "site": "", "avatar": None,
+           "event_key": ("ingest:" + key) if key else None, "details": details[-events.DETAILS_MAX:] or None}
     conn = sqlite3.connect(db_path, timeout=5)
     try:
+        if key:                      # одна проблема — одна карточка: прежнюю с тем же ключом прочитать
+            conn.execute("UPDATE messages SET is_read = 1, read_at = ? WHERE event_key = ? AND is_read = 0 "
+                         "AND pinned = 0", (catcher.msk_time(), rec["event_key"]))
         rec["id"] = catcher.insert(conn, rec)
         rules.apply_on_insert(conn, rec)
         return rec["id"]
@@ -109,7 +139,7 @@ def serve_network(db_path, bind):
                 return self._reply(401, {"error": "bad token"})
             try:
                 size = min(int(self.headers.get("Content-Length") or 0), 65536)
-                self._reply(200, {"id": accept(db_path, json.loads(self.rfile.read(size) or b"{}"))})
+                self._reply(200, accept_api(db_path, json.loads(self.rfile.read(size) or b"{}")))
             except (ValueError, TypeError) as e:
                 self._reply(400, {"error": str(e)})
 
