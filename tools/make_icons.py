@@ -4,9 +4,11 @@
 Иконка программы: доска с тремя колонками карточек. Рисуется кодом, без графических
 библиотек, чтобы её можно было пересобрать где угодно.
 
-    python3 tools/make_icons.py        # → app/icons/messhub.svg, messhub-<N>.png, messhub.ico
+    python3 tools/make_icons.py        # → app/icons/messhub.svg, messhub-<N>.png, messhub.ico, messhub.icns
+    python3 tools/make_icons.py --icns # только messhub.icns
 
-PNG — для Linux (иконки приложения и окна), ICO (PNG внутри, 16…256) — для Windows.
+PNG — для Linux (иконки приложения и окна), ICO (PNG внутри, 16…256) — для Windows,
+ICNS (PNG внутри, 16…1024, с вариантами для Retina) — для macOS.
 """
 
 import os
@@ -98,7 +100,38 @@ def ico(pngs):
     return head + dirs + data
 
 
+# ICNS: тип записи → размер PNG внутри (16…1024 и @2x для Retina)
+ICNS_TYPES = ((b"icp4", 16), (b"icp5", 32), (b"icp6", 64), (b"ic07", 128), (b"ic08", 256), (b"ic09", 512),
+              (b"ic10", 1024), (b"ic11", 32), (b"ic12", 64), (b"ic13", 256), (b"ic14", 512))
+
+
+def icns(png_of):
+    """ICNS с PNG внутри (так делает и iconutil): заголовок 'icns' + записи «тип, длина, данные»."""
+    body = b"".join(t + struct.pack(">I", len(png_of(n)) + 8) + png_of(n) for t, n in ICNS_TYPES)
+    return b"icns" + struct.pack(">I", len(body) + 8) + body
+
+
+def make_icns():
+    cache = {}
+
+    def png_of(n):
+        if n not in cache:
+            path = os.path.join(OUT, f"messhub-{n}.png")
+            if os.path.exists(path):
+                with open(path, "rb") as f:
+                    cache[n] = f.read()
+            else:                                    # 512 и 1024 — без лишнего сглаживания: пикселей и так много
+                cache[n] = raster(n, ss=2 if n <= 512 else 1)
+        return cache[n]
+    with open(os.path.join(OUT, "messhub.icns"), "wb") as f:
+        f.write(icns(png_of))
+
+
 def main():
+    if "--icns" in sys.argv:
+        make_icns()
+        print("готово:", os.path.join(OUT, "messhub.icns"))
+        return
     os.makedirs(OUT, exist_ok=True)
     with open(os.path.join(OUT, "messhub.svg"), "w", encoding="utf-8") as f:
         f.write(svg())
@@ -110,6 +143,7 @@ def main():
             f.write(png)
     with open(os.path.join(OUT, "messhub.ico"), "wb") as f:
         f.write(ico([p for p in pngs if p[0] in (16, 24, 32, 48, 64, 128, 256)]))
+    make_icns()
     print("готово:", OUT)
 
 

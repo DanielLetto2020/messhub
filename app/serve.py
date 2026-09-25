@@ -172,7 +172,8 @@ class View:
     def row(self, d):
         s = rules.source_of(d["app"], d.get("site") or "", self.names)
         text = d.get("message") or ""
-        d.update(src=s["key"], src_name=s["name"], src_ico=s["ico"], src_rank=s["rank"],
+        sub, sub_name = rules.sub_of(d["app"], d.get("site") or "", d.get("chat") or "")
+        d.update(src=s["key"], src_name=s["name"], src_ico=s["ico"], src_rank=s["rank"], sub=sub, sub_name=sub_name,
                  highlight=self.rs.highlight(s["key"], d["chat"], d["sender"], text),
                  mention=bool(self.mre and self.mre.search(text)))
         return d
@@ -626,10 +627,11 @@ def export_config(db_path):
 def themed_info(db_path):
     """Настройки и состояние тематических колонок — для раздела настроек."""
     prefs = read(db_path, rules.get_prefs)
-    run_cmd = (f'"{os.path.join(os.path.dirname(os.path.abspath(sys.executable)), "messhub-run.exe")}" -- …'
+    run_exe = "messhub-run.exe" if os.name == "nt" else "messhub-run"     # в сборке — рядом с messhub(.exe)
+    run_cmd = (f'"{os.path.join(os.path.dirname(os.path.abspath(sys.executable)), run_exe)}" -- …'
                if getattr(sys, "frozen", False) else
                "messhub run -- …" if HERE.startswith("/usr/lib/") else f"python3 {os.path.join(HERE, 'run.py')} -- …")
-    hook = "" if os.name == "nt" else (
+    hook = "" if os.name == "nt" or sys.platform == "darwin" else (      # хук шлёт notify-send — он есть на Linux
         "source /usr/lib/messhub/hooks/long-command.sh" if HERE.startswith("/usr/lib/")
         else f"source {os.path.join(HERE, 'hooks', 'long-command.sh')}")
     demo = os.environ.get(f"{paths.ENV_PREFIX}_THEMED_DEMO") == "1"      # снимки экрана: без настоящих движков
@@ -646,7 +648,8 @@ def themed_info(db_path):
     if demo:
         cal, cal_srcs = dict(cal, running=True, events=4, sources=2), ["~/.local/share/evolution/calendar/system/calendar.ics",
                                                                      "~/Календари/работа.ics"]
-    return {"prefs": rules.themed(prefs), "platform": "windows" if os.name == "nt" else "linux",
+    return {"prefs": rules.themed(prefs),
+            "platform": "windows" if os.name == "nt" else "mac" if sys.platform == "darwin" else "linux",
             "containers": cont, "services": serv, "commands": {"run": run_cmd, "hook": hook},
             "resources": res, "logwatch": logwatch.public_status(), "calendar": dict(cal, files=cal_srcs),
             "log_lines": list(rules.LOG_LINES)}
@@ -1010,7 +1013,8 @@ def make_handler(db_path):
                 if os.name == "nt":
                     os.startfile(scripts.DIR)      # noqa: S606 — своя папка настроек
                 else:
-                    subprocess.Popen(["xdg-open", scripts.DIR], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", scripts.DIR],
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 return {"ok": True}
             if p == "/api/logs/clear":
                 return {"cleared": applog.clear()}

@@ -11,6 +11,8 @@
 
 import locale
 import os
+import subprocess
+import sys
 import threading
 
 _local = threading.local()
@@ -46,6 +48,12 @@ def system_lang():
         loc = (locale.getlocale()[0] or "").lower()
     except (ValueError, TypeError):
         loc = ""
+    if not loc and sys.platform == "darwin":        # программе из Finder LANG не задают — язык из настроек Mac
+        try:
+            loc = subprocess.run(["defaults", "read", "-g", "AppleLocale"], capture_output=True, text=True,
+                                 timeout=3).stdout.strip().lower()
+        except (OSError, subprocess.SubprocessError):
+            loc = ""
     return "ru" if loc.startswith(("ru", "uk", "be", "kk", "russian", "ukrainian")) else "en" if loc else "ru"
 
 

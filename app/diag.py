@@ -10,7 +10,8 @@ checks() — список проверок {id, state: ok|warn|bad|info, title, 
 
 Автозапуск — это юниты systemd --user (<APP_ID>.service — сбор, <APP_ID>-widget.service
 — виджет): включить/выключить = systemctl --user enable/disable. На Windows сбор и виджет —
-один процесс messhub.exe, автозапуск — значение в HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run.
+один процесс messhub.exe, автозапуск — значение в HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run;
+на macOS — тоже один процесс (messhub.app), автозапуск — ~/Library/LaunchAgents/<APP_ID>.plist.
 """
 
 import os
@@ -29,6 +30,8 @@ from i18n import L
 
 UNITS = {"collect": f"{version.APP_ID}.service", "widget": f"{version.APP_ID}-widget.service"}
 WINDOWS = os.name == "nt"
+MAC = sys.platform == "darwin"
+LAUNCH_AGENT = os.path.expanduser(f"~/Library/LaunchAgents/{version.APP_ID}.plist")
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 WEBVIEW2 = r"Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
 
@@ -56,6 +59,8 @@ def _unit(unit):
 def autostart_status():
     if WINDOWS:
         return {"collect": _win_autostart()}
+    if MAC:
+        return {"collect": _mac_autostart()}
     return {key: _unit(unit) for key, unit in UNITS.items()}
 
 
@@ -112,6 +117,9 @@ def set_autostart(key, enabled):
     if WINDOWS:
         _win_set_autostart(enabled)
         return autostart_status()
+    if MAC:
+        _mac_set_autostart(enabled)
+        return autostart_status()
     unit = UNITS.get(key)
     if not unit:
         raise ValueError(L("Неизвестный сервис", "Unknown service"))
@@ -132,11 +140,47 @@ def restart_later(key):
         subprocess.Popen(f"{win_command()} --wait-port", creationflags=0x00000008 | 0x00000200)  # DETACHED | NEW_GROUP
         threading.Timer(0.7, lambda: os._exit(0)).start()
         return
+    if MAC:              # так же: новый процесс ждёт порт, этот выходит
+        import threading
+        subprocess.Popen([*mac_command(), "--wait-port"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True)
+        threading.Timer(0.7, lambda: os._exit(0)).start()
+        return
     unit = UNITS.get(key)
     if not unit:
         raise ValueError(L("Неизвестный сервис", "Unknown service"))
     subprocess.Popen(["sh", "-c", f"sleep 0.7; systemctl --user restart --no-block {unit}"],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+
+
+# ── macOS: автозапуск — LaunchAgent, перезапуск — новым процессом ─────────────────
+
+def mac_command():
+    """Чем запускать messhub на Mac: исполняемый файл внутри messhub.app или python + messhub_mac.py."""
+    if getattr(sys, "frozen", False):
+        return [sys.executable]
+    return [sys.executable, os.path.join(paths.HERE, "messhub_mac.py")]
+
+
+def _mac_autostart():
+    import maccatcher
+    return {"unit": LAUNCH_AGENT.replace(os.path.expanduser("~"), "~"), "installed": True,
+            "enabled": os.path.exists(LAUNCH_AGENT), "active": maccatcher.status["running"]}
+
+
+def _mac_set_autostart(enabled):
+    """~/Library/LaunchAgents/messhub.plist: при входе в систему launchd запустит messhub (одна копия)."""
+    import plistlib
+    if not enabled:
+        try:
+            os.remove(LAUNCH_AGENT)
+        except OSError:
+            pass
+        return
+    os.makedirs(os.path.dirname(LAUNCH_AGENT), exist_ok=True)
+    with open(LAUNCH_AGENT, "wb") as f:
+        plistlib.dump({"Label": version.APP_ID, "ProgramArguments": mac_command(), "RunAtLoad": True,
+                       "ProcessType": "Interactive", "LimitLoadToSessionType": "Aqua"}, f)
 
 
 def _collector_alive():
@@ -168,6 +212,8 @@ def checks(db_path):
     st = autostart_status()
     if WINDOWS:
         _win_checks(add)
+    elif MAC:
+        _mac_checks(add)
     else:
         alive = _collector_alive()
         add("collect", "ok" if alive else "bad", L("Сбор уведомлений", "Notification collector"),
@@ -195,7 +241,7 @@ def checks(db_path):
     add("apps", "info", L("Кто присылал за 7 дней", "Who sent in 7 days"),
         ", ".join(f"{a} — {n}" for a, n, _ in per) or L("никто", "nobody"))
 
-    if not WINDOWS:
+    if not WINDOWS and not MAC:
         _linux_checks(add, tg_recent)
     _common_checks(add, db_path, prefs, accs)
     for key, s in st.items():
@@ -203,6 +249,8 @@ def checks(db_path):
             L("Автозапуск виджета", "Widget autostart")
         if WINDOWS:
             title = L("Запуск при входе в Windows", "Start with Windows")
+        elif MAC:
+            title = L("Запуск при входе в macOS", "Start at macOS login")
         if not s["installed"]:
             add("svc-" + key, "warn", title, L("не установлен", "not installed"),
                 L("Запусти ./install.sh", "Run ./install.sh"))
@@ -211,7 +259,7 @@ def checks(db_path):
                 L("включён" if s["enabled"] else "выключен", "enabled" if s["enabled"] else "disabled")
                 + (L(", работает", ", running") if s["active"] else L(", остановлен", ", stopped")))
     return {"checks": res, "version": version.__version__, "python": sys.version.split()[0],
-            "platform": "windows" if WINDOWS else "linux",
+            "platform": "windows" if WINDOWS else "mac" if MAC else "linux",
             "paths": {"code": paths.HERE, "data": paths.DATA_DIR, "config": paths.CONFIG_DIR,
                       "cache": paths.CACHE_DIR, "db": db_path},
             "autostart": st}
@@ -241,6 +289,28 @@ def _win_checks(add):
     add("webview2", "ok" if wv else "bad", "WebView2", wv or L("не установлен", "not installed"),
         "" if wv else L("Поставь Microsoft Edge WebView2 Runtime с сайта Microsoft — без него доска не откроется",
                         "Install Microsoft Edge WebView2 Runtime — the board needs it"))
+
+
+def _mac_checks(add):
+    import maccatcher
+    s = maccatcher.status
+    add("collect", "ok" if s["running"] else "bad", L("Сбор уведомлений", "Notification collector"),
+        L("работает" if s["running"] else "не запущен", "running" if s["running"] else "not running"))
+    acc = maccatcher.access_status()
+    text = {"allowed": L("есть", "granted"), "denied": L("нет", "not granted"),
+            "missing": L("базы уведомлений нет", "no notification database")}.get(acc, acc)
+    hint = {"denied": L("Системные настройки → Конфиденциальность и безопасность → Полный доступ к диску → "
+                        "включи messhub, затем перезапусти его. macOS хранит уведомления в защищённой базе, "
+                        "messhub её только читает. После обновления программы разрешение нужно дать заново",
+                        "System Settings → Privacy & Security → Full Disk Access → turn on messhub, then restart "
+                        "it. macOS keeps notifications in a protected database; messhub only reads it. After an "
+                        "update grant it again"),
+            "missing": L("Появится с первым уведомлением", "It appears with the first notification")}.get(acc, "")
+    add("access", "ok" if acc == "allowed" else ("info" if acc == "missing" else "bad"),
+        L("Полный доступ к диску", "Full Disk Access"), text, hint)
+    if s.get("error"):
+        add("listener", "warn", L("Чтение уведомлений", "Reading notifications"), s["error"])
+    add("macos", "info", "macOS", str(maccatcher.macos_major() or "?"))
 
 
 def _linux_checks(add, tg_recent):

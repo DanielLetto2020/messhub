@@ -1,6 +1,6 @@
 # messhub
 
-**One window for all the notifications on your Linux computer.**
+**One window for all the notifications on your computer: Linux, plus Windows and macOS (beta).**
 
 Messages from your work messenger, Telegram, MAX, WhatsApp, mail and your own scripts land on one
 tidy board on your desktop. The pop-up is gone - the message stays. And nothing leaves your computer.
@@ -74,6 +74,12 @@ them, pin the message or mark it read from there. Esc closes it.
 message. You can also hide it for good.
 
 ![Close a column](docs/screens/en/widget-close.png)
+
+**Sub-columns** - when a column gets messages from several sites or apps (a browser with different tabs,
+mail from several mailboxes, MAX both in the browser and as an app), the button in the column header splits
+it into sub-columns, each with its own counter and "read all". Press it again to merge them back.
+
+![Sub-columns](docs/screens/en/widget-split.png)
 
 **Focus mode** (key F) - only what matters: pinned, highlighted and mentions.
 
@@ -258,6 +264,8 @@ system. Admin rights are needed only for the Linux packages (the package manager
 | Windows 10 / 11 (beta) | `messhub-<version>-windows-x64.msi` | double-click - regular install |
 | Windows 10 / 11 (beta) | `messhub-<version>-windows-setup.bat` | install without an installer |
 | Windows 10 / 11 (beta) | `messhub-<version>-windows-portable.zip` | portable, no install |
+| macOS 14+ on Apple Silicon (beta) | `messhub-<version>-macos-arm64.dmg` | open and drag into Applications |
+| macOS 14+ on Apple Silicon (beta) | `messhub-<version>-macos-arm64.zip` | the same app as an archive |
 | to verify | `SHA256SUMS.txt` | checksums of all files |
 
 ### Linux
@@ -321,11 +329,52 @@ updated Windows 10. The app isn't code-signed yet, so Windows may warn about an 
 More info → Run anyway. Windows 7 is not supported: it has no system notification center. The Windows
 version is new - if something is off, open an [issue](https://github.com/DanielLetto2020/messhub/issues/new/choose).
 
+### macOS (beta, Apple Silicon)
+
+You need a Mac with Apple Silicon (M1 or newer) and macOS 14 Sonoma or newer (up to macOS 27 Golden Gate).
+
+**Why macOS warns you.** messhub is a free open-source app without a paid Apple signature (Apple
+Developer ID, 99 dollars a year). GitHub Actions builds it right from this repository and signs it with
+the usual free signature (ad-hoc). So macOS can't verify the developer and asks you once - like
+"Unknown publisher" on Windows.
+
+1. Download `messhub-<version>-macos-arm64.dmg`, open it and drag **messhub** into Applications.
+2. Open messhub from Applications. macOS says it could not verify messhub is free of malware - press
+   **Done** (not "Move to Trash").
+3. Open **System Settings → Privacy & Security** and scroll down to "Security": there is a line saying
+   messhub was blocked - press **Open Anyway**, enter your password and press **Open** once more. The
+   button stays for about an hour after the blocked launch; if it's gone, open messhub again and come back.
+
+   The same with one Terminal command, no settings:
+
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/messhub.app
+   ```
+
+4. Allow **Full Disk Access** - messhub opens that pane itself ("System Settings → Privacy & Security →
+   Full Disk Access"). Turn messhub on there (if it's not listed - "+" and pick messhub in Applications),
+   then quit and reopen messhub. Why: macOS keeps the notifications it has shown in its own protected
+   database, and messhub only reads it. It never looks into the apps' own data.
+5. Start at login - in messhub settings, "System".
+
+**Update** - drag the new version into Applications, replacing the old one, and go through steps 2-4
+again. Without a paid signature macOS treats every version as a new app, so "Open Anyway" and "Full Disk
+Access" have to be confirmed again (remove the old messhub from the access list with "-" first).
+**Uninstall** - drag messhub from Applications to the Trash. History lives in
+`~/Library/Application Support/messhub`, the login item in `~/Library/LaunchAgents/messhub.plist`.
+
+What's different on a Mac for now: it gets the notifications macOS puts into Notification Center (if an
+app's notifications are off or one was swiped away within a couple of seconds, it won't be there); the
+Services column and the terminal hook are Linux and Windows only; "go to the app" opens the app itself.
+The Mac version is new - if something is off, open an
+[issue](https://github.com/DanielLetto2020/messhub/issues/new/choose); the log from "Logs" helps find the cause.
+
 ### Verify the download
 
 ```bash
 sha256sum -c SHA256SUMS.txt --ignore-missing      # Linux: next to the downloaded files
 certutil -hashfile messhub-…-windows-x64.msi SHA256   # Windows: compare with SHA256SUMS.txt
+shasum -a 256 messhub-…-macos-arm64.dmg                 # macOS: compare with SHA256SUMS.txt
 ```
 
 ### If Telegram messages don't show up
@@ -338,8 +387,10 @@ keep the sender name and message preview on.
 
 - messhub sees **only the notifications** your computer has already shown you. It doesn't look into
   the apps, their databases or conversations.
-- The history is kept **only on your computer** (`~/.local/share/messhub`). No servers, accounts or
-  analytics.
+- The history is kept **only on your computer** (`~/.local/share/messhub`, on a Mac -
+  `~/Library/Application Support/messhub`). No servers, accounts or analytics.
+- On a Mac notifications come from the Notification Center database that macOS itself keeps - hence
+  "Full Disk Access". messhub only reads that database and never changes it.
 - Only what you turn on leaves the computer: forwarding to Telegram, the weekly report and checking
   your own mailboxes (read-only). Smart search uses an AI model on your own computer.
 - Passwords and keys are stored in files only you can read and are never sent anywhere.
@@ -362,13 +413,21 @@ shown as a notification. The exception is mail from connected mailboxes: new mai
 next check.
 
 **Why are there no messages from the chat I have open?** Apps don't show notifications for the chat
-you're already looking at, so there's nothing to remember.
+you're already looking at (Telegram - while its window is open on that chat), so there's nothing to
+remember. Such messages could only be taken from the app's own data, and messhub never looks there.
+Switch to another window and new messages from that chat arrive as notifications again.
 
 **Sometimes only the beginning of a long message arrives.** That's how the app itself showed it:
 notifications often carry just the start of the text and "photo" or "file" instead of attachments.
 
-**Does it work on Windows or macOS?** Linux - yes, Windows 10 and 11 - yes (beta). Not Windows 7: it has no
-system notification center an app could read. No macOS.
+**Does it work on Windows or macOS?** Linux - yes, Windows 10 and 11 - yes (beta), macOS 14 or newer on
+Apple Silicon - yes (beta). Not Windows 7: it has no system notification center an app could read.
+
+**Why is everything from the browser in one column?** On Linux and Mac the browser puts the site into
+the notification, and messages go to their own columns (MAX, WhatsApp, Mail and so on). On Windows the
+site is only drawn on the pop-up itself and isn't given to other apps (checked), so everything from
+Chrome lands in one column there. When a column gets messages from several sites or apps, the button in
+its header splits it into sub-columns.
 
 **And on Wayland?** Yes, with Wayland's own limits: the board can't remember its position on screen
 or stay below other windows. See Help inside the app.

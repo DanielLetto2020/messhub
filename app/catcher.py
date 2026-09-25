@@ -195,9 +195,10 @@ def parse_message_block(header, body_lines):
 
 # ── разбор по типу приложения: браузер (сайт в теле), почта (От/Тема), остальное ──
 BROWSER_MARKS = ("yandex", "chrome", "chromium", "firefox", "brave", "opera", "vivaldi", "edge")
-MAIL_MARKS = ("thunderbird", "geary", "evolution", "outlook")
-CALENDAR_MARKS = ("alarm-notify", "reminder", "calendar")   # evolution-alarm-notify — календарь
-_RE_DOMAIN = re.compile(r"^(?:https?://)?((?:[a-z0-9-]+\.)+[a-z]{2,})(?::\d+)?/?$", re.I)
+MAIL_MARKS = ("thunderbird", "geary", "evolution", "outlook", "com.apple.mail")
+CALENDAR_MARKS = ("alarm-notify", "reminder", "calendar", "com.apple.ical")   # evolution-alarm-notify — календарь
+# домен — и кириллический (сайт.москва, пример.рф) и в punycode (xn--p1ai)
+_RE_DOMAIN = re.compile(r"^(?:https?://)?((?:[^\W_][\w-]*\.)+(?:[^\W\d_]{2,}|xn--[a-z0-9-]+))(?::\d+)?/?$", re.I)
 _RE_MAIL_FROM = re.compile(r"^(?:From|От|Отправитель)\s*:\s*(.+)$", re.I | re.M)
 _RE_MAIL_SUBJ = re.compile(r"^(?:Subject|Тема)\s*:\s*(.+)$", re.I | re.M)
 
@@ -413,6 +414,17 @@ def migrate_after(conn, added=()):
                          "WHERE id = ?", (chat, sender, message, site, id_))
         else:
             conn.execute("UPDATE messages SET site = '' WHERE id = ?", (id_,))
+    # браузер без сайта: сайт мог не распознаться (кириллический домен до 1.0.19) — пробуем снова;
+    # запись меняется, только если сайт нашёлся
+    for id_, app, summ, body in conn.execute(
+            "SELECT id, app, raw_summary, raw_body FROM messages WHERE site = '' AND raw_body LIKE '%.%'").fetchall():
+        if app_kind(app) != "browser":
+            continue
+        chat, sender, message, site, fmt = (*parse_fields(app, summ, body), None) if os.name == "nt" \
+            else parse_markup(app, summ, body)
+        if site:
+            conn.execute("UPDATE messages SET chat = ?, sender = ?, message = ?, site = ?, fmt = ? WHERE id = ?",
+                         (chat, sender, message, site, fmt, id_))
     # один раз, когда появилась колонка fmt: уведомления с разметкой, записанные раньше, — заново
     # (было «<b>Имя</b>» прямо в тексте). Только Linux: на Windows тексты уведомлений простые.
     if "fmt" in added and os.name != "nt":

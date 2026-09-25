@@ -19,6 +19,7 @@ import json
 import os
 import queue
 import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -33,6 +34,7 @@ FORWARD_CFG = os.environ.get(f"{paths.ENV_PREFIX}_FORWARD_CFG") or paths.FORWARD
 TG_API = os.environ.get(f"{paths.ENV_PREFIX}_TG_API", "https://api.telegram.org")
 
 SOUND_NAME = "message-new-instant"
+MAC_SOUND = "/System/Library/Sounds/Glass.aiff"
 SOUND_FILE = "/usr/share/sounds/freedesktop/stereo/message-new-instant.oga"
 _last_sound = 0.0
 
@@ -45,6 +47,12 @@ def play_sound():
     if os.name == "nt":                     # Windows: системный звук уведомления
         import winsound
         winsound.PlaySound("SystemNotification", winsound.SND_ALIAS | winsound.SND_ASYNC)
+        return
+    if sys.platform == "darwin":            # macOS: системный звук через afplay
+        try:
+            subprocess.Popen(["afplay", MAC_SOUND], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            pass
         return
     for cmd in (["canberra-gtk-play", "-i", SOUND_NAME], ["pw-play", SOUND_FILE],
                 ["paplay", SOUND_FILE]):

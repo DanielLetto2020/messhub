@@ -95,6 +95,11 @@ def plan(lang):
         # окно сообщения целиком: id карточки shop-api узнаём у сервера и открываем её
         ("message", "/message", M, ["fetch('/api/messages?limit=500').then(r=>r.json()).then(rs=>"
             "location.replace('/message?id='+rs.find(m=>m.chat==='shop-api'&&m.details).id));'ok'", 1500]),
+        # подколонки: «Почта» из двух ящиков делится на две (до светлой темы — она меняет настройки дальше)
+        ("widget-split", "/widget", W, [
+            "fetch('/api/prefs',{method:'POST',headers:{'Content-Type':'application/json'},"
+            "body:JSON.stringify({hidden_cols:['containers','services','commands'],split_cols:['mail']})})"
+            ".then(()=>location.reload());'ok'", 2200, DARK_DESK, 400]),
         ("widget-light", "/widget", W, [
             "fetch('/api/prefs',{method:'POST',headers:{'Content-Type':'application/json'},"
             "body:JSON.stringify({theme:'light',opacity:0.9,hidden_cols:['containers','services','commands']})})"

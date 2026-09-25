@@ -36,10 +36,11 @@ docs/screens/   картинки для README (только вымышленн�
 | `backup.py`, `report.py`, `stats.py`, `ingest.py`, `diag.py`, `avatars.py` | копии, недельный отчёт, статистика, приём событий, самодиагностика, аватары |
 | `paths.py`, `version.py` | где лежат данные, имя, автор и номер версии |
 | `wincatcher.py`, `winwidget.py`, `messhub_win.py` | Windows 10/11: чтение уведомлений (UserNotificationListener), окно на WebView2, всё одним процессом `messhub.exe` |
+| `maccatcher.py`, `messhub_mac.py` | macOS (бета, Apple Silicon): чтение базы Центра уведомлений (нужен «Полный доступ к диску»), окно - то же `winwidget.py` на WKWebView, всё одним процессом `messhub.app`; сборка - `tools/build_mac.py` (подпись ad-hoc) |
 
 | в `tools/` | |
 |---|---|
-| `build.py`, `build_windows.py` | пакеты: `.deb`, `.rpm`, `.tar.gz`; на Windows - exe, zip, `.bat`, `.msi` (CI: `.github/workflows/packages.yml`) |
+| `build.py`, `build_windows.py`, `build_mac.py` | пакеты: `.deb`, `.rpm`, `.tar.gz`; на Windows - exe, zip, `.bat`, `.msi`; на Mac - `.app` в `.dmg` и `.zip` (CI: `.github/workflows/packages.yml`) |
 | `demo_data.py`, `screenshots.py` | вымышленные данные и скриншоты для README |
 | `check_public.py`, `i18n_check.py` | нет ли личного в коммите; у всех строк интерфейса есть перевод |
 | `make_icons.py` | значок программы |

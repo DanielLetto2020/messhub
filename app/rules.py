@@ -57,6 +57,9 @@ SOURCES = (
     ("max", "max", ("MAX", "MAX"), "🅼", 2),
     ("alarm-notify", "calendar", ("Календарь", "Calendar"), "📅", 3),   # evolution-alarm-notify — до evolution
     ("org.gnome.calendar", "calendar", ("Календарь", "Calendar"), "📅", 3),
+    ("com.apple.ical", "calendar", ("Календарь", "Calendar"), "📅", 3),   # macOS: Календарь
+    ("com.apple.mobilesms", "imessage", ("Сообщения", "Messages"), "💬", 1),   # macOS: Сообщения (iMessage, SMS)
+    ("com.apple.mail", "mail", ("Почта", "Mail"), "✉️", 3),   # macOS: Почта
     ("mail-imap", "mail", ("Почта", "Mail"), "✉️", 3),        # письма из ящиков (mail.py)
     ("thunderbird", "mail", ("Почта", "Mail"), "✉️", 3),
     ("geary", "mail", ("Почта", "Mail"), "✉️", 3),
@@ -102,6 +105,7 @@ PREF_DEFAULTS = {
     "group_by_chat": True,    # сворачивать сообщения одного чата в одну плашку
     "avatars": True,          # показывать картинки отправителей из уведомлений
     "col_order": [],          # порядок колонок (ключи источников); остальные — по умолчанию
+    "split_cols": [],         # колонки, разделённые на подколонки (по сайтам и приложениям)
     "hidden_cols": [],        # скрытые насовсем колонки (ключи источников)
     "closed_cols": [],        # закрытые до нового сообщения (снова открывает apply_on_insert)
     "mail_channel": "notify", # почта: notify — уведомления почтовых программ, imap — ящики (mail.py)
@@ -143,7 +147,7 @@ PREF_DEFAULTS = {
 STATE_PREFS = ("backup_last", "report_last", "services_win_last", "quiet_state", "agenda_last")
 # от этих настроек зависит вид доски — по их хэшу (X-Prefs-Ver) виджет перечитывает её
 DISPLAY_PREFS = ("language", "opacity", "font_size", "compact", "theme", "group_by_chat",
-                 "avatars", "col_order", "hidden_cols", "closed_cols", "mail_channel", "mentions",
+                 "avatars", "col_order", "split_cols", "hidden_cols", "closed_cols", "mail_channel", "mentions",
                  "source_names", "profiles", "profile", "time_hints", "share_blur", "share_patterns", "quiet")
 
 
@@ -162,11 +166,33 @@ def source_of(app, site="", names=None):
         a = (app or "").lower()
         meta = next(({"key": k, "name": n[en], "ico": i, "rank": r} for sub, k, n, i, r in SOURCES
                      if sub in a),
-                    {"key": "other:" + a, "name": app or "—", "ico": "🔔", "rank": 9})
+                    {"key": "other:" + a, "name": _app_name(app), "ico": "🔔", "rank": 9})
     over = (names or {}).get(meta["key"])
     if over:
         meta = dict(meta, name=over.get("name") or meta["name"], ico=over.get("ico") or meta["ico"])
     return meta
+
+
+_RE_BUNDLE = re.compile(r"^[a-z0-9-]+(\.[A-Za-z0-9_-]+){2,}$")
+
+
+def _app_name(app):
+    """Название колонки незнакомого приложения: у bundle id macOS и desktop-entry вида
+    com.example.App — последняя часть («App»), иначе — как есть."""
+    if app and _RE_BUNDLE.match(app):
+        return app.rsplit(".", 1)[-1]
+    return app or "—"
+
+
+def sub_of(app, site="", chat=""):
+    """Подисточник внутри колонки — для подколонок: сайт (вкладка браузера), ящик почты из IMAP или
+    само приложение. → (ключ, название)."""
+    if site:
+        return "site:" + site, site
+    if app == "mail-imap":
+        return "imap:" + (chat or ""), chat or "IMAP"
+    name = _app_name(app)
+    return "app:" + (app or "").lower(), name.split("_")[0] if "_" in name else name   # snap: telegram-desktop_…
 
 
 # ── профили ─────────────────────────────────────────────────────────────────
@@ -417,7 +443,7 @@ def _clean_pref(k, v):
         if v not in ("notify", "imap"):
             raise bad
         return v
-    if k in ("col_order", "hidden_cols", "closed_cols"):
+    if k in ("col_order", "hidden_cols", "closed_cols", "split_cols"):
         return [str(x)[:200] for x in list(v)][:100]
     if k == "mentions":
         out = []

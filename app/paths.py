@@ -15,8 +15,9 @@
 Так `git pull` в папке с кодом никогда не лежит рядом с перепиской и токенами.
 
 Уважаются XDG_DATA_HOME / XDG_CONFIG_HOME / XDG_CACHE_HOME; на Windows — %LOCALAPPDATA%\\messhub
-(база, кэш) и %APPDATA%\\messhub (настройки). Всё можно увести в одну папку переменной
-<APP_ID>_HOME (MESSHUB_HOME) — так работают тесты и переносная версия для Windows.
+(база, кэш) и %APPDATA%\\messhub (настройки); на macOS — ~/Library/Application Support/messhub
+(база; настройки — в её папке config) и ~/Library/Caches/messhub. Всё можно увести в одну папку
+переменной <APP_ID>_HOME (MESSHUB_HOME) — так работают тесты и переносная версия для Windows.
 
 migrate_legacy() переносит файлы первых сборок (до публикации), лежавшие рядом с кодом.
 """
@@ -24,6 +25,7 @@ migrate_legacy() переносит файлы первых сборок (до �
 import os
 import shutil
 import sqlite3
+import sys
 from datetime import datetime
 
 from version import APP_ID, LEGACY_IDS
@@ -33,9 +35,14 @@ ENV_PREFIX = APP_ID.upper().replace("-", "_")          # MESSHUB
 
 
 WINDOWS = os.name == "nt"
+MAC = sys.platform == "darwin"
 # Windows: данные и кэш — %LOCALAPPDATA%\messhub, настройки — %APPDATA%\messhub (переезжают с профилем)
 _WIN_BASE = {"XDG_DATA_HOME": ("LOCALAPPDATA", ""), "XDG_CONFIG_HOME": ("APPDATA", ""),
              "XDG_CACHE_HOME": ("LOCALAPPDATA", "cache")}
+# macOS: как принято у программ Mac — Application Support и Caches в ~/Library
+_MAC_BASE = {"XDG_DATA_HOME": ("~/Library/Application Support", ""),
+             "XDG_CONFIG_HOME": ("~/Library/Application Support", "config"),
+             "XDG_CACHE_HOME": ("~/Library/Caches", "")}
 
 
 def _xdg(var, default, app_id=APP_ID):
@@ -45,6 +52,10 @@ def _xdg(var, default, app_id=APP_ID):
     if WINDOWS:
         env, sub = _WIN_BASE[var]
         base = os.environ.get(env) or os.path.expanduser("~")
+        return os.path.join(base, app_id, sub) if sub else os.path.join(base, app_id)
+    if MAC:
+        base, sub = _MAC_BASE[var]
+        base = os.path.expanduser(base)
         return os.path.join(base, app_id, sub) if sub else os.path.join(base, app_id)
     base = os.environ.get(var) or os.path.expanduser(default)
     return os.path.join(base, app_id)
@@ -115,7 +126,7 @@ def _merge_dir(old, new):
 def migrate_old_app_dirs(log=print):
     """Папки данных прежних имён проекта (LEGACY_IDS) → папки нынешнего APP_ID.
     Зовут install.sh (до запуска сервисов), сбор и виджет при старте."""
-    if os.environ.get(f"{ENV_PREFIX}_HOME") or WINDOWS:     # на Windows прежних имён не было
+    if os.environ.get(f"{ENV_PREFIX}_HOME") or WINDOWS or MAC:     # на Windows и Mac прежних имён не было
         return []
     moved = []
     for old_id in LEGACY_IDS:

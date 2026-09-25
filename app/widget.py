@@ -78,7 +78,7 @@ FORCE_NOX11 = bool(os.environ.get(f"{paths.ENV_PREFIX}_FORCE_NOX11"))
 
 def is_x11():
     return not FORCE_NOX11 and isinstance(Gdk.Display.get_default(), GdkX11.X11Display)
-_RE_SITE = re.compile(r"^(?:[a-z0-9-]+\.)+[a-z]{2,}$")
+_RE_SITE = re.compile(r"^(?:[^\W_][\w-]*\.)+(?:[^\W\d_]{2,}|xn--[a-z0-9-]+)$")   # и сайт.москва
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_STATE = paths.WIDGET_STATE       # ~/.config/<APP_ID>/widget-state.json

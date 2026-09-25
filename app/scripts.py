@@ -83,7 +83,8 @@ def command(path):
     """Как запустить файл, или None — не скрипт."""
     ext = os.path.splitext(path)[1].lower()
     if ext == ".py":
-        py = sys.executable if not getattr(sys, "frozen", False) else (shutil.which("py") or shutil.which("python"))
+        py = sys.executable if not getattr(sys, "frozen", False) else (
+            shutil.which("py") or shutil.which("python3") or shutil.which("python"))
         return [py, path] if py else None
     if WINDOWS:
         if ext in (".bat", ".cmd"):

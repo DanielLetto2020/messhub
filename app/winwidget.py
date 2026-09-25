@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Окно доски на Windows 10/11 — то же, что widget.py на Linux, но на pywebview (движок WebView2).
+Окно доски на Windows 10/11 и macOS — то же, что widget.py на Linux, но на pywebview (движок WebView2
+на Windows, WKWebView на Mac).
 
 Страница та же (/widget?host=pywebview) и говорит с окном теми же сообщениями через
 window.pywebview.api.post(…):
@@ -10,14 +11,21 @@ window.pywebview.api.post(…):
   lock:1 / lock:0 — замок: не двигать, не менять размер, держать под остальными окнами;
   settings / settings:<раздел> — окно настроек;  message:<id> — окно одного сообщения (/message?id=N);
   assistant — окно ассистента (/assistant);
-  open:{"app","site"} — сайт открыть в браузере, приложение — по его AUMID (shell:AppsFolder).
+  open:{"app","site"} — сайт открыть в браузере, приложение — по его AUMID (shell:AppsFolder), на Mac —
+      по bundle id (open -b).
 
-Прозрачных окон WebView2 не умеет — подложка сплошная (класс pyw на странице). Место, размер
-и замок хранятся в том же widget-state.json, что и на Linux (%APPDATA%\\\\messhub).
+Прозрачность (настройка «Непрозрачность»): по-настоящему прозрачное окно с WebView2 на Windows рисуется
+серым, а на Mac не показывается вовсе (проверено в CI), поэтому подложка сплошная (класс pyw на странице),
+а полупрозрачным становится окно целиком: на Windows — слой с альфой (WS_EX_LAYERED), на Mac —
+NSWindow.alphaValue. Страница шлёт opacity:<0.3…1>. Место, размер и замок хранятся в том же
+widget-state.json, что и на Linux (%APPDATA%\\\\messhub).
 """
 
 import json
 import os
+import re
+import subprocess
+import sys
 import threading
 import time
 import webbrowser
@@ -25,11 +33,14 @@ import webbrowser
 import paths
 import screen
 import version
-import wincatcher
+
+WINDOWS = os.name == "nt"
+MAC = sys.platform == "darwin"
 
 MIN_W, MIN_H = 360, 160
 DEF_W, DEF_H = 1000, 300
 HWND_BOTTOM, SWP_KEEP = 1, 0x0001 | 0x0002 | 0x0010        # NOSIZE | NOMOVE | NOACTIVATE
+GWL_EXSTYLE, WS_EX_LAYERED, LWA_ALPHA = -20, 0x80000, 0x2
 
 
 def _load_state(path):
@@ -99,7 +110,7 @@ class Api:
         elif msg.startswith("share:"):
             cfg = json.loads(msg[6:])
             self._share = {"on": bool(cfg.get("on")), "patterns": [str(x) for x in cfg.get("patterns") or []]}
-            if self._share["on"] and not self._share_thread:
+            if self._share["on"] and not self._share_thread and WINDOWS:   # заголовки окон — пока только Windows
                 self._share_thread = threading.Thread(target=self._share_loop, name="share", daemon=True)
                 self._share_thread.start()
         elif msg.startswith("search:"):
@@ -114,6 +125,8 @@ class Api:
             self._open_page("assistant", "/assistant?host=pywebview", 1120, 760)
         elif msg.startswith("open:"):
             self._open(json.loads(msg[5:]))
+        elif msg.startswith("opacity:"):
+            self._set_alpha(float(msg[8:]))
 
     # ── окно ──
     def _remember(self, *_):
@@ -136,8 +149,28 @@ class Api:
         except Exception:  # noqa: BLE001
             return None
 
+    def _set_alpha(self, opacity):
+        """Окно целиком полупрозрачное. Текст бледнеет вместе с подложкой, поэтому шкала мягче, чем на
+        Linux: 0.3 → 55 %, 0.72 → 82 %, 1 → непрозрачное."""
+        alpha = 0.35 + 0.65 * max(0.3, min(1.0, opacity))
+        if MAC and self._win and self._win.native is not None:
+            from PyObjCTools import AppHelper           # AppKit — только из главного потока
+            AppHelper.callAfter(self._win.native.setAlphaValue_, alpha)
+            return
+        if not WINDOWS:
+            return
+        h = self._hwnd()
+        if not h:
+            return
+        import ctypes
+        u = ctypes.windll.user32
+        style = u.GetWindowLongW(h, GWL_EXSTYLE)
+        if not style & WS_EX_LAYERED:
+            u.SetWindowLongW(h, GWL_EXSTYLE, style | WS_EX_LAYERED)
+        u.SetLayeredWindowAttributes(h, 0, int(round(255 * alpha)), LWA_ALPHA)
+
     def _keep_below(self):
-        if self._state.get("locked"):
+        if WINDOWS and self._state.get("locked"):       # на Mac замок только не даёт двигать и тянуть
             h = self._hwnd()
             if h:
                 import ctypes
@@ -158,6 +191,14 @@ class Api:
         if site:
             webbrowser.open("https://" + site)
             return
+        if MAC:                                       # app у уведомлений Mac — bundle id (ru.keepcoder.Telegram)
+            if re.match(r"^[\w.-]+$", app) and "." in app:
+                r = subprocess.run(["open", "-b", app], capture_output=True, text=True, timeout=10)
+                if r.returncode == 0:
+                    return
+            self._toast("Не нашёл окно «{app}» — приложение закрыто?", {"app": app})
+            return
+        import wincatcher
         aumid = wincatcher.aumid_for(app)
         if aumid:
             try:
@@ -335,7 +376,8 @@ def run(base_url, state_path=paths.WIDGET_STATE, only="", open_settings=False):
     win.events.loaded += api._on_loaded
     win.events.moved += api._remember
     win.events.resized += api._remember
-    win.events.shown += lambda: threading.Thread(target=api._below_loop, daemon=True).start()
+    if WINDOWS:
+        win.events.shown += lambda: threading.Thread(target=api._below_loop, daemon=True).start()
 
     def closed():
         api._remember()
@@ -345,5 +387,8 @@ def run(base_url, state_path=paths.WIDGET_STATE, only="", open_settings=False):
         api._open_settings("")
     storage = os.path.join(paths.CACHE_DIR, "webview")         # localStorage страницы (фокус, размытие)
     os.makedirs(storage, exist_ok=True)
-    webview.start(gui="edgechromium", private_mode=False, storage_path=storage,
-                  icon=os.path.join(paths.HERE, "icons", "messhub.ico"))
+    if MAC:                                            # WKWebView; значок — у самого messhub.app
+        webview.start(private_mode=False, storage_path=storage)
+    else:
+        webview.start(gui="edgechromium", private_mode=False, storage_path=storage,
+                      icon=os.path.join(paths.HERE, "icons", "messhub.ico"))

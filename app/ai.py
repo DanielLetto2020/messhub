@@ -35,6 +35,7 @@ import re
 import shutil
 import sqlite3
 import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -125,10 +126,14 @@ def hardware():
         if WINDOWS:
             import resources
             ram = resources.memory()[2] / 1024 ** 3
+        elif sys.platform == "darwin":
+            ram = int(subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True,
+                                     timeout=5).stdout.strip()) / 1024 ** 3
+            vram = vram or ram * 0.66          # Apple Silicon: общая память, видеоядро берёт до ~2/3
         else:
             with open("/proc/meminfo", encoding="utf-8") as f:
                 ram = int(f.readline().split()[1]) / 1024 ** 2
-    except (OSError, ValueError, IndexError):
+    except (OSError, ValueError, IndexError, subprocess.SubprocessError):
         pass
     return {"vram_gb": round(vram, 1), "ram_gb": round(ram, 1)}
 

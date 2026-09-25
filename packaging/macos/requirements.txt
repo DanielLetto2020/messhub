@@ -1,0 +1,3 @@
+# messhub на macOS (messhub_mac.py, сборка messhub.app). На Linux не нужно — там только stdlib + GTK.
+# Окно доски: pywebview на движке WKWebView (встроен в macOS), через PyObjC — pywebview ставит его сам
+pywebview>=5.3,<7
