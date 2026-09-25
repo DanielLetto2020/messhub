@@ -838,6 +838,7 @@ async function send(){
         if(ev.type==='context') $('ctxLine').textContent=t('Выборка: {s}',{s:ev.summary});
         else if(ev.type==='token'||ev.type==='think'){if(ev.type==='think')thinkAcc+=ev.t;else acc+=ev.t;
           if(!drawT)drawT=setTimeout(()=>{drawT=0;redraw();},60);}
+        else if(ev.type==='retry') $('ctxLine').textContent=ev.text;
         else if(ev.type==='error') err=ev.error;
       }
     }
@@ -871,11 +872,13 @@ async function openDrawer(){
           ${s.provider==='openrouter'?`<div class="ext" style="margin-top:8px"><b class="w">☁ ${esc(t('Облачная модель'))}</b><p>${esc(t('Выборка сообщений (тексты, имена, названия чатов), вопрос и картинки уйдут в OpenRouter и к провайдеру модели. Для личного и рабочего лучше локальная модель.'))}</p></div>`:''}</div>
         <div class="fld"><label>${esc(t('Температура'))}: <b id="dTv">${s.temperature}</b></label><input type="range" id="dTemp" min="0" max="1.5" step="0.05" value="${s.temperature}">
           <div class="hint">${esc(t('Ниже — точнее и повторяемее (для сводок и поиска), выше — свободнее.'))}</div></div>
-        <div class="fld"><label>${esc(t('Размер контекста'))}</label><select class="inp" id="dCtx">${ST.ctx_sizes.map(n=>`<option value="${n}"${s.num_ctx===n?' selected':''}>${n.toLocaleString()} ${esc(t('токенов'))}</option>`).join('')}</select>
-          <div class="hint">${esc(s.provider==='lmstudio'?t('У LM Studio размер контекста задаётся при загрузке модели в самой программе; здесь он лишь решает, сколько сообщений отдать.'):t('Больше — больше сообщений влезет в выборку, но нужно больше видеопамяти и ответ медленнее.'))}</div></div>
+        ${s.provider==='openrouter'?`<div class="fld"><label>${esc(t('Размер контекста'))}</label>
+          <div class="hint">${esc(info.ctx?t('Берётся у самой модели: {n} токенов. Сколько сообщений отдать — решает «Сообщений в выборке» ниже.',{n:info.ctx.toLocaleString()}):t('Берётся у самой модели.'))}</div></div>`
+        :`<div class="fld"><label>${esc(t('Размер контекста'))}</label><select class="inp" id="dCtx">${ST.ctx_sizes.map(n=>`<option value="${n}"${s.num_ctx===n?' selected':''}>${n.toLocaleString()} ${esc(t('токенов'))}</option>`).join('')}</select>
+          <div class="hint">${esc(s.provider==='lmstudio'?t('У LM Studio размер контекста задаётся при загрузке модели в самой программе; здесь он лишь решает, сколько сообщений отдать.'):t('Больше — больше сообщений влезет в выборку, но нужно больше видеопамяти и ответ медленнее.'))}${info.thinking?' '+esc(t('«Думающей» модели нужно место и на размышления — лучше от 16 384.')):''}</div></div>`}
         <div class="fld"><label>${esc(t('Размышления модели'))}</label><select class="inp" id="dThink">
             ${[['hide','Скрывать — свёрнуты над ответом'],['show','Показывать сразу'],['off','Не просить размышлять — быстрее']].map(([v,l])=>`<option value="${v}"${s.think===v?' selected':''}>${esc(t(l))}</option>`).join('')}</select>
-          <div class="hint">${esc(info.thinking?t('Модель «думающая» (qwen3, deepseek-r1 и подобные): сначала рассуждает, потом отвечает. «Не просить» ускоряет гибридные модели, но модели, которые думают всегда, будут рассуждать прямо в ответе.'):t('Эта модель не размышляет — настройка на неё не влияет.'))}</div></div>
+          <div class="hint">${esc(info.mandatory?t('Эта модель размышляет всегда: «Не просить» лишь просит думать как можно меньше.'):info.thinking?t('Модель «думающая» (qwen3, deepseek-r1 и подобные): сначала рассуждает, потом отвечает. «Не просить» ускоряет гибридные модели, но модели, которые думают всегда, будут рассуждать прямо в ответе.'):t('Эта модель не размышляет — настройка на неё не влияет.'))}</div></div>
         <div class="fld"><label>${esc(t('Длина ответа, не больше'))}</label><select class="inp" id="dMax">${[256,512,1024,2048,4096,8192].map(n=>`<option value="${n}"${s.max_tokens===n?' selected':''}>${n} ${esc(t('токенов'))}</option>`).join('')}</select></div>
         <h3 class="sec">${esc(t('Какие сообщения давать модели'))}</h3>
         <div class="fld"><label>${esc(t('Период'))}</label><select class="inp" id="dPer">${Object.keys(PERIOD_NAMES).map(k=>`<option value="${k}"${s.period===k?' selected':''}>${esc(t(PERIOD_NAMES[k]))}</option>`).join('')}</select></div>
@@ -895,7 +898,7 @@ async function openDrawer(){
     if($('dMf')){const f=$('dMf');f.oninput=()=>{mf=f.value.trim().toLowerCase();const pos=f.selectionStart;draw();const g=$('dMf');g.focus();g.setSelectionRange(pos,pos);};}
     $('dModel').onchange=async e=>{const [p,...n]=e.target.value.split('|');s.provider=p;s.model=n.join('|');info=await api(`/api/ai/model-info?provider=${encodeURIComponent(p)}&model=${encodeURIComponent(s.model)}`).catch(()=>({ctx:0}));draw();};
     $('dTemp').oninput=e=>{s.temperature=+e.target.value;$('dTv').textContent=s.temperature;};
-    $('dCtx').onchange=e=>{s.num_ctx=+e.target.value;};
+    if($('dCtx')) $('dCtx').onchange=e=>{s.num_ctx=+e.target.value;};
     $('dMax').onchange=e=>{s.max_tokens=+e.target.value;};
     $('dThink').onchange=e=>{s.think=e.target.value;};
     $('dPer').onchange=e=>{s.period=e.target.value;};

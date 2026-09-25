@@ -22,11 +22,14 @@ hf.co/… — тоже можно) — /api/pull с прогрессом и от
 сколько сообщений, брать ли логи и прочитанное). Ответ на вопрос:
   1. выборка: сообщения за период (слова «сегодня», «вчера», «за неделю» в вопросе сужают его),
      по источникам; самые подходящие — по умному поиску (векторы rag.py, если включён) или по
-     словам вопроса, плюс самые свежие; сколько влезет в контекст;
+     словам вопроса, плюс самые свежие; сколько влезет в контекст (plan: запас на размышления и
+     ответ, русский текст — ≈2 символа на токен; у OpenRouter контекст — самой модели);
   2. в модель — системный промпт, сводка (сколько сообщений, откуда), сами сообщения строками
      «#id · дата · источник / чат / кто: текст», история беседы и вопрос;
-  3. ответ идёт потоком (NDJSON: context → token… → done), номера #id в ответе — ссылки на окно
-     сообщения. Прерванный ответ сохраняется как есть.
+  3. ответ идёт потоком (NDJSON: context → think…/token… → done), номера #id в ответе — ссылки на окно
+     сообщения. Прерванный ответ сохраняется как есть. «Думающая» модель истратила всё на
+     размышления и не ответила — второй заход без них (retry), у OpenRouter с обязательными
+     размышлениями — с наименьшим усилием.
 """
 
 import json
@@ -285,9 +288,14 @@ def or_models(force=False):
             except ValueError:
                 return 0.0
         p_in, p_out = per_m(pr.get("prompt")), per_m(pr.get("completion"))    # цена-не-число не роняет весь каталог
+        rs = m.get("reasoning") if isinstance(m.get("reasoning"), dict) else {}
+        top = m.get("top_provider") if isinstance(m.get("top_provider"), dict) else {}
         out.append({"name": m.get("id", ""), "title": m.get("name", ""), "ctx": int(m.get("context_length") or 0),
+                    "max_out": int(top.get("max_completion_tokens") or 0),
                     "vision": "image" in (arch.get("input_modalities") or []),
                     "reasoning": "reasoning" in (m.get("supported_parameters") or []),
+                    "mandatory": bool(rs.get("mandatory")),   # размышления не выключаются (DeepSeek R1, gpt-oss, Gemini 2.5 Pro…)
+                    "efforts": [str(x) for x in (rs.get("supported_efforts") or [])],
                     "price_in": p_in, "price_out": p_out,
                     "free": m.get("id", "").endswith(":free") or (not p_in and not p_out)})
     out.sort(key=lambda x: x["name"])
@@ -352,7 +360,7 @@ _DEMO_OR = [  # имя, название, контекст, картинки, р
 
 
 def _demo_or(ai):
-    models = [{"name": n, "title": ti, "ctx": c, "vision": v, "reasoning": r,
+    models = [{"name": n, "title": ti, "ctx": c, "max_out": 0, "vision": v, "reasoning": r, "mandatory": r, "efforts": [],
                "price_in": pi, "price_out": po, "free": not pi and not po} for n, ti, c, v, r, pi, po in _DEMO_OR]
     _or_models.update(t=time.time(), list=models, error="")
     on = ai["openrouter"]
@@ -398,6 +406,7 @@ def model_info(conn, provider, model):
         if provider == "openrouter":
             m = _or_model(model) or (or_models() and _or_model(model)) or {}
             return {"ctx": m.get("ctx", 0), "params": "", "thinking": m.get("reasoning", False), "vision": m.get("vision", False),
+                    "mandatory": m.get("mandatory", False), "max_out": m.get("max_out", 0),
                     "price_in": m.get("price_in", 0), "price_out": m.get("price_out", 0)}
         for m in lmstudio_status(ai["lmstudio_url"])["models"]:
             if m["name"] == model:
@@ -489,12 +498,34 @@ def delete_model(conn, model):
 
 SESSION_KEYS = ("provider", "model", "temperature", "num_ctx", "max_tokens", "system", "period", "max_msgs",
                 "include_logs", "include_read", "think")
-THINK_BUDGET = 4096          # сколько токенов «думающей» модели даём на размышления сверх длины ответа
+CHARS_PER_TOKEN = 2.0       # замер на русских сообщениях (qwen3, T-lite): ≈2 символа на токен; по-английски — больше
+MARGIN = 256                # токенов про запас: служебная разметка чата у модели
+OR_THINK = 16384            # OpenRouter: запас на размышления сверх ответа (OpenRouter заранее бронирует деньги на max_tokens)
+LOCAL_THINK_MAX = 8192      # на компьютере: размышлениям — остаток контекста, но не больше (зациклившаяся модель думала бы час)
+IMAGE_TOKENS = 1500         # сколько контекста примерно занимает одна картинка
 
 
-def think_budget(st):
-    """Токены на размышления: не больше THINK_BUDGET и не больше 40% контекста (он делится с выборкой)."""
-    return min(THINK_BUDGET, int(st["num_ctx"] * 0.4))
+def est_tokens(text):
+    """Сколько токенов займёт текст — с запасом (точно знает только сама модель)."""
+    return int(len(text or "") / CHARS_PER_TOKEN) + 1
+
+
+def plan(st, lim=None, thinking=False):
+    """Как делить контекст: ctx — весь, out — запас на размышления и ответ, prompt — на промпт (системный
+    промпт, выборка, история, вопрос). У OpenRouter контекст — самой модели (настройка «Размер контекста»
+    только для моделей на этом компьютере: от неё зависит видеопамять)."""
+    lim = lim or {}
+    ctx = st["num_ctx"]
+    if st["provider"] == "openrouter":              # каталог не загрузился — хотя бы 32 тыс.: облачные модели умеют больше
+        ctx = lim.get("ctx") or max(ctx, 32768)
+    think = 0
+    if thinking:
+        think = OR_THINK if st["provider"] == "openrouter" else max(2048, int(ctx * 0.3))
+    out = st["max_tokens"] + think
+    if lim.get("max_out"):
+        out = min(out, lim["max_out"])
+    out = min(out, int(ctx * 0.6))                  # промпту — не меньше 40% контекста
+    return {"ctx": ctx, "out": out, "prompt": max(256, ctx - out - MARGIN)}
 
 
 def session_defaults(conn):
@@ -628,9 +659,10 @@ def _msk(dt):
     return local.astimezone(catcher.MSK).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def build_context(conn, st, question, thinking=False):
+def build_context(conn, st, question, thinking=False, budget=None):
     """Выборка сообщений: (строки для модели, id, сводка, с какого периода).
-    thinking — модель будет размышлять: сообщениям достаётся меньшая доля контекста."""
+    budget — символов на сообщения (по умолчанию — 3/4 промпта по plan; thinking — модель будет размышлять,
+    сообщениям достаётся меньше)."""
     prefs = rules.get_prefs(conn)
     names = prefs["source_names"]
     frm, to = question_period(question, st["period"])
@@ -675,26 +707,29 @@ def build_context(conn, st, question, thinking=False):
             sc += 2
         if sc:
             scored[it["id"]] = sc
-    share = 0.35 if thinking else 0.55               # остальное — история беседы, размышления и ответ
-    budget = int(st["num_ctx"] * share * 3)          # символов на сообщения (≈3 символа на токен)
-    chosen, used = [], 0
+    if budget is None:
+        budget = int(plan(st, None, thinking)["prompt"] * 0.75 * CHARS_PER_TOKEN)
+    chosen, used, cut = [], 0, False
     ranked = sorted(items, key=lambda x: (-scored.get(x["id"], 0), -x["id"]))
     for it in ranked:
         if len(chosen) >= st["max_msgs"]:
             break
         line = _line(it, st["include_logs"])
         if used + len(line) > budget:
+            cut = True
             if scored.get(it["id"]):
                 continue
             break
         chosen.append((it, line))
         used += len(line)
+    left = min(len(ranked), st["max_msgs"]) - len(chosen) if cut else 0
     chosen.sort(key=lambda x: x[0]["id"])
     period = (frm.strftime("%d.%m %H:%M") if frm else L("всё время", "all time")) + \
         (" – " + to.strftime("%d.%m %H:%M") if to else "")
     summary = L(f"Период: {period}. Всего сообщений: {total}", f"Period: {period}. Messages in total: {total}") + \
         ("; " + ", ".join(f"{k} {v}" for k, v in sorted(by_src.items(), key=lambda x: -x[1])[:10]) if by_src else "") + \
-        "." + (L(f" В выборке: {len(chosen)}.", f" In the selection: {len(chosen)}.") if chosen else "")
+        "." + (L(f" В выборке: {len(chosen)}.", f" In the selection: {len(chosen)}.") if chosen else "") + \
+        (L(f" Не влезло в контекст: {left}.", f" Did not fit into the context: {left}.") if left else "")
     return [ln for _, ln in chosen], [it["id"] for it, _ in chosen], summary, period
 
 
@@ -814,46 +849,91 @@ def chat(db_path, sid, question, emit, lang="ru", images=None):
             conn.execute("UPDATE ai_sessions SET title = ? WHERE id = ?", (question.splitlines()[0][:80], sid))
         conn.execute("UPDATE ai_sessions SET updated = ? WHERE id = ?", (now, sid))
         conn.commit()
-        will_think = st.get("think") != "off" and thinks(ai, st["provider"], st["model"])
-        lines, ids, summary, period = build_context(conn, st, question, will_think)
+        lim = _limits(st["provider"], st["model"])          # у OpenRouter — заодно подтянет каталог моделей
+        can_think = thinks(ai, st["provider"], st["model"])
+        will_think = st.get("think") != "off" and can_think
+        pl = plan(st, lim, will_think or bool(lim.get("mandatory")))
+        base = st["system"] or default_system()
+        fixed = est_tokens(base + question) + 200 + IMAGE_TOKENS * len(names)       # 200 — сводка и подписи
+        hist = _history(s["messages"], int(pl["prompt"] * 0.2 * CHARS_PER_TOKEN))
+        room = pl["prompt"] - fixed - sum(est_tokens(m["content"]) for m in hist)
+        lines, ids, summary, period = build_context(conn, st, question, will_think,
+                                                    budget=max(0, int(room * CHARS_PER_TOKEN)))
         emit({"type": "context", "count": len(ids), "ids": ids, "summary": summary, "period": period})
-        system = (st["system"] or default_system()) + "\n\n" + L(
+        system = base + "\n\n" + L(
             "Сводка по выборке: ", "Selection summary: ") + summary + "\n" + L(
             "Сообщения (номер · дата · источник / чат / кто: текст):", "Messages (number · date · source / chat / who: text):") + \
             "\n" + ("".join(lines) or L("(за этот период сообщений нет)\n", "(no messages in this period)\n"))
-        hist = _history(s["messages"], int(st["num_ctx"] * 0.2 * 3))
         messages = [{"role": "system", "content": system}, *hist,
                     _with_images(st["provider"], {"role": "user", "content": question}, names)]
+        used = est_tokens(system + question) + sum(est_tokens(m["content"]) for m in hist) + IMAGE_TOKENS * len(names)
+        free = max(st["max_tokens"], pl["ctx"] - used - MARGIN)      # всё, что осталось от контекста
         t0, answer, thought, tokens, stopped, reason, cost = time.time(), [], [], 0, False, "", None
-        split = ThinkSplitter()             # <think>…</think> внутри текста (LM Studio, старые Ollama) — в размышления
-        try:
-            for ev in _stream(ai, st, messages):
-                for kind, piece in split.feed(ev.get("t", ""), ev.get("think", "")):
-                    (thought if kind == "think" else answer).append(piece)
-                    if not emit({"type": "think" if kind == "think" else "token", "t": piece}):
-                        stopped = True
+        retried, retry_err = False, ""
+        # первый заход — как настроено; если размышления съели весь запас и ответа нет — второй, без размышлений
+        passes = [dict(st, _predict=_predict(st, pl, free, will_think, lim))]
+        while passes:
+            cur = passes.pop(0)
+            split = ThinkSplitter()         # <think>…</think> внутри текста (LM Studio, старые Ollama) — в размышления
+            reason, p_tok, p_cost = "", 0, None
+            try:
+                for ev in _stream(ai, cur, messages):
+                    for kind, piece in split.feed(ev.get("t", ""), ev.get("think", "")):
+                        (thought if kind == "think" else answer).append(piece)
+                        if not emit({"type": "think" if kind == "think" else "token", "t": piece}):
+                            stopped = True
+                            break
+                    if stopped:
                         break
-                if stopped:
+                    p_tok = ev.get("tokens") or p_tok
+                    reason = ev.get("done_reason") or reason
+                    p_cost = ev.get("cost", p_cost)
+            except (OSError, ValueError, urllib.error.URLError, http.client.HTTPException) as e:   # в т.ч. оборванный поток
+                if retried and not answer:          # второй заход не удался — объясним в заметке
+                    retry_err = _human(e)
+                elif not answer and not thought:
+                    raise ValueError(L(f"Модель не ответила: {_human(e)}", f"The model did not answer: {_human(e)}"))
+                else:
+                    stopped = True
+            for kind, piece in split.flush():
+                (thought if kind == "think" else answer).append(piece)
+                emit({"type": "think" if kind == "think" else "token", "t": piece})
+            tokens += p_tok                     # за оба захода: платят и за размышления первого
+            if p_cost is not None:
+                cost = (cost or 0) + p_cost
+            if not retried and not stopped and not "".join(answer).strip() and (thought or reason == "length") \
+                    and (can_think or lim.get("mandatory")):
+                retried = True
+                if not emit({"type": "retry", "text": L("Размышления заняли весь запас — отвечаю с наименьшими размышлениями…",
+                                                        "Thinking used up the whole budget — answering with the least thinking…")
+                             if lim.get("mandatory") else L("Размышления заняли весь запас — отвечаю без них…",
+                                                            "Thinking used up the whole budget — answering without it…")}):
+                    stopped = True
                     break
-                tokens = ev.get("tokens") or tokens
-                reason = ev.get("done_reason") or reason
-                cost = ev.get("cost", cost)
-        except (OSError, ValueError, urllib.error.URLError, http.client.HTTPException) as e:   # в т.ч. оборванный поток
-            if not answer and not thought:
-                raise ValueError(L(f"Модель не ответила: {_human(e)}", f"The model did not answer: {_human(e)}"))
-            stopped = True
-        for kind, piece in split.flush():
-            (thought if kind == "think" else answer).append(piece)
-            emit({"type": "think" if kind == "think" else "token", "t": piece})
-        text = "".join(answer).strip()
+                passes.append(dict(st, think="off", _retry=True, _predict=_predict(st, pl, free, True, lim)))
+        text = "".join(answer)
+        if "</think>" in text:          # «думает всегда», а <think> открыл шаблон модели: рассуждения — до </think>
+            pre, text = text.rsplit("</think>", 1)
+            thought.append(pre.replace("<think>", ""))
+        text = text.strip()
         note = ""
         if not text and not stopped:
-            note = (L("Модель не успела ответить: весь лимит ушёл на размышления. Увеличь «Размер контекста» и "
-                      "«Длину ответа» в настройках беседы или возьми модель без размышлений.",
-                      "The model ran out of room: the whole limit went into thinking. Raise “Context size” and “Answer "
-                      "length” in the conversation settings or use a model without thinking.") if thought else
+            note = (L("Модель не успела ответить: весь запас ушёл на размышления, а без них она отвечать не стала. "
+                      "Увеличь «Размер контекста» в настройках беседы или возьми модель без размышлений.",
+                      "The model ran out of room: everything went into thinking, and it would not answer without it. "
+                      "Raise “Context size” in the conversation settings or use a model without thinking.") if thought else
                     L("Модель ничего не ответила. Попробуй ещё раз, другую модель или меньше сообщений в выборке.",
                       "The model returned nothing. Try again, another model or fewer messages in the selection."))
+            if retry_err:
+                note += L(f" Второй заход не удался: {retry_err}.", f" The second attempt failed: {retry_err}.")
+        elif retried and text:
+            note = (L("Размышления заняли весь запас — ответ дан с наименьшими размышлениями.",
+                      "Thinking used up the whole budget — the answer was given with the least thinking.")
+                    if lim.get("mandatory") else
+                    L("Размышления заняли весь запас — ответ дан без них. Чтобы модель успевала подумать, увеличь "
+                      "«Размер контекста» в настройках беседы.",
+                      "Thinking used up the whole budget — the answer was given without it. To leave room for thinking, "
+                      "raise “Context size” in the conversation settings."))
         elif reason == "length" and text:
             note = L("Ответ обрезан по «Длине ответа» — её можно увеличить в настройках беседы.",
                      "The answer was cut at “Answer length” — raise it in the conversation settings.")
@@ -871,6 +951,37 @@ def chat(db_path, sid, question, emit, lang="ru", images=None):
         return text
     finally:
         conn.close()
+
+
+def _limits(provider, model):
+    """Пределы облачной модели из каталога OpenRouter: контекст, длина ответа, обязательные размышления."""
+    if provider != "openrouter":
+        return {}
+    m = _or_model(model) or (or_models() and _or_model(model)) or {}
+    return {k: m.get(k, d) for k, d in (("ctx", 0), ("max_out", 0), ("mandatory", False), ("efforts", []))}
+
+
+def _predict(st, pl, free, thinking, lim):
+    """Сколько токенов модели можно выдать за заход. Размышления идут в тот же счёт, что и ответ, поэтому
+    «думающей» модели — всё, что осталось от контекста (у OpenRouter — запас plan: он бронирует деньги)."""
+    if st["provider"] == "openrouter":
+        return pl["out"] if thinking or lim.get("mandatory") else st["max_tokens"]
+    return min(free, st["max_tokens"] + LOCAL_THINK_MAX) if thinking else st["max_tokens"]
+
+
+EFFORTS = ("minimal", "low", "medium", "high", "xhigh", "max")
+
+
+def _or_reasoning(think, lim):
+    """Параметр reasoning для OpenRouter: выключить размышления можно, только если модель это позволяет;
+    у моделей с обязательными размышлениями — наименьшее усилие (exclude лишь прятал бы их, а платить — всё равно)."""
+    if think:
+        return None
+    efforts = lim.get("efforts") or []            # пусто — модель принимает любое усилие
+    if not lim.get("mandatory"):                  # усилие не из списка модели OpenRouter отклоняет (400)
+        return {"effort": "none"} if not efforts or "none" in efforts else {"enabled": False}
+    low = next((e for e in EFFORTS if e in efforts), None)
+    return {"effort": low or "low"}
 
 
 class ThinkSplitter:
@@ -907,12 +1018,21 @@ def _stream(ai, st, messages):
     """События от Ollama или LM Studio: {t: текст ответа, think: размышления, tokens, done_reason}."""
     can_think = thinks(ai, st["provider"], st["model"])
     think = can_think and st.get("think") != "off"
-    budget = st["max_tokens"] + (think_budget(st) if think else 0)
+    budget = st.get("_predict") or st["max_tokens"]
     if st["provider"] == "ollama":
         body = {"model": st["model"], "messages": messages, "stream": True,
                 "options": {"temperature": st["temperature"], "num_ctx": st["num_ctx"], "num_predict": budget}}
         if can_think:
             body["think"] = think        # у «думающих» моделей: выключено — отвечает сразу
+        if can_think and st.get("_retry"):
+            if "gpt-oss" in st["model"].lower():
+                body["think"] = "low"    # gpt-oss не выключает размышления, только уровень
+            else:   # модели «думают всегда» (…-Thinking-2507) think=false не слушают: начинаем ответ за них — размышления
+                head = L("**Ответ**\n\n", "**Answer**\n\n")    # уже закрыты, ответ начат (без заголовка откроют <think> снова)
+                body["messages"] = [*messages, {"role": "assistant", "content": head, "thinking": L(
+                    "Размышлять дальше некогда — отвечаю сразу по сообщениям.",
+                    "No more time to think — answering right away from the messages.")}]
+                yield {"t": head}
         with _req(ai["ollama_url"], "/api/chat", body, timeout=900, allow_lan=ai["allow_lan"]) as r:
             for line in r:
                 try:
@@ -930,8 +1050,10 @@ def _stream(ai, st, messages):
     elif st["provider"] == "openrouter":
         body = {"model": st["model"], "messages": messages, "stream": True, "temperature": st["temperature"],
                 "max_tokens": budget, "usage": {"include": True}}
-        if can_think and not think:
-            body["reasoning"] = {"exclude": True}
+        lim = _limits("openrouter", st["model"])
+        rs = _or_reasoning(think, lim) if can_think or lim.get("mandatory") else None
+        if rs:
+            body["reasoning"] = rs
         with _or_req("/chat/completions", body, timeout=900) as r:
             for raw in r:
                 line = raw.decode("utf-8", "replace").strip()

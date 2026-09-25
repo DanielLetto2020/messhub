@@ -382,17 +382,68 @@ class AiTest(unittest.TestCase):
         with urllib.request.urlopen(f"{self.base}/api/ai/sessions", timeout=10) as r:
             self.assertNotIn(s["id"], [x["id"] for x in json.load(r)])
 
-    def test_empty_answer_explained(self):
-        """Вся «длина ответа» ушла на размышления — не «(пустой ответ)», а что поправить."""
+    def test_empty_answer_retried_without_thinking(self):
+        """Весь запас ушёл на размышления — второй заход без них; не помогло — объяснить, что поправить."""
         s = json.loads(self.post("/api/ai/session", {"settings": {"provider": "ollama", "model": "demo:1b"}}))
+        calls = []
+
+        def think_then_answer(ai_prefs, st, messages):
+            calls.append((st["think"], st["_predict"]))
+            if st["think"] != "off":
+                yield {"think": "долго-долго думаю"}
+                yield {"tokens": 4000, "done_reason": "length"}
+            else:
+                yield {"t": "Коротко: всё спокойно."}
+                yield {"tokens": 12, "done_reason": "stop"}
+        with mock.patch.object(ai, "_stream", think_then_answer), mock.patch.object(ai, "thinks", return_value=True):
+            out = self.post("/api/ai/chat", {"session": s["id"], "text": "Что было?"})
+        evs = [json.loads(x) for x in out.splitlines() if x.strip()]
+        self.assertEqual([e["type"] for e in evs], ["context", "think", "retry", "token", "done"])
+        self.assertEqual([c[0] for c in calls], ["hide", "off"])
+        self.assertGreater(calls[0][1], 1024)            # размышлениям — весь остаток контекста, не «длина ответа»
+        done = evs[-1]
+        self.assertEqual((done["tokens"], done["thinking"]), (4012, "долго-долго думаю"))
+        self.assertIn("ответ дан без них", done["note"])
+        msgs = json.loads(urllib.request.urlopen(f"{self.base}/api/ai/session?id={s['id']}", timeout=10).read())["messages"]
+        self.assertEqual(msgs[-1]["content"], "Коротко: всё спокойно.")
 
         def only_thinking(ai_prefs, st, messages):
-            yield {"think": "долго-долго думаю"}
+            yield {"think": "думаю"}
             yield {"tokens": 1024, "done_reason": "length"}
         with mock.patch.object(ai, "_stream", only_thinking), mock.patch.object(ai, "thinks", return_value=True):
-            out = self.post("/api/ai/chat", {"session": s["id"], "text": "Что было?"})
+            out = self.post("/api/ai/chat", {"session": s["id"], "text": "А ещё?"})
         done = json.loads(out.splitlines()[-1])
-        self.assertIn("весь лимит ушёл на размышления", done["note"])
+        self.assertIn("весь запас ушёл на размышления", done["note"])
+
+    def test_context_plan(self):
+        """Контекст делится с запасом на размышления; у OpenRouter — контекст самой модели, не настройка."""
+        st = {"provider": "ollama", "num_ctx": 8192, "max_tokens": 1024}
+        p = ai.plan(st, None, thinking=True)
+        self.assertEqual(p["ctx"], 8192)
+        self.assertGreaterEqual(p["out"], 1024 + 2048)
+        self.assertEqual(p["prompt"], 8192 - p["out"] - ai.MARGIN)
+        self.assertEqual(ai.plan(st)["out"], 1024)
+        orst = dict(st, provider="openrouter")
+        p = ai.plan(orst, {"ctx": 1000000, "max_out": 128000}, thinking=True)
+        self.assertEqual((p["ctx"], p["out"]), (1000000, 1024 + ai.OR_THINK))
+        self.assertEqual(ai.plan(orst, {"ctx": 200000, "max_out": 8000}, thinking=True)["out"], 8000)
+        self.assertEqual(ai.plan(orst, {})["ctx"], 32768)          # каталог не загрузился
+        self.assertEqual(ai._or_reasoning(True, {}), None)
+        self.assertEqual(ai._or_reasoning(False, {}), {"effort": "none"})
+        self.assertEqual(ai._or_reasoning(False, {"efforts": ["high", "medium", "none"]}), {"effort": "none"})
+        self.assertEqual(ai._or_reasoning(False, {"efforts": ["xhigh", "medium", "low"]}), {"enabled": False})
+        self.assertEqual(ai._or_reasoning(False, {"mandatory": True, "efforts": ["high", "medium", "low"]}), {"effort": "low"})
+        # русский текст: ≈2 символа на токен (замер на qwen3) — оценка не должна занижать
+        self.assertGreaterEqual(ai.est_tokens("Созвон переносим на 15:00, пришлите отчёт"), 20)
+
+    def test_selection_says_what_did_not_fit(self):
+        conn = sqlite3.connect(self.db)
+        st = dict(ai.session_defaults(conn), period="all")
+        lines, ids, summary, _ = ai.build_context(conn, st, "что было?", budget=len(ai._line(
+            {"id": 1, "src_name": "x", "chat": "", "sender": "", "text": "", "iso": "", "details": ""}, False)) + 60)
+        self.assertLess(len(ids), 3)
+        self.assertIn("Не влезло в контекст:", summary)
+        conn.close()
 
     def test_think_modes_and_splitter(self):
         self.assertEqual(rules.clean_ai({"think": True})["think"], "show")
@@ -404,7 +455,6 @@ class AiTest(unittest.TestCase):
         out += sp.flush()
         self.assertEqual("".join(p for k, p in out if k == "think"), "думаю")
         self.assertEqual("".join(p for k, p in out if k == "answer"), "Ответ <")
-        self.assertEqual(ai.think_budget({"num_ctx": 8192}), 3276)
 
     def test_pages_served(self):
         with urllib.request.urlopen(self.base + "/assistant", timeout=10) as r:
@@ -424,6 +474,8 @@ class FakeOpenRouter(BaseHTTPRequestHandler):
     def do_GET(self):
         body = json.dumps({"data": [
             {"id": "demo/vision-pro", "name": "Vision Pro", "context_length": 128000,
+             "top_provider": {"context_length": 128000, "max_completion_tokens": 64000},
+             "reasoning": {"mandatory": True, "supported_efforts": ["high", "medium", "low"]},
              "architecture": {"input_modalities": ["text", "image"], "output_modalities": ["text"]},
              "supported_parameters": ["reasoning"], "pricing": {"prompt": "0.000001", "completion": "0.000002"}},
             {"id": "demo/free:free", "name": "Free", "context_length": 32000, "architecture": {},
@@ -490,6 +542,7 @@ class OpenRouterTest(AiTest):
         self.assertEqual([m["name"] for m in models], ["demo/free:free", "demo/vision-pro"])   # без моделей-«художников»
         self.assertTrue(models[0]["free"] and models[1]["vision"] and models[1]["reasoning"])
         self.assertEqual(models[1]["price_in"], 1.0)
+        self.assertEqual((models[1]["mandatory"], models[1]["max_out"], models[0]["mandatory"]), (True, 64000, False))
 
         s = json.loads(self.post("/api/ai/session", {"settings": {"provider": "openrouter", "model": "demo/vision-pro", "period": "all"}}))
         out = self.post("/api/ai/chat", {"session": s["id"], "text": "Что было?", "images": ["data:image/png;base64," + base64.b64encode(PNG).decode()]})
@@ -499,11 +552,21 @@ class OpenRouterTest(AiTest):
         self.assertEqual(evs[-1]["cost"], 0.00042)
         self.assertEqual(evs[-1]["thinking"], "считаю")
         self.assertEqual(FakeOpenRouter.seen["auth"], "Bearer sk-or-v1-demo-token-not-real-1234")
+        body = FakeOpenRouter.seen["body"]
+        self.assertEqual(body["max_tokens"], 1024 + ai.OR_THINK)          # размышлениям — запас сверх ответа
+        self.assertNotIn("reasoning", body)
+        conn = sqlite3.connect(self.db)
+        self.assertEqual(ai.model_info(conn, "openrouter", "demo/vision-pro")["mandatory"], True)
+        conn.close()
         last = FakeOpenRouter.seen["body"]["messages"][-1]
         self.assertEqual(last["content"][0], {"type": "text", "text": "Что было?"})
         self.assertTrue(last["content"][1]["image_url"]["url"].startswith("data:image/png;base64,"))
         msgs = self.get(f"/api/ai/session?id={s['id']}")["messages"]
         self.assertEqual(msgs[1]["content"], "Готово (#1).")
+        # «не просить размышлять» у модели, которая думает всегда, — наименьшее усилие, а не exclude
+        self.post("/api/ai/session", {"id": s["id"], "settings": {"think": "off"}})
+        self.post("/api/ai/chat", {"session": s["id"], "text": "Коротко?"})
+        self.assertEqual(FakeOpenRouter.seen["body"]["reasoning"], {"effort": "low"})
         name = msgs[0]["meta"]["images"][0]
         with urllib.request.urlopen(f"{self.base}/ai-image/{name}", timeout=10) as r:
             self.assertEqual((r.headers["Content-Type"], r.read()), ("image/png", PNG))

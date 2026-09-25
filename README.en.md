@@ -139,6 +139,11 @@ open the message itself.
   size, answer length, which messages to use (period, sources, read ones, logs) and its own system
   prompt. Ready-made questions: "What did I miss?", "Mentions and questions to me", "Deadlines and
   agreements", "Server report".
+- **"Thinking" models** (qwen3, deepseek-r1 and the like) - the thinking is collapsed above the
+  answer. It gets what is left of the context after the selection; if the model uses it all up, it
+  answers again right away, without thinking. Such models do better with a context of 16,384 or more.
+  Cloud models use their own context, and "Messages in the selection" decides how many to send; the
+  selection summary shows how many did not fit.
 - **Everything stays with you** - the model address must be on this computer (your home network only
   if you allow it); cloud addresses are refused.
 - **Answers with code, tables and charts** - code and JSON highlighting with a Copy button, tables,

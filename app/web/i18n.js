@@ -524,6 +524,10 @@ const EN = {
   'Модель «думающая» (qwen3, deepseek-r1 и подобные): сначала рассуждает, потом отвечает. «Не просить» ускоряет гибридные модели, но модели, которые думают всегда, будут рассуждать прямо в ответе.':
     'A “thinking” model (qwen3, deepseek-r1 and similar) reasons first and answers after. “Do not ask” speeds up hybrid models, but always-thinking models will reason right in the answer.',
   'Эта модель не размышляет — настройка на неё не влияет.': 'This model does not think — the setting has no effect.',
+  'Эта модель размышляет всегда: «Не просить» лишь просит думать как можно меньше.': 'This model always thinks: “Don’t ask” only asks it to think as little as possible.',
+  'Берётся у самой модели: {n} токенов. Сколько сообщений отдать — решает «Сообщений в выборке» ниже.': 'Taken from the model itself: {n} tokens. How many messages to send is set by “Messages in the selection” below.',
+  'Берётся у самой модели.': 'Taken from the model itself.',
+  '«Думающей» модели нужно место и на размышления — лучше от 16 384.': 'A “thinking” model also needs room to think — 16,384 or more is better.',
 
   // ── поиск в шапке доски ──
   'Поиск…': 'Search…', 'Поиск по всем сообщениям · клавиша /': 'Search all messages · key /', 'Найдено': 'Found',
