@@ -17,7 +17,7 @@
                         &rules=1 — «как видит виджет»: правила показа, без отложенного,
                                    плюс highlight (цвет) и mention (упоминание)
                         заголовки X-Rules-Ver / X-Prefs-Ver — версии правил и настроек
-    GET /api/sources    источники [{key,name,ico,rank}] (&rules=1 — плюс hidden)
+    GET /api/sources    источники [{key,name,ico,rank}] (&rules=1 — плюс hidden) и свои колонки (my:…)
     GET /api/visible    {"max_id", "ids"} — что сейчас должно быть на доске виджета
     GET /api/column?src=KEY  сколько в колонке непрочитанного / закреплённого / отложенного
     POST /api/close-column {src} — закрыть колонку: прочитать её сообщения; колонка вернётся
@@ -36,7 +36,8 @@
     GET /api/logs       журнал программы: level=all|warn|error, q, src, limit (applog.py)
     POST /api/logs/clear | /api/logs/export (в «Загрузки», домашняя папка → ~) | /api/logs/client (ошибки JS)
 
-  Настройки: /api/settings/sources|source|rules, /api/rules(/delete), /api/source-mode,
+  Настройки: /api/settings/sources|source|rules, /api/rules(/delete) (у «перенести в колонку» — ещё ico),
+    /api/source-mode,
     /api/prefs, /api/stats, /api/data, /api/purge, /api/export, /api/config/export|import,
     /api/backups(/make|/restore), /api/report/preview|send, /api/forward(/test),
     /api/rag/status|install|disable|retry|remove-model|search|ask, /api/ingest/config|token,
@@ -170,12 +171,17 @@ class View:
         self.mre = rules.mention_re(self.prefs["mentions"])
 
     def row(self, d):
-        s = rules.source_of(d["app"], d.get("site") or "", self.names)
+        s0 = rules.source_of(d["app"], d.get("site") or "", self.names)
         text = d.get("message") or ""
+        # правило «перенести в колонку» ставит сообщение в свою колонку; видимость и подсветку решают
+        # по-прежнему правила источника (rsrc), а откуда оно — видно по orig_*
+        s = rules.place(self.rs, s0, d["chat"], d["sender"], text, self.names)
         sub, sub_name = rules.sub_of(d["app"], d.get("site") or "", d.get("chat") or "")
         d.update(src=s["key"], src_name=s["name"], src_ico=s["ico"], src_rank=s["rank"], sub=sub, sub_name=sub_name,
-                 highlight=self.rs.highlight(s["key"], d["chat"], d["sender"], text),
+                 rsrc=s0["key"], highlight=self.rs.highlight(s0["key"], d["chat"], d["sender"], text),
                  mention=bool(self.mre and self.mre.search(text)))
+        if s is not s0:
+            d.update(orig_src=s0["key"], orig_name=s0["name"], orig_ico=s0["ico"])
         return d
 
     def times(self, d):
@@ -189,7 +195,8 @@ class View:
         return when.find(d.get("message") or "", base)
 
     def visible(self, d):
-        return bool(d.get("pinned")) or self.rs.visible(d["src"], d["chat"], d["sender"], d.get("message") or "")
+        return bool(d.get("pinned")) or self.rs.visible(d.get("rsrc") or d["src"], d["chat"], d["sender"],
+                                                        d.get("message") or "")
 
 
 def query(db_path, after=None, limit=100, app="", q="", unread=False, widget=False,
@@ -324,6 +331,10 @@ def sources(db_path, apply_rules=False):
         if prefs["mail_channel"] == "imap" and mail.load_accounts():
             m = rules.source_of(mail.APP, "", prefs["source_names"])
             found.setdefault(m["key"], m)
+        # свои колонки (правило «перенести в колонку») — есть, пока есть правило, даже пустые
+        for name in rs.my_columns().values():
+            m = rules.my_meta(name, prefs["source_names"])
+            found.setdefault(m["key"], m)
         res = sorted(({k: s[k] for k in ("key", "name", "ico", "rank")} for s in found.values()),
                      key=lambda s: (s["rank"], s["name"]))
         if apply_rules:
@@ -407,11 +418,12 @@ def _reopen(conn, keys):
 
 
 def _reopen_for(conn, ids):
-    """Сообщения вернули в виджет — их закрытые колонки снова открыты."""
+    """Сообщения вернули в виджет — их закрытые колонки (и свои, куда их переносит правило) снова открыты."""
     prefs = rules.get_prefs(conn)
     if prefs["closed_cols"] and ids:
-        rows = conn.execute(f"SELECT app, site FROM messages WHERE id IN ({_in(ids)})", ids).fetchall()
-        _reopen(conn, {rules.source_of(a, s or "", prefs["source_names"])["key"] for a, s in rows})
+        v = View(conn)
+        _reopen(conn, {v.row(dict(zip(FIELDS, r)))["src"] for r in conn.execute(
+            f"SELECT {', '.join(FIELDS)} FROM messages WHERE id IN ({_in(ids)})", ids)})
 
 
 def _in(ids):
@@ -1052,7 +1064,13 @@ def make_handler(db_path):
                 return {"new": mail.check_now(db_path, str(payload.get("id") or "")),
                         "accounts": read(db_path, mail.public_accounts)}
             if p == "/api/rules":
-                write(db_path, rules.save_rule, rules.clean_rule(payload))
+                r = rules.clean_rule(payload)
+
+                def save(conn):
+                    rules.save_rule(conn, r)
+                    if r["action"] == "move":          # значок своей колонки выбирают в самом правиле
+                        rules.set_my_icon(conn, r["param"], payload.get("ico"))
+                write(db_path, save)
                 return {"ok": True}
             if p == "/api/rules/delete":
                 return {"ok": True, "deleted": write(db_path, rules.delete_rule, int(payload.get("id")))}

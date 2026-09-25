@@ -132,12 +132,24 @@ def item_of(un, w):
         app, aumid = "Windows", ""
     texts = []
     try:
-        binding = un.notification.visual.get_binding(_static(w[3], "toast_generic"))
-        if binding is not None:
-            texts = [t.text for t in binding.get_text_elements() if t.text]
+        visual = un.notification.visual
+        texts = _texts(visual.get_binding(_static(w[3], "toast_generic")))
+        if not texts:                    # старые шаблоны (ToastText02 и подобные) — тексты в других привязках
+            for b in list(getattr(visual, "bindings", None) or []):
+                texts = _texts(b)
+                if texts:
+                    break
     except Exception:  # noqa: BLE001
         pass
     return (int(un.id), _ts(getattr(un, "creation_time", None)), app, aumid, texts) if texts else None
+
+
+def _texts(binding):
+    """Тексты привязки без пустых: строка из пробелов и невидимых меток направления (Windows ими обрамляет
+    имена) — не текст, иначе на доске была бы карточка без содержимого."""
+    if binding is None:
+        return []
+    return [x for x in (catcher.visible_text(t.text) for t in binding.get_text_elements()) if x]
 
 
 def to_record(item):

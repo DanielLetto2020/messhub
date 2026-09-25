@@ -524,6 +524,11 @@ const EN = {
   'Модель «думающая» (qwen3, deepseek-r1 и подобные): сначала рассуждает, потом отвечает. «Не просить» ускоряет гибридные модели, но модели, которые думают всегда, будут рассуждать прямо в ответе.':
     'A “thinking” model (qwen3, deepseek-r1 and similar) reasons first and answers after. “Do not ask” speeds up hybrid models, but always-thinking models will reason right in the answer.',
   'Эта модель не размышляет — настройка на неё не влияет.': 'This model does not think — the setting has no effect.',
+  'Перенести в колонку': 'Move to a column', 'переносить в колонку': 'move to the column', 'Колонка': 'Column',
+  'Значок': 'Icon', 'Значок колонки': 'Column icon', 'Свой значок': 'Your own icon', 'Свой значок — любой эмодзи': 'Your own icon: any emoji',
+  'например: Личное': 'e.g. Personal', 'Из колонки «{name}»': 'From the “{name}” column', 'без текста': 'no text',
+  'Перенесено в колонку «{c}» правилом: {r}': 'Moved to the “{c}” column by the rule: {r}',
+  'Сообщение встанет в свою колонку с этим названием и значком (например, «Личное»), а из колонки источника уйдёт. Колонка появится на доске сама; действует и на уже пришедшие.': 'The message goes to a column of its own with this name and icon (for example, “Personal”) and leaves the source column. The column appears on the board by itself; this works for messages that already arrived too.',
   'Лента важного': 'Important strip', 'Показывать ленту над доской': 'Show the strip above the board',
   'Что в неё уходит:': 'What goes into it:', 'закреплённое': 'pinned', 'подсвеченное правилами': 'highlighted by rules',
   'упоминания': 'mentions', 'Свернуть': 'Collapse',

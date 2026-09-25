@@ -160,13 +160,12 @@ def gpu_temps():
 def containers_df():
     """Сколько занимают образы и контейнеры — к карточке о заполненном диске."""
     parts = []
+    import containers
     for eng in ("podman", "docker"):
-        exe = shutil.which(eng)
-        if not exe:
+        if not containers.exe(eng):
             continue
         try:
-            r = subprocess.run([exe, "system", "df"], capture_output=True, text=True, timeout=20,
-                               creationflags=NO_WINDOW)
+            r = containers.run_engine(eng, ["system", "df"], capture_output=True, text=True, timeout=20)
             if r.returncode == 0 and r.stdout.strip():
                 parts.append(f"$ {eng} system df\n{r.stdout.strip()}")
         except (OSError, subprocess.SubprocessError):

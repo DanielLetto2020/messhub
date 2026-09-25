@@ -4,6 +4,7 @@ import sqlite3
 import threading
 import unittest
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import ThreadingHTTPServer
 from unittest import mock
@@ -170,3 +171,74 @@ class ApiTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MoveColumnTest(unittest.TestCase):
+    """Правило «перенести в колонку»: своя колонка со значком; видимость — по правилам источника."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.db = common.new_db("move.db")
+        conn = sqlite3.connect(cls.db)
+        cls.mama = common.put(conn, "telegram-desktop", "Мама", "Позвони, как освободишься")["id"]
+        cls.work = common.put(conn, "telegram-desktop", "Работа", "Олег: созвон в 15:00")["id"]
+        cls.wa = common.put(conn, "yandex-browser", "Папа", "web.whatsapp.com\n\nКупил билеты")["id"]
+        conn.close()
+        cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), serve.make_handler(cls.db))
+        cls.base = f"http://127.0.0.1:{cls.httpd.server_address[1]}"
+        threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.httpd.shutdown()
+        cls.httpd.server_close()
+
+    req = ApiTest.req
+
+    def board(self):
+        return {m["id"]: m for m in self.req("/api/messages?unread=1&rules=1&limit=100")[1]}
+
+    def test_move_rules(self):
+        import rules
+        # без условия в «правилах для всех» нельзя; в своём источнике — можно (весь источник)
+        code, err, _ = self.req("/api/rules", {"src": "*", "action": "move", "param": "Личное"})
+        self.assertEqual(code, 400)
+        code, err, _ = self.req("/api/rules", {"src": "telegram", "chat": "Мама", "action": "move", "param": ""})
+        self.assertEqual(code, 400)
+        self.assertEqual(self.req("/api/rules", {"src": "telegram", "chat": "Мама", "action": "move",
+                                                 "param": "  Личное ", "ico": "🏠"})[0], 200)
+        self.assertEqual(self.req("/api/rules", {"src": "whatsapp", "action": "move", "param": "личное"})[0], 200)
+        b = self.board()
+        for mid in (self.mama, self.wa):                   # «Личное» и «личное» — одна колонка, значок из правила
+            self.assertEqual((b[mid]["src"], b[mid]["src_name"], b[mid]["src_ico"]), ("my:личное", "Личное", "🏠"))
+        self.assertEqual((b[self.mama]["orig_src"], b[self.mama]["orig_name"]), ("telegram", "Telegram"))
+        self.assertEqual(b[self.work]["src"], "telegram")
+        self.assertNotIn("orig_src", b[self.work])
+        srcs = {s["key"]: s for s in self.req("/api/sources?rules=1")[1]}
+        self.assertEqual(srcs["my:личное"]["ico"], "🏠")
+        self.assertEqual(list(srcs)[0], "my:личное")      # свои колонки — первыми
+        # «перенести весь источник» — не режим источника: список правил его показывает
+        det = self.req("/api/settings/source?src=whatsapp")[1]
+        self.assertEqual([r["action"] for r in det["rules"]], ["move"])
+        self.assertEqual(det["mode"], "show")
+        # скрывает по-прежнему правило источника, хоть сообщение и в своей колонке
+        self.req("/api/rules", {"src": "telegram", "chat": "Мама", "action": "hide"})
+        self.assertNotIn(self.mama, self.board())
+        w = self.req(f"/api/why?id={self.mama}")[1]
+        self.assertEqual(w["move_rule"]["param"], "Личное")
+        rid = w["vis_rule"]["id"]
+        self.req("/api/rules/delete", {"id": rid})
+        # закрыть свою колонку: читается только её; новое по правилу открывает её снова
+        st = self.req("/api/column?src=" + urllib.parse.quote("my:личное"))[1]
+        self.assertEqual((st["unread"], st["pinned"]), (2, 0))
+        code, r, _ = self.req("/api/close-column", {"src": "my:личное"})
+        self.assertEqual((code, r["read"], sorted(r["ids"])), (200, 2, sorted([self.mama, self.wa])))
+        self.assertIn(self.work, self.board())
+        conn = sqlite3.connect(self.db)
+        try:
+            rec = common.put(conn, "telegram-desktop", "Мама", "Ты где?")
+            rules.apply_on_insert(conn, rec)
+            self.assertNotIn("my:личное", rules.get_prefs(conn)["closed_cols"])
+        finally:
+            conn.close()
+        self.assertEqual(self.board()[rec["id"]]["src"], "my:личное")

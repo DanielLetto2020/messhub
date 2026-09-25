@@ -187,6 +187,11 @@
   .colors { display: inline-flex; gap: 6px; }
   .colors button { width: 22px; height: 22px; border-radius: 6px; border: 2px solid transparent; cursor: pointer; }
   .colors button[aria-checked="true"] { border-color: var(--text); }
+  /* значок своей колонки (правило «перенести в колонку») */
+  .icons { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+  .icons button { width: 30px; height: 30px; border-radius: 8px; border: 2px solid transparent; background: rgba(128,128,128,.12);
+    cursor: pointer; font-size: 16px; line-height: 1; padding: 0; }
+  .icons button[aria-checked="true"] { border-color: var(--accent, #6aa2ff); }
   .ehint { color: var(--muted); font-size: 12px; margin: -2px 0 10px 102px; max-width: 62ch; }
   .eerr { color: var(--off); margin: 0 0 10px 102px; }
   .editor .actions { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
@@ -389,13 +394,18 @@ const I = {
   back: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>',
 };
 const ACT = {show:'показывать в виджете', hide:'не показывать в виджете', highlight:'подсвечивать',
-  read:'сразу отмечать прочитанным', pin:'закреплять', sound:'играть звук', forward:'пересылать в Telegram'};
+  move:'переносить в колонку', read:'сразу отмечать прочитанным', pin:'закреплять', sound:'играть звук', forward:'пересылать в Telegram'};
+// своя колонка (правило «перенести в колонку»): значки на выбор; MYCOLS — уже заведённые колонки (для подсказки)
+const MY_ICONS=['🏠','👤','❤️','⭐','💼','👨‍👩‍👧','🎯','🔥','📌','💬','🛒','📁'];
+let MYCOLS=null;
+async function loadMyCols(){try{MYCOLS=(await api('/api/sources')).filter(s=>s.key.startsWith('my:'));}catch(e){MYCOLS=[];}return MYCOLS;}
 const COLORS = {red:'#ff6b6b', orange:'#f59f45', yellow:'#e2c23b', green:'#3ec98f', blue:'#5b9bff', purple:'#b884ff'};
 const COLOR_NAMES = {red:'красным', orange:'оранжевым', yellow:'жёлтым', green:'зелёным', blue:'синим', purple:'фиолетовым'};
 const HINTS = {
   show: 'Показывать в виджете, даже если чат или весь источник скрыт.',
   hide: 'Не показывать в виджете. Само сообщение всё равно сохранится.',
   highlight: 'Цветная полоска и фон на плашке. В режиме фокуса такие сообщения видны.',
+  move: 'Сообщение встанет в свою колонку с этим названием и значком (например, «Личное»), а из колонки источника уйдёт. Колонка появится на доске сама; действует и на уже пришедшие.',
   read: 'Считать прочитанным сразу, в виджете не появится. Действует на новые сообщения.',
   pin: 'Закрепить сверху колонки, само через 24 ч не прочитается. Действует на новые сообщения.',
   sound: 'Проиграть системный звук, когда придёт. Действует на новые сообщения.',
@@ -440,7 +450,7 @@ function confirmBtn(b,askText,run){
   };
 }
 const swatch=c=>`<span class="swatch" style="background:${COLORS[c]||'#888'}"></span>`;
-const isMode=r=>r.src!=='*'&&!r.chat&&!r.sender&&!r.text;
+const isMode=r=>(r.action==='show'||r.action==='hide')&&r.src!=='*'&&!r.chat&&!r.sender&&!r.text;   // «перенести весь источник» — не режим
 let PREFS={profiles:[]}, ABOUT={};
 const profName=id=>(PREFS.profiles.find(p=>p.id===id)||{}).name||id;
 
@@ -452,7 +462,9 @@ function condText(r){
   if(r.text)p.push(r.text_mode==='regex'?t('по выражению {x}',{x:q(r.text)}):t('с текстом {x}',{x:q(r.text)}));
   return p.join(' ')||esc(t('все'));
 }
-const actText=r=>r.action==='highlight'?`${esc(t('подсвечивать'))} ${swatch(r.param)}${esc(t(COLOR_NAMES[r.param]||''))}`:esc(t(ACT[r.action]));
+const myIco=name=>((MYCOLS||[]).find(c=>c.name.toLowerCase()===String(name).toLowerCase())||{}).ico||'📁';
+const actText=r=>r.action==='highlight'?`${esc(t('подсвечивать'))} ${swatch(r.param)}${esc(t(COLOR_NAMES[r.param]||''))}`
+  :r.action==='move'?`${esc(t('переносить в колонку'))} ${esc(myIco(r.param))} ${q(r.param)}`:esc(t(ACT[r.action]));
 function whyText(rule){
   if(!rule)return'';
   if(isMode(rule))return esc(t('режим источника'))+(rule.profile?' · '+esc(t('в профиле «{p}»',{p:profName(rule.profile)})):'');
@@ -510,10 +522,16 @@ function editorHtml(ed,ctx){
       <label class="muted"><input type="checkbox" id="edRegex" ${ed.text_mode==='regex'?'checked':''}> ${esc(t('регулярное выражение'))}</label></div>
     <div class="erow" role="radiogroup" aria-label="${attr(t('Что делать'))}"><span class="lbl">${esc(t('Что делать'))}</span>
       ${chip('show',I.eye+esc(t('Показывать')))}${chip('hide',I.eyeOff+esc(t('Не показывать')))}
-      ${chip('highlight',esc(t('Подсветить')))}${chip('read',esc(t('Сразу прочитано')))}${chip('pin',esc(t('Закрепить')))}${chip('sound',esc(t('Звук')))}
+      ${chip('highlight',esc(t('Подсветить')))}${chip('move',esc(t('Перенести в колонку')))}${chip('read',esc(t('Сразу прочитано')))}${chip('pin',esc(t('Закрепить')))}${chip('sound',esc(t('Звук')))}
       ${chip('forward',esc(t('Переслать в Telegram')),fwdReady?'':`disabled title="${attr(t('Сначала настрой раздел «Пересылка в Telegram»'))}"`)}</div>
     ${ed.action==='highlight'?`<div class="erow"><span class="lbl">${esc(t('Цвет'))}</span><span class="colors" role="radiogroup" aria-label="${attr(t('Цвет подсветки'))}">${
       Object.keys(COLORS).map(c=>`<button type="button" role="radio" aria-checked="${ed.param===c}" aria-label="${attr(t(COLOR_NAMES[c]))}" title="${attr(t(COLOR_NAMES[c]))}" data-color="${c}" style="background:${COLORS[c]}"></button>`).join('')}</span></div>`:''}
+    ${ed.action==='move'?`<div class="erow"><span class="lbl">${esc(t('Колонка'))}</span>
+      <input class="inp" id="edCol" list="dlCols" maxlength="40" placeholder="${attr(t('например: Личное'))}" value="${attr(ed.param)}" style="width:210px" aria-label="${attr(t('Название колонки'))}">
+      <datalist id="dlCols">${(MYCOLS||[]).map(c=>`<option value="${attr(c.name)}">`).join('')}</datalist></div>
+      <div class="erow"><span class="lbl">${esc(t('Значок'))}</span><span class="icons" role="radiogroup" aria-label="${attr(t('Значок колонки'))}">${
+        MY_ICONS.map(i=>`<button type="button" role="radio" aria-checked="${ed.ico===i}" data-ico="${attr(i)}">${esc(i)}</button>`).join('')}</span>
+        <input class="inp" id="edIco" maxlength="8" value="${attr(ed.ico)}" style="width:56px;text-align:center" aria-label="${attr(t('Свой значок'))}" title="${attr(t('Свой значок — любой эмодзи'))}"></div>`:''}
     ${profs.length?`<div class="erow"><span class="lbl">${esc(t('Профиль'))}</span><select class="inp" id="edProf">
       <option value="">${esc(t('Во всех профилях'))}</option>${profs.map(p=>`<option value="${attr(p.id)}"${ed.profile===p.id?' selected':''}>${esc(t('Только в профиле «{p}»',{p:p.name}))}</option>`).join('')}</select></div>`:''}
     <div class="ehint">${esc(t(HINTS[ed.action]||''))}${fwdReady?'':' '+esc(t('Пересылка станет доступна, когда настроишь бота в разделе «Пересылка в Telegram».'))}</div>
@@ -525,9 +543,19 @@ function mountEditor(slot,ed,ctx){
   const draw=()=>{slot.innerHTML=editorHtml(ed,ctx);bind();};
   function bind(){
     slot.querySelectorAll('[data-cond]').forEach(b=>b.onclick=()=>{ed.cond=+b.dataset.cond;draw();});
-    slot.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{ed.action=b.dataset.act;
-      if(ed.action==='highlight'&&!ed.param)ed.param='orange';ed.err='';draw();});
+    slot.querySelectorAll('[data-act]').forEach(b=>b.onclick=async()=>{ed.action=b.dataset.act;
+      if(ed.action==='highlight'&&!COLORS[ed.param])ed.param='orange';
+      if(ed.action==='move'){if(COLORS[ed.param])ed.param='';if(!ed.ico)ed.ico=MY_ICONS[0];if(!MYCOLS)await loadMyCols();}
+      ed.err='';draw();});
     slot.querySelectorAll('[data-color]').forEach(b=>b.onclick=()=>{ed.param=b.dataset.color;draw();});
+    // своя колонка: название (выбрали уже заведённую — её значок), значок из набора или свой
+    const setIco=v=>{ed.ico=v;slot.querySelectorAll('[data-ico]').forEach(x=>x.setAttribute('aria-checked',String(x.dataset.ico===v)));
+      const f=slot.querySelector('#edIco');if(f&&f.value!==v)f.value=v;};
+    const col=slot.querySelector('#edCol');
+    if(col)col.oninput=()=>{ed.param=col.value;const c=(MYCOLS||[]).find(x=>x.name.toLowerCase()===col.value.trim().toLowerCase());
+      if(c&&!ed.icoTouched)setIco(c.ico);};
+    slot.querySelectorAll('[data-ico]').forEach(b=>b.onclick=()=>{ed.icoTouched=true;setIco(b.dataset.ico);});
+    const ico=slot.querySelector('#edIco');if(ico)ico.oninput=()=>{ed.icoTouched=true;setIco(ico.value.trim());};
     for(const [id,k] of [['edChat','chat'],['edSender','sender'],['edText','text']]){
       const el=slot.querySelector('#'+id);if(el)el.oninput=()=>{ed[k]=el.value;};}
     const rx=slot.querySelector('#edRegex');rx.onchange=()=>{ed.text_mode=rx.checked?'regex':'contains';};
@@ -537,7 +565,9 @@ function mountEditor(slot,ed,ctx){
       const c=ed.conds?ed.conds[ed.cond]:{chat:ed.chat.trim(),sender:ed.sender.trim()};
       try{
         await api('/api/rules',{src:ed.src,chat:c.chat,sender:c.sender,text:ed.text.trim(),text_mode:ed.text_mode,
-          action:ed.action,param:ed.action==='highlight'?ed.param:'',profile:ed.profile||''});
+          action:ed.action,param:ed.action==='highlight'||ed.action==='move'?ed.param.trim():'',
+          ico:ed.action==='move'?ed.ico:'',profile:ed.profile||''});
+        if(ed.action==='move')MYCOLS=null;              // новая колонка — в подсказку при следующем правиле
         toast(t('Правило сохранено'));ctx.onSaved();
       }catch(e){ed.err=e.message;draw();}
     };
@@ -664,6 +694,7 @@ function renderNewRule(){
 }
 function renderRules(){
   const rs=cur.data.rules,box=$('rules');
+  if(!MYCOLS&&rs.some(r=>r.action==='move')){loadMyCols().then(()=>{if($('rules'))renderRules();});}   // значки своих колонок
   $('rulesN').textContent=rs.length||'';
   const g=cur.data.global_rules?`<p class="hint" style="margin-top:8px">${esc(t('Ещё действуют {n} для всех источников —',{n:tp(cur.data.global_rules,...W.rule)}))} <button class="link" type="button" id="toGlobal">${esc(t('посмотреть'))}</button>.</p>`:'';
   box.innerHTML=(rs.length?rulesListHtml(rs):`<div class="empty-note">${esc(t('Правил пока нет. Создай первое кнопкой «Новое правило» или из списка «Кто писал».'))}</div>`)+g;
@@ -737,7 +768,8 @@ function renderWho(){
 let gEd=null;
 async function showGlobalRules(){
   page.innerHTML=`<div class="state">${esc(t('Загружаю…'))}</div>`;
-  let d;try{d=await api('/api/settings/rules');PREFS.profiles=d.profiles;}catch(e){failed(showGlobalRules);return;}
+  let d;try{d=await api('/api/settings/rules');PREFS.profiles=d.profiles;if(d.rules.some(r=>r.action==='move'))await loadMyCols();}
+  catch(e){failed(showGlobalRules);return;}
   page.innerHTML=`<h1>${esc(t('Правила для всех источников'))}</h1>
     <p class="lead">${esc(t('Срабатывают в любом приложении и на любом сайте. Удобно для слов и фраз: скрывать всё про обед, подсвечивать «срочно», закреплять «дедлайн». Правило конкретного источника с тем же условием главнее.'))}</p>
     <h3>${esc(t('Правила'))} <span class="n">${d.rules.length||''}</span><span class="sp"></span><button class="btn" type="button" id="addG">${esc(t('Новое правило'))}</button></h3>

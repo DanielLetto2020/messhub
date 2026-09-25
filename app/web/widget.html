@@ -149,6 +149,8 @@
   .badge.urg { color: var(--bad); border-color: var(--bad); }
   .badge.at { color: var(--warn); border-color: var(--warn); font-weight: 700; }
   .badge.pin { color: var(--accent); border: 0; padding: 0; }
+  .badge.orig { border: 0; padding: 0; font-size: 11px; }        /* в своей колонке — откуда сообщение */
+  .notext { color: var(--muted); font-style: italic; }
   .time { flex: 0 0 auto; color: var(--muted); font-size: 10px; white-space: nowrap; }
   /* «перейти», «почему», «отложить», «закрепить» — по наведению, поверх времени */
   .acts { position: absolute; right: 22px; top: -2px; display: inline-flex; gap: 1px; padding: 0 2px;
@@ -495,6 +497,8 @@ function rich(s){
 const unesc = s => s.replace(/&(lt|gt|amp|quot|apos);/g,(_,e)=>({lt:'<',gt:'>',amp:'&',quot:'"',apos:"'"})[e]);
 function richFmt(f){return String(f).split(/(<\/?[biu]>)/).map((p,i)=>i%2?p:rich(unesc(p))).join('');}
 const textHtml = m => m.fmt ? richFmt(m.fmt) : rich(m.message||'');
+// есть ли что показать: без невидимых меток направления текста и пробелов (catcher.visible_text)
+const seen = s => !!String(s||'').replace(/[\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g,'').trim();
 const avatar = m => prefs.avatars && m.avatar ? `<img class="av" src="/avatar/${attr(m.avatar)}" alt="">` : '';
 
 // ── колонки: порядок — из prefs.col_order (перетаскивание), дальше — по умолчанию ──
@@ -530,15 +534,18 @@ function colItems(key){
 const goTitle = m => m.app==='mail-imap'||/^messhub-/.test(m.app||'')?'':m.site?t('Открыть {site}',{site:m.site}):t('Перейти в {app}',{app:m.src_name});
 // источник строкой над карточкой — в ленте важного, где карточки из разных колонок стоят рядом
 // (сайт или ящик — через точку; имя программы вроде telegram-desktop ничего не добавляет)
-const srcLine = m => `<div class="srcl">${esc(m.src_ico||'')} ${esc(m.src_name||'')}${/^(site|imap):/.test(m.sub||'')&&m.sub_name!==m.src_name?' · '+esc(m.sub_name):''}</div>`;
+const srcLine = m => `<div class="srcl">${esc(m.src_ico||'')} ${esc(m.src_name||'')}${m.orig_name?' · '+esc((m.orig_ico||'')+' '+m.orig_name):''}${
+  /^(site|imap):/.test(m.sub||'')&&m.sub_name!==m.src_name?' · '+esc(m.sub_name):''}</div>`;
 function cardHtml(m, withChat, withSrc){
   let b='';
+  if(m.orig_name) b+=`<span class="badge orig" title="${attr(t('Из колонки «{name}»',{name:m.orig_name}))}">${esc(m.orig_ico||'')}</span>`;
   if(m.pinned) b+=`<span class="badge pin" title="${attr(t('Закреплено'))}">${ICON.pinS}</span>`;
   if(m.mention) b+=`<span class="badge at" title="${attr(t('Упоминание'))}">@</span>`;
   if(m.is_bot) b+=`<span class="badge bot">${esc(t('бот'))}</span>`;
   if(m.has_media) b+='<span class="badge media">📎</span>';
   if(m.urgency>=2) b+='<span class="badge urg">!</span>';
-  const who = withChat
+  // уведомление без заголовка и имени (бывает на Windows) — хотя бы откуда оно
+  const who = !(seen(m.chat)||seen(m.sender)) ? `<span class="chat">${esc(m.orig_name||m.src_name||'—')}</span>` : withChat
     ? `<span class="chat">${esc(m.chat)}</span>`+(m.sender&&m.sender!==m.chat?` · <span class="sender">${esc(m.sender)}</span>`:'')
     : `<span class="sender">${esc(m.sender||m.chat)}</span>`;
   const cls='msg'+(fresh.has(m.id)?' flash':'')+(m.highlight?' hl hl-'+m.highlight:'')+(m.pinned?' pinned':'')+(m.resolved_at?' resolved':'');
@@ -555,7 +562,7 @@ function cardHtml(m, withChat, withSrc){
     <span class="ab" data-act="snooze" title="${attr(t('Отложить'))}">${ICON.clock}</span>
     <span class="ab${m.pinned?' on':''}" data-act="pin" title="${attr(m.pinned?t('Открепить'):t('Закрепить — не прочитается само через 24 ч'))}">${ICON.pin}</span></span>
     <span class="ab read" data-act="read" title="${attr(t('Прочитано — скрыть'))}">${ICON.check}</span></div>
-    <div class="body" title="${attr(t('Двойной клик — скопировать текст'))}">${textHtml(m)}</div>${det}${tchip}${fixed}</div>`;
+    <div class="body" title="${attr(t('Двойной клик — скопировать текст'))}">${seen(m.message)?textHtml(m):`<span class="notext">${esc(t('без текста'))}</span>`}</div>${det}${tchip}${fixed}</div>`;
 }
 // «2026-09-25 15:00» → «15:00» / «завтра 10:00» / «пт 02.10 11:30» (date_only — без часов)
 function whenLabel(at, dateOnly){
@@ -978,6 +985,7 @@ async function openWhy(btn,id){
   lines.push((w.visible?t('Видно в виджете'):t('Скрыто в виджете'))+' — '+
     (vr?(vr.src!=='*'&&!vr.chat&&!vr.sender&&!vr.text?t('режимом источника'):t('правилом: {r}',{r:ruleDesc(vr)})):t('по умолчанию'))+'.');
   if(w.highlight_rule) lines.push(t('Подсвечено правилом: {r}',{r:ruleDesc(w.highlight_rule)})+'.');
+  if(w.move_rule) lines.push(t('Перенесено в колонку «{c}» правилом: {r}',{c:w.move_rule.param,r:ruleDesc(w.move_rule)})+'.');
   for(const h of w.insert_hits) lines.push(t('При записи: {a} — правилом {r}',{a:t(ACT_WORD[h.action]||h.action),
     r:h.rule?ruleDesc(h.rule):t('правило уже удалено')})+'.');
   if(w.pinned&&!w.insert_hits.some(h=>h.action==='pin')) lines.push(t('Закреплено вручную или правилом')+'.');

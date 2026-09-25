@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Тематическая колонка «Контейнеры»: Docker и Podman (Linux и Windows).
+Тематическая колонка «Контейнеры»: Docker и Podman (Linux, Windows и macOS).
 
 Слушаем поток событий движка — `podman events --format json` / `docker events
 --format '{{json .}}'` (только чтение: ничего не запускаем, не останавливаем и не
@@ -17,6 +17,10 @@
 
 Ключ события: container:<движок>:<имя>. Rootless podman видит только контейнеры этого
 пользователя; docker — если у пользователя есть доступ к сокету (группа docker).
+
+Где движок: у программы из Finder, автозапуска или службы PATH урезан (на Mac — /usr/bin:/bin:/usr/sbin:/sbin),
+а Docker Desktop, Homebrew, OrbStack, Colima и snap кладут docker и podman в свои папки — exe() ищет и там,
+а env() добавляет их к PATH (docker зовёт оттуда свои помощники).
 """
 
 import fnmatch
@@ -25,6 +29,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
 
@@ -38,7 +43,7 @@ AFTER_DIE = 3               # столько ждём после выхода: d
 HEALTHY_AFTER = 20          # после старта столько секунд без падения — «починилось»
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 
-status = {e: {"found": False, "running": False, "error": "", "events": 0} for e in ENGINES}
+status = {e: {"found": False, "running": False, "error": "", "events": 0, "path": ""} for e in ENGINES}
 _procs = {}
 _lock = threading.Lock()
 
@@ -81,13 +86,43 @@ def parse(engine, line):
             "image": str(attrs.get("image") or e.get("from") or "")}
 
 
+def _extra_dirs():
+    """Обычные места установки docker и podman, которых может не быть в PATH программы."""
+    home = os.path.expanduser("~")
+    if sys.platform == "darwin":
+        return ["/usr/local/bin", "/opt/homebrew/bin", os.path.join(home, ".docker", "bin"),
+                "/Applications/Docker.app/Contents/Resources/bin", os.path.join(home, ".orbstack", "bin"),
+                os.path.join(home, ".rd", "bin"), "/opt/podman/bin", "/opt/local/bin"]
+    if os.name == "nt":
+        pf = os.environ.get("ProgramFiles") or r"C:\Program Files"
+        return [os.path.join(pf, "Docker", "Docker", "resources", "bin"), os.path.join(pf, "RedHat", "Podman")]
+    return ["/usr/local/bin", "/snap/bin", os.path.join(home, ".local", "bin"), os.path.join(home, "bin")]
+
+
+def exe(engine):
+    """Полный путь к docker или podman: из PATH, иначе из обычных мест установки. None — не установлен."""
+    return shutil.which(engine) or shutil.which(engine, path=os.pathsep.join(_extra_dirs()))
+
+
+def env():
+    """Окружение для вызовов движка: к PATH добавлены места установки."""
+    e = dict(os.environ)
+    have = [p for p in (e.get("PATH") or "").split(os.pathsep) if p]
+    e["PATH"] = os.pathsep.join(have + [d for d in _extra_dirs() if d not in have])
+    return e
+
+
+def run_engine(engine, args, **kw):
+    """Короткий вызов движка (logs, inspect, system df) — полным путём и с полным PATH."""
+    return subprocess.run([exe(engine) or engine, *args], env=env(), creationflags=NO_WINDOW, **kw)
+
+
 def logs_tail(engine, name, n):
     """Последние n строк лога контейнера (без цветовых кодов, строка — до 300 символов)."""
     if n <= 0:
         return ""
     try:
-        r = subprocess.run([engine, "logs", "--tail", str(n), name], capture_output=True, timeout=8,
-                           creationflags=NO_WINDOW)
+        r = run_engine(engine, ["logs", "--tail", str(n), name], capture_output=True, timeout=8)
     except (OSError, subprocess.SubprocessError):
         return ""
     raw = (r.stdout or b"") + (b"\n" + r.stderr if r.stderr else b"")
@@ -97,8 +132,8 @@ def logs_tail(engine, name, n):
 
 def oom_killed(engine, name):
     try:
-        r = subprocess.run([engine, "inspect", "--format", "{{.State.OOMKilled}}", name],
-                           capture_output=True, text=True, timeout=8, creationflags=NO_WINDOW)
+        r = run_engine(engine, ["inspect", "--format", "{{.State.OOMKilled}}", name],
+                       capture_output=True, text=True, timeout=8)
         return r.stdout.strip().lower() == "true"
     except (OSError, subprocess.SubprocessError):
         return False
@@ -231,9 +266,9 @@ def _reader(db_path, engine, stop):
     while not stop.is_set():
         st = status[engine]
         try:
-            p = subprocess.Popen([engine, "events", "--format", fmt, "--filter", "type=container"],
+            p = subprocess.Popen([exe(engine) or engine, "events", "--format", fmt, "--filter", "type=container"],
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8",
-                                 errors="replace", bufsize=1, creationflags=NO_WINDOW)
+                                 errors="replace", bufsize=1, creationflags=NO_WINDOW, env=env())
         except OSError as e:
             st.update(running=False, error=str(e))
             stop.wait(60)
@@ -283,7 +318,8 @@ def start(db_path):
             except Exception:  # noqa: BLE001 — база занята: подождём
                 on = None
             for eng in ENGINES:
-                status[eng]["found"] = bool(shutil.which(eng))
+                path = exe(eng)
+                status[eng].update(found=bool(path), path=path or "")
                 if on is None:
                     continue
                 running = eng in stops and not stops[eng].is_set()

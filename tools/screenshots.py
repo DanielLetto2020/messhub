@@ -36,7 +36,8 @@ W, S = (1640, 470), (1150, 800)        # размер окна: виджет и 
 IT = (1240, 470)                        # доска только с тематическими колонками
 M = (900, 640)                          # окно одного сообщения
 A = (1200, 780)                         # окно ассистента
-LANG_Q = {"ru": {"search": "созвон"}, "en": {"search": "call"}}
+LANG_Q = {"ru": {"search": "созвон", "my": "Личное", "chats": ["Мама", "Семья"], "wa": "Тренер"},
+          "en": {"search": "call", "my": "Personal", "chats": ["Mom", "Family"], "wa": "Coach"}}
 
 
 def plan(lang):
@@ -58,6 +59,12 @@ def plan(lang):
         ("settings-rule-editor", "/settings#source=express", S, [900,
             "document.getElementById('addRule').click();'ok'", 400,
             "document.querySelector('#nrEd [data-act=highlight]').click();'ok'", 300]),
+        # правило «перенести в колонку»: название и значок своей колонки
+        ("settings-rule-move", "/settings#source=telegram", S, [900,
+            "document.getElementById('addRule').click();'ok'", 400,
+            "document.querySelector('#nrEd [data-act=move]').click();'ok'", 500,
+            f"(()=>{{const i=document.getElementById('edCol');i.value={json.dumps(q['my'])};"
+            "i.dispatchEvent(new Event('input'));i.scrollIntoView({block:'center'});return 'ok';})()", 300]),
         ("settings-rules", "/settings#rules", S, [900]),
         ("settings-profiles", "/settings#profiles", S, [900]),
         ("settings-mentions", "/settings#mentions", S, [900]),
@@ -106,6 +113,14 @@ def plan(lang):
             "body:JSON.stringify({strip:{on:true,mentions:true},split_cols:[]})}).then(()=>location.reload());'ok'", 2500,
             "document.querySelector('.sit[data-k^=g] [data-act=stoggle]').click();'ok'", 900],
          {"host": True, "under": "/widget", "under_h": 380}),
+        # своя колонка: правила «перенести в колонку» собирают домашнее из Telegram и WhatsApp
+        ("widget-mycol", "/widget", W, [
+            "Promise.all([" + ",".join(
+                "fetch('/api/rules',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(%s)})"
+                % json.dumps(r, ensure_ascii=False) for r in
+                [{"src": "telegram", "chat": c, "action": "move", "param": q["my"], "ico": "🏠"} for c in q["chats"]] +
+                [{"src": "whatsapp", "chat": q["wa"], "action": "move", "param": q["my"], "ico": "🏠"}]) +
+            "]).then(()=>location.reload());'ok'", 2500, DARK_DESK, 400]),
         ("widget-light", "/widget", W, [
             "fetch('/api/prefs',{method:'POST',headers:{'Content-Type':'application/json'},"
             "body:JSON.stringify({theme:'light',opacity:0.9,hidden_cols:['containers','services','commands']})})"

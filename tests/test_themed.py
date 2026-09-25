@@ -170,6 +170,24 @@ class LifecycleTest(ServerCase):
         self.assertIn("run", info["commands"])
 
 
+class EngineLookupTest(unittest.TestCase):
+    @unittest.skipIf(os.name == "nt", "исполняемый файл без .exe — только на Linux и Mac")
+    def test_engine_found_outside_path(self):
+        """Mac: у программы из Finder PATH урезан — docker ищем и в обычных местах установки (Docker Desktop,
+        Homebrew…), а движку передаём полный PATH."""
+        import tempfile
+        d = tempfile.mkdtemp(dir=common.TMP)
+        f = os.path.join(d, "docker")
+        with open(f, "w") as fh:
+            fh.write("#!/bin/sh\n")
+        os.chmod(f, 0o755)
+        with mock.patch.object(containers, "_extra_dirs", return_value=[d]), \
+                mock.patch.dict(os.environ, {"PATH": os.path.join(d, "empty")}):
+            self.assertEqual(containers.exe("docker"), f)
+            self.assertIsNone(containers.exe("podman-nonexistent"))
+            self.assertEqual(containers.env()["PATH"].split(os.pathsep)[-1], d)
+
+
 class CommandsTest(ServerCase):
     def test_disabled_then_failure_then_success(self):
         cmd = {"kind": "command", "cmd": "make build", "code": 2, "seconds": 75, "cwd": "/tmp/shop",

@@ -213,7 +213,8 @@ class Api:
             return
         # над доской или под ней — по постоянной высоте (строка и раскрытый чат), а не по текущей:
         # иначе лента перескакивала бы, когда раскрывают чат
-        dock = "above" if w.y - STRIP_GAP - 320 >= 0 else "below"
+        sy = _screen_of(w.x, w.y, w.width, w.height)[1]
+        dock = "above" if w.y - sy - STRIP_GAP - 320 >= 0 else "below"
         if tell or dock != b._dock:
             b._dock = dock
             s.evaluate_js(f"window.hostStrip && hostStrip({json.dumps({'dock': dock, 'fit': True})})")
@@ -222,7 +223,7 @@ class Api:
                 s.hide()
                 b._shown = False
             return
-        h = min(b._h, w.y - STRIP_GAP) if dock == "above" else b._h
+        h = min(b._h, w.y - sy - STRIP_GAP) if dock == "above" else b._h
         s.resize(w.width, h)
         s.move(w.x, w.y - STRIP_GAP - h if dock == "above" else w.y + w.height + STRIP_GAP)
         if not b._shown:
@@ -300,19 +301,31 @@ class Api:
         win.events.closed += lambda: self._pages.pop(kind, None)
 
     def _search(self, cfg):
-        """Окно результатов без рамки над полем поиска (сверху мало места — под доской), не забирает фокус."""
+        """Окно результатов без рамки прямо над полем поиска — как на Linux: в пределах монитора, где доска,
+        высотой по свободному месту (от 220 до 440); сверху места нет — под доской. Не забирает фокус.
+        (Раньше высота была постоянной, 420, и при чуть меньшем месте сверху окно уезжало под всю доску.)"""
         import webview
         from urllib.parse import quote
         q = str(cfg.get("q") or "").strip()[:200]
         if not q:
             return self._search_close()
         w = self._win
-        width, height = 600, 420
-        x = max(0, w.x + int(cfg.get("x") or 0) - 10)
-        y = w.y - height - 6 if w.y - height - 6 >= 0 else w.y + w.height + 6
+        sx, sy, sw, sh = _screen_of(w.x, w.y, w.width, w.height)
+        width = max(460, min(640, sw - 40))
+        x = min(max(w.x + int(cfg.get("x") or 0) - 10, sx + 8), sx + sw - width - 8)
+        above, below = w.y - sy - 12, sy + sh - (w.y + w.height) - 12
+        if above >= 220:
+            height = min(440, above)
+            y = w.y - height - 6
+        elif below >= 220:
+            height = min(440, below)
+            y = w.y + w.height + 6
+        else:
+            height, y = min(440, sh - 40), sy + 20
         if self._find:
             try:
                 self._find.evaluate_js(f"window.hostSearch && hostSearch({json.dumps(q)})")
+                self._find.resize(width, height)
                 self._find.move(x, y)
                 return
             except Exception:  # noqa: BLE001 — окно уже закрыли
@@ -349,6 +362,21 @@ class Api:
         locked = "true" if self._state.get("locked") else "false"
         self._win.evaluate_js(f"window.hostSetLocked && hostSetLocked({locked})")
         self._keep_below()
+
+
+def _screen_of(x, y, w, h):
+    """(x, y, ширина, высота) монитора, на котором центр окна (координаты pywebview — логические)."""
+    import webview
+    cx, cy = x + w / 2, y + h / 2
+    screens = list(webview.screens or [])
+    for s in screens:
+        sx, sy = getattr(s, "x", 0), getattr(s, "y", 0)
+        if sx <= cx <= sx + s.width and sy <= cy <= sy + s.height:
+            return sx, sy, s.width, s.height
+    if screens:
+        s = screens[0]
+        return getattr(s, "x", 0), getattr(s, "y", 0), s.width, s.height
+    return 0, 0, 1920, 1080
 
 
 def _window_titles():

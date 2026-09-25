@@ -42,3 +42,25 @@ class MigrateTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RulesActionMigrateTest(unittest.TestCase):
+    def test_new_action_allowed_rules_kept(self):
+        """База до 1.0.22: в CHECK таблицы правил нет «move» — таблица пересоздаётся, правила — с теми же id."""
+        path = os.path.join(common.TMP, "rules-1021.db")
+        if os.path.exists(path):
+            os.remove(path)
+        c = catcher.init_db(path)
+        ddl = c.execute("SELECT sql FROM sqlite_master WHERE name = 'rules'").fetchone()[0]
+        c.execute("DROP TABLE rules")
+        c.execute(ddl.replace("'highlight', 'move', ", "'highlight', "))          # как было в 1.0.21
+        c.execute("INSERT INTO rules (id, src, chat, action, param) VALUES (7, 'express', 'Флуд', 'highlight', 'red')")
+        c.commit()
+        with self.assertRaises(sqlite3.IntegrityError):
+            c.execute("INSERT INTO rules (src, chat, action, param) VALUES ('telegram', 'Мама', 'move', 'Личное')")
+        c.close()
+        c = catcher.init_db(path)
+        self.assertEqual(c.execute("SELECT id, action, param FROM rules").fetchall(), [(7, "highlight", "red")])
+        c.execute("INSERT INTO rules (src, chat, action, param) VALUES ('telegram', 'Мама', 'move', 'Личное')")
+        self.assertIsNone(c.execute("SELECT 1 FROM sqlite_master WHERE name = 'rules_old'").fetchone())
+        c.close()

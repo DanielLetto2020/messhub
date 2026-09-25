@@ -75,6 +75,19 @@ class WinCatcherTest(unittest.TestCase):
                 wincatcher.item_of(note(2, 2, "eXpress", []), W)])
         self.assertEqual(self.rows(), [])
 
+    def test_blank_and_invisible_texts(self):
+        """Строки из пробелов и невидимых меток направления — не текст: пустой карточки на доске нет;
+        старые шаблоны — текст из другой привязки."""
+        self.assertIsNone(wincatcher.item_of(note(1, 1, "App", [" ", "\u2068\u2069", "\u200e"]), W))
+        n = note(2, 2, "App", [])
+        legacy = types.SimpleNamespace(get_text_elements=lambda: [types.SimpleNamespace(text="Обновление готово")])
+        n.notification.visual.bindings = [types.SimpleNamespace(get_text_elements=lambda: []), legacy]
+        self.assertEqual(wincatcher.item_of(n, W)[4], ["Обновление готово"])
+        self.assertEqual(wincatcher.item_of(note(3, 3, "App", ["\u2068Анна\u2069", "привет"]), W)[4], ["Анна", "привет"])
+        h = catcher.make_handler(self.conn)
+        self.assertIsNone(h(catcher.record("App", " \u200f", "\u2066 \u2069")))
+        self.assertEqual(self.rows(), [])
+
     def test_time_formats(self):
         self.assertEqual(wincatcher._ts(types.SimpleNamespace(universal_time=wincatcher.EPOCH_1601 + 10 ** 7)), 1.0)
         if wincatcher._winrt() is None:                                  # на Linux WinRT нет

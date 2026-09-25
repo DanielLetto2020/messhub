@@ -372,6 +372,7 @@ NEW_COLUMNS = (("is_read", "INTEGER DEFAULT 0"), ("read_at", "TEXT"),
                ("avatar", "TEXT"), ("event_key", "TEXT"), ("resolved_at", "TEXT"), ("details", "TEXT"),
                ("fmt", "TEXT"))
 RULES_NEWEST = ("text", "profile")    # колонки последней версии таблицы rules
+RULES_NEWEST_ACTION = "'move'"        # последнее действие в CHECK таблицы rules (1.0.22 — «перенести в колонку»)
 
 
 def migrate(conn):
@@ -390,7 +391,9 @@ def migrate(conn):
                 conn.execute(f"ALTER TABLE messages ADD COLUMN {name} {ddl}")
                 added.add(name)
     rcols = {r[1] for r in conn.execute("PRAGMA table_info(rules)")}
-    if rcols and not all(c in rcols for c in RULES_NEWEST):
+    ddl = (conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'rules'").fetchone() or [""])[0]
+    # нет новых колонок или новое действие не проходит CHECK — таблицу пересоздаём (правила переносятся с id)
+    if rcols and (not all(c in rcols for c in RULES_NEWEST) or RULES_NEWEST_ACTION not in (ddl or "")):
         conn.execute("DROP TABLE IF EXISTS rules_old")
         conn.execute("ALTER TABLE rules RENAME TO rules_old")
     return added
@@ -484,6 +487,15 @@ def blocks_from_stream(lines):
         yield header, body
 
 
+# невидимые символы: метки направления текста и изоляции (Windows ими обрамляет имена), нулевой ширины, мягкий перенос
+_RE_INVISIBLE = re.compile("[\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]")
+
+
+def visible_text(s):
+    """Текст без невидимых символов и пробелов по краям: пусто — показывать нечего."""
+    return _RE_INVISIBLE.sub("", s or "").strip()
+
+
 def record(app, summary, body, event_ts=None, urgency=1, has_media=0, notification_id=0, avatar=None):
     """Уведомление из любого источника (dbus-monitor, Windows, приём событий) → запись для insert."""
     event_ts = event_ts or time.time()
@@ -510,6 +522,8 @@ def make_handler(conn, verbose=False, on_insert=None, skip=None):
             return None
         if telegram_should_skip(rec):        # Telegram: только чаты, без ботов/каналов
             return None
+        if not any(visible_text(rec.get(k)) for k in ("chat", "sender", "message")):
+            return None                      # ни заголовка, ни имени, ни текста — на доске была бы пустая карточка
         key = (rec["app"], rec["raw_summary"], rec["raw_body"])
         now = rec["event_ts"]
         if key == last["key"] and (now - last["t"]) < 2.0:

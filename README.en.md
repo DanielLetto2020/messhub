@@ -109,7 +109,9 @@ Turned on in settings, each one separately; all are off by default. They stay ou
 everyday users and save a trip to the terminal for people who work with code and servers.
 
 - **Containers** - Docker and Podman: a container crashed, ran out of memory, turned unhealthy or
-  keeps restarting. The app only listens to engine events; it never starts or stops anything.
+  keeps restarting. The app only listens to engine events; it never starts or stops anything. On a Mac
+  it finds Docker Desktop, OrbStack, Colima, Rancher Desktop and Podman even when they are not in the
+  app's PATH.
 - **Services** - failed systemd services (a backup timer did not run, a service did not start); on
   Windows, services from the event log.
 - **Commands** - `messhub run -- make build`: the command runs as usual, and its result with the exit
@@ -191,9 +193,20 @@ board, and one click creates a rule for it.
 ![Source settings](docs/screens/en/settings-source.png)
 
 **Mail-like rules** - a condition (chat, sender, words in the text) and an action: show, hide,
-highlight with a color, mark read right away, pin, play a sound, forward to Telegram.
+highlight with a color, move to a column of your own, mark read right away, pin, play a sound, forward to
+Telegram.
 
 ![Rule editor](docs/screens/en/settings-rule-editor.png)
+
+**A column of your own** - the "Move to a column" action: a name (for example, "Personal") and an icon of
+your choice. Messages matching the rule leave their app's column for this one, so home chats from Telegram,
+WhatsApp and MAX can gather in one column. Each card shows a small icon of where it came from; the column
+can be split into sub-columns by app, closed or hidden like any other. In a source of its own you may leave
+the condition empty, and then the whole source moves into the column.
+
+![The "Move to a column" rule](docs/screens/en/settings-rule-move.png)
+
+![A "Personal" column of your own on the board](docs/screens/en/widget-mycol.png)
 
 **Rules for all** - apply to every app at once: for example, a sound for the word "urgent".
 

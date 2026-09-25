@@ -92,7 +92,10 @@ SITES = (
 
 VIS_ACTIONS = ("show", "hide")
 INSERT_ACTIONS = ("read", "pin", "sound", "forward")      # выполняются при записи
-ACTIONS = VIS_ACTIONS + ("highlight",) + INSERT_ACTIONS
+# move — «перенести в свою колонку» (param — её название): как подсветка, решается при показе, поэтому
+# действует и на уже пришедшие; видно ли сообщение, по-прежнему решают правила его источника
+ACTIONS = VIS_ACTIONS + ("highlight", "move") + INSERT_ACTIONS
+MY_PREFIX, MY_ICON = "my:", "📁"          # свои колонки: ключ my:<название>, значок по умолчанию
 TEXT_MODES = ("contains", "regex")
 HIGHLIGHT_COLORS = ("red", "orange", "yellow", "green", "blue", "purple")
 
@@ -174,6 +177,26 @@ def source_of(app, site="", names=None):
     if over:
         meta = dict(meta, name=over.get("name") or meta["name"], ico=over.get("ico") or meta["ico"])
     return meta
+
+
+def my_key(name):
+    """Своя колонка (правило «перенести в колонку») → ключ: название без лишних пробелов и регистра."""
+    return MY_PREFIX + " ".join((name or "").split()).casefold()
+
+
+def my_meta(name, names=None):
+    """Своя колонка → {key, name, ico, rank}: значок — из настроек (source_names), выбирают его в правиле.
+    Свои колонки — первыми: их заводят ради важного."""
+    key = my_key(name)
+    over = (names or {}).get(key) or {}
+    return {"key": key, "name": over.get("name") or " ".join(name.split()), "ico": over.get("ico") or MY_ICON,
+            "rank": -1}
+
+
+def place(rs, meta, chat, sender, text, names=None):
+    """В какой колонке сообщение: своя (правило «перенести в колонку») или колонка его источника."""
+    r = rs.move_rule(meta["key"], chat, sender, text)
+    return my_meta(r["param"], names) if r else meta
 
 
 _RE_BUNDLE = re.compile(r"^[a-z0-9-]+(\.[A-Za-z0-9_-]+){2,}$")
@@ -289,6 +312,19 @@ class Rules:
         r = self.highlight_rule(src, chat, sender, text)
         return r["param"] if r else ""
 
+    def move_rule(self, src, chat, sender, text):
+        """«Перенести в колонку»: несколько подходят — самое узкое (как у подсветки)."""
+        rs = [r for r in self.matching(("move",), src, chat, sender, text) if r["param"]]
+        return max(rs, key=self.weight) if rs else None
+
+    def my_columns(self):
+        """Свои колонки, в которые переносят действующие правила: {ключ: название}."""
+        out = {}
+        for r in self.rows:
+            if r["action"] == "move" and r["param"]:
+                out.setdefault(my_key(r["param"]), r["param"])
+        return out
+
     def mode(self, src):
         return "hide" if any(is_mode_rule(r) and r["src"] == src and r["action"] == "hide"
                              and r["profile"] == "" for r in self.rows) else "show"
@@ -302,7 +338,8 @@ class Rules:
 
 
 def is_mode_rule(r):
-    return r["src"] != "*" and not r["chat"] and not r["sender"] and not r["text"]
+    """Режим источника — «показывать/скрывать всё» без условий («перенести весь источник» — не режим)."""
+    return r["action"] in VIS_ACTIONS and r["src"] != "*" and not r["chat"] and not r["sender"] and not r["text"]
 
 
 def all_rules(conn):
@@ -326,7 +363,7 @@ def clean_rule(d):
         return v
     r = {"src": s("src", 200).strip(), "chat": s("chat"), "sender": s("sender"),
          "text": s("text"), "text_mode": d.get("text_mode") or "contains",
-         "action": d.get("action"), "param": s("param", 20), "profile": s("profile", 40)}
+         "action": d.get("action"), "param": s("param", 60), "profile": s("profile", 40)}
     if not r["src"]:
         raise ValueError(L("Не указан источник", "No source given"))
     if r["action"] not in ACTIONS:
@@ -334,13 +371,17 @@ def clean_rule(d):
     if r["text_mode"] not in TEXT_MODES:
         raise ValueError(L("Неизвестный способ сравнения текста", "Unknown text match mode"))
     if not (r["chat"] or r["sender"] or r["text"]) and \
-            not (r["src"] != "*" and r["action"] in VIS_ACTIONS):
-        # без условия можно только «показывать/скрывать весь источник» (режим)
+            not (r["src"] != "*" and r["action"] in (*VIS_ACTIONS, "move")):
+        # без условия можно только «показывать/скрывать весь источник» (режим) и «перенести весь источник»
         raise ValueError(L("Нужно условие: чат, отправитель или текст",
                            "A condition is needed: chat, sender or text"))
     if r["action"] == "highlight":
         if r["param"] not in HIGHLIGHT_COLORS:
             raise ValueError(L("Не выбран цвет подсветки", "Pick a highlight colour"))
+    elif r["action"] == "move":
+        r["param"] = " ".join(r["param"].split())
+        if not r["param"] or len(r["param"]) > 40:
+            raise ValueError(L("Название колонки — от 1 до 40 символов", "The column name must be 1 to 40 characters"))
     else:
         r["param"] = ""
     if r["text"] and r["text_mode"] == "regex":
@@ -349,6 +390,17 @@ def clean_rule(d):
         except re.error as e:
             raise ValueError(L(f"В регулярном выражении ошибка: {e}", f"Regular expression error: {e}"))
     return r
+
+
+def set_my_icon(conn, name, ico):
+    """Значок своей колонки (его выбирают в правиле «перенести в колонку») — в source_names."""
+    ico = str(ico or "").strip()[:8]
+    if not ico:
+        return
+    names = dict(get_prefs(conn)["source_names"])
+    key = my_key(name)
+    names[key] = {**names.get(key, {}), "name": " ".join(name.split()), "ico": ico}
+    set_prefs(conn, {"source_names": names})
 
 
 def save_rule(conn, r):
@@ -700,10 +752,11 @@ def apply_on_insert(conn, rec):
     done = {r["action"] for r in hits}
     if "pin" in done:
         done.discard("read")                     # закрепить главнее «сразу прочитано»
-    # закрытая колонка открывается снова, как только в ней появится что показать
-    if meta["key"] in prefs["closed_cols"] and "read" not in done and \
+    # закрытая колонка открывается снова, как только в ней появится что показать (своя колонка по правилу — её)
+    col = place(rs, meta, rec["chat"], rec["sender"], rec["message"] or "", prefs["source_names"])["key"]
+    if col in prefs["closed_cols"] and "read" not in done and \
             rs.visible(meta["key"], rec["chat"], rec["sender"], rec["message"] or ""):
-        set_prefs(conn, {"closed_cols": [k for k in prefs["closed_cols"] if k != meta["key"]]})
+        set_prefs(conn, {"closed_cols": [k for k in prefs["closed_cols"] if k != col]})
     if "pin" in done:
         conn.execute("UPDATE messages SET pinned = 1 WHERE id = ?", (rec["id"],))
     if "read" in done:
@@ -742,6 +795,7 @@ def why(conn, mid):
     return {"id": mid, "source": meta, "visible": rs.visible(meta["key"], chat, sender, text or ""),
             "vis_rule": rs.vis_rule(meta["key"], chat, sender, text or ""),
             "highlight_rule": rs.highlight_rule(meta["key"], chat, sender, text or ""),
+            "move_rule": rs.move_rule(meta["key"], chat, sender, text or ""),
             "insert_hits": hits, "is_read": is_read, "read_at": read_at, "pinned": pinned,
             "snooze_until": snooze, "profile": rs.profile}
 

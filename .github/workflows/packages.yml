@@ -171,6 +171,39 @@ jobs:
           Start-Sleep -Seconds 4
           Shot "dist\ci\board-after-eye-click.png"
           Stop-Process -Id $p.Id -Force; Start-Sleep -Seconds 2
+      - name: Поиск в шапке - окно результатов над полем (снимок для проверки)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          Add-Type @"
+          using System; using System.Runtime.InteropServices;
+          public class Mouse2 { [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+            [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint x, uint y, uint d, UIntPtr e);
+            [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+            [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r); }
+          "@
+          function Shot($path) {
+            $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            $bmp.Save($path)
+          }
+          New-Item -ItemType Directory dist\ci -Force | Out-Null
+          $env:MESSHUB_HOME = "$env:RUNNER_TEMP\mh-search"
+          python tools/demo_data.py --home $env:MESSHUB_HOME --lang ru
+          $p = Start-Process dist\win\messhub\messhub.exe -PassThru
+          Start-Sleep -Seconds 20
+          $h = (Get-Process -Id $p.Id).MainWindowHandle
+          $r = New-Object Mouse2+RECT; [Mouse2]::GetWindowRect($h, [ref]$r) | Out-Null
+          "окно доски: $($r.Left),$($r.Top) - $($r.Right),$($r.Bottom)"
+          [Mouse2]::SetCursorPos($r.Left + 260, $r.Top + 19) | Out-Null; Start-Sleep -Milliseconds 400
+          [Mouse2]::mouse_event(2, 0, 0, 0, [UIntPtr]::Zero); Start-Sleep -Milliseconds 80
+          [Mouse2]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero); Start-Sleep -Seconds 1
+          [System.Windows.Forms.SendKeys]::SendWait("call")
+          Start-Sleep -Seconds 5
+          Shot "dist\ci\search.png"
+          Stop-Process -Id $p.Id -Force; Start-Sleep -Seconds 2
       - name: Лента важного над доской (снимок для проверки)
         continue-on-error: true
         timeout-minutes: 5

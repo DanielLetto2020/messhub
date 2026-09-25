@@ -53,8 +53,8 @@ CREATE TABLE IF NOT EXISTS rules (
     text        TEXT NOT NULL DEFAULT '',   -- текст сообщения; '' = любой
     text_mode   TEXT NOT NULL DEFAULT 'contains' CHECK (text_mode IN ('contains', 'regex')),
     action      TEXT NOT NULL CHECK (action IN
-                  ('show', 'hide', 'highlight', 'read', 'pin', 'sound', 'forward')),
-    param       TEXT NOT NULL DEFAULT '',   -- highlight: цвет (red, orange, yellow, green, blue, purple)
+                  ('show', 'hide', 'highlight', 'move', 'read', 'pin', 'sound', 'forward')),
+    param       TEXT NOT NULL DEFAULT '',   -- highlight: цвет (red, orange, …); move: название своей колонки
     profile     TEXT NOT NULL DEFAULT '',   -- id профиля; '' — во всех профилях
     created_at  TEXT,                       -- когда создано (МСК)
     UNIQUE (src, chat, sender, text, text_mode, action, profile)
