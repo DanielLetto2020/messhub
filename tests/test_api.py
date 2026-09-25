@@ -50,7 +50,7 @@ class ApiTest(unittest.TestCase):
 
     def test_pages_served(self):
         """Страницы и переводы отдаются (после переноса файлов было «not found»)."""
-        for path, marker in (("/", b"id=\"board\""), ("/widget", b"id=\"board\""),
+        for path, marker in (("/", b"id=\"board\""), ("/widget", b"id=\"board\""), ("/widget?strip=1", b"id=\"strip\""),
                              ("/settings", b"id=\"page\""), ("/message?id=1", b"id=\"foot\""),
                              ("/i18n.js", b"const EN")):
             with urllib.request.urlopen(self.base + path, timeout=10) as r:

@@ -100,6 +100,12 @@ def plan(lang):
             "fetch('/api/prefs',{method:'POST',headers:{'Content-Type':'application/json'},"
             "body:JSON.stringify({hidden_cols:['containers','services','commands'],split_cols:['mail']})})"
             ".then(()=>location.reload());'ok'", 2200, DARK_DESK, 400]),
+        # лента важного над доской: страница ленты, под ней — доска (iframe); обе думают, что они в программе
+        ("widget-strip", "/widget?strip=1", (1640, 760), [
+            "fetch('/api/prefs',{method:'POST',headers:{'Content-Type':'application/json'},"
+            "body:JSON.stringify({strip:{on:true,mentions:true},split_cols:[]})}).then(()=>location.reload());'ok'", 2500,
+            "document.querySelector('.sit[data-k^=g] [data-act=stoggle]').click();'ok'", 900],
+         {"host": True, "under": "/widget", "under_h": 380}),
         ("widget-light", "/widget", W, [
             "fetch('/api/prefs',{method:'POST',headers:{'Content-Type':'application/json'},"
             "body:JSON.stringify({theme:'light',opacity:0.9,hidden_cols:['containers','services','commands']})})"
@@ -129,33 +135,58 @@ def harness(plan_file):
              "if(m.type==='characterData')fix(m.target);else m.addedNodes.forEach(n=>n.nodeType===3?fix(n):all(n));}})"
              ".observe(document,{subtree:true,childList:true,characterData:true});"
              "document.addEventListener('DOMContentLoaded',()=>all(document.body));})();" % json.dumps(masks))
-    ucm = WebKit2.UserContentManager()
-    ucm.add_script(WebKit2.UserScript(guard, WebKit2.UserContentInjectedFrames.ALL_FRAMES,
-                                      WebKit2.UserScriptInjectionTime.START, None, None))
-    web = WebKit2.WebView(web_context=WebKit2.WebContext.new_ephemeral(), user_content_manager=ucm)
-    win.add(web)
+    ctx = WebKit2.WebContext.new_ephemeral()
+
+    def make_web(host):
+        ucm = WebKit2.UserContentManager()
+        ucm.add_script(WebKit2.UserScript(guard, WebKit2.UserContentInjectedFrames.ALL_FRAMES,
+                                          WebKit2.UserScriptInjectionTime.START, None, None))
+        if host:        # «окно-хозяин» без дел: страница ведёт себя как в программе (лента важного и доска под ней)
+            ucm.register_script_message_handler("widget")
+        return WebKit2.WebView(web_context=ctx, user_content_manager=ucm)
+    webs = {False: make_web(False), True: make_web(True)}
+    under = make_web(True)                  # вторая страница под первой в том же кадре (доска под лентой важного)
+    for w in (webs[True], under):
+        w.set_background_color(Gdk.RGBA(0.055, 0.063, 0.078, 1))       # тёмный «рабочий стол»
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+    win.add(webs[False])
     leak_js = ("(()=>{const L=%s;const t=document.body.innerText;"
                "return JSON.stringify(L.filter(x=>t.includes(x)));})()" % json.dumps(leaks))
-    shots, state = job["shots"], {"i": -1, "failed": []}
+    shots, state = job["shots"], {"i": -1, "failed": [], "web": webs[False], "under": False}
 
-    def js(code, then):
+    def js(code, then, web=None):
         def done(v, res):
             try:
                 out = v.evaluate_javascript_finish(res).to_string()
             except Exception as e:  # noqa: BLE001 — ошибку шага показываем и идём дальше
                 out = "ERR " + str(e)
             then(out)
-        web.evaluate_javascript(code, -1, None, None, None, done)
+        (web or state["web"]).evaluate_javascript(code, -1, None, None, None, done)
 
     def next_shot():
         state["i"] += 1
         if state["i"] >= len(shots):
             Gtk.main_quit()
             return False
-        name, url, size, steps = shots[state["i"]]
+        name, url, size, steps, *opt = shots[state["i"]]
+        o = opt[0] if opt else {}
+        cur = state["web"] = webs[bool(o.get("host"))]
+        state["under"] = bool(o.get("under"))
+        want = box if state["under"] else cur
+        if win.get_child() is not want:
+            win.remove(win.get_child())
+        for c in box.get_children():
+            box.remove(c)
+        if state["under"]:
+            box.pack_start(cur, True, True, 0)
+            under.set_size_request(-1, o.get("under_h", 330))
+            box.pack_start(under, False, False, 0)
+            under.load_uri(job["base"] + o["under"])
+        if win.get_child() is None:
+            win.add(want)
         win.resize(*size)
         win.show_all()
-        web.load_uri(job["base"] + url)
+        cur.load_uri(job["base"] + url)
         GLib.timeout_add(1500, run_steps, name, list(steps))
         return False
 
@@ -190,7 +221,12 @@ def harness(plan_file):
         print(f"  ✕ {name}: на странице личное ({', '.join(found)}) — снимок НЕ сохранён", flush=True)
         state["failed"].append(name)
 
-    def snap(name, found):
+    def snap(name, found, checked_under=False):
+        if state["under"] and not checked_under:          # сначала проверить и вторую страницу кадра
+            js(leak_js, lambda f2: snap(name, json.dumps(
+                (json.loads(found) if found and found.startswith("[") else ["проверка не ответила"]) +
+                (json.loads(f2) if f2 and f2.startswith("[") else ["проверка не ответила"])), True), under)
+            return
         found = json.loads(found) if found and found.startswith("[") else ["проверка не ответила"]
         if found:
             fail(name, found)
@@ -201,15 +237,19 @@ def harness(plan_file):
         path = os.path.join(job["out"], name + ".png")
         pb.savev(path, "png", ["compression"], ["9"])
 
-        def after(out):          # и после снимка: если что-то дорисовалось — файл удаляем
-            late = json.loads(out) if out and out.startswith("[") else ["проверка не ответила"]
+        def after(out, out2="[]"):   # и после снимка: если что-то дорисовалось — файл удаляем
+            late = (json.loads(out) if out and out.startswith("[") else ["проверка не ответила"]) + \
+                (json.loads(out2) if out2 and out2.startswith("[") else ["проверка не ответила"])
             if late:
                 os.remove(path)
                 fail(name, late)
             else:
                 print(f"  ✓ {name}", flush=True)
             GLib.timeout_add(100, next_shot)
-        js(leak_js, after)
+        if state["under"]:
+            js(leak_js, lambda out: js(leak_js, lambda out2: after(out, out2), under))
+        else:
+            js(leak_js, after)
 
     GLib.timeout_add(300, next_shot)
     Gtk.main()

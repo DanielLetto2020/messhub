@@ -28,7 +28,10 @@ GTK + WebKit2:
   - клик по имени на плашке переключает на окно приложения-источника (libwnck:
     окно ищется по классу WM_CLASS), нет окна — запускает приложение по .desktop;
     у веб-уведомлений (MAX и т.п.) открывает сайт в браузере;
-  - кнопка-«галочка» на сообщении отмечает его прочитанным в БД и скрывает.
+  - кнопка-«галочка» на сообщении отмечает его прочитанным в БД и скрывает;
+  - ЛЕНТА ВАЖНОГО (настройка prefs.strip): закреплённое и подсвеченное — не в колонках, а строкой карточек
+    в отдельном прозрачном окне прямо над доской (сверху нет места — под ней); окно ездит за доской, а
+    пустые места в нём пропускают клики к окнам под ним (класс Strip).
 
 Требует запущенный сбор+сервер (сервис messhub или `python3 collect.py`).
 Полностью работает на X11. На Wayland — упрощённый режим: окно двигается и
@@ -47,6 +50,7 @@ GTK + WebKit2:
 """
 
 import argparse
+import ctypes
 import json
 import os
 import re
@@ -87,6 +91,7 @@ MIN_W, MIN_H = 260, 140      # меньше мышкой не сжать
 SETTINGS_W, SETTINGS_H = 1000, 680   # окно настроек по умолчанию
 MESSAGE_W, MESSAGE_H = 900, 640      # окно одного сообщения (/message?id=N)
 ASSIST_W, ASSIST_H = 1120, 760       # окно ассистента (/assistant)
+STRIP_H, STRIP_GAP = 460, 6          # окно ленты важного: строка карточек + место над ней для чатов и меню
 GEOM_KEYS = ("x", "y", "w", "h")
 
 # край/угол, за который тянут на странице → край окна для оконного менеджера
@@ -183,6 +188,157 @@ def save_state(path, geom):
     os.replace(tmp, path)
 
 
+class _XRect(ctypes.Structure):
+    _fields_ = [("x", ctypes.c_short), ("y", ctypes.c_short), ("width", ctypes.c_ushort), ("height", ctypes.c_ushort)]
+
+
+class XShape:
+    """Форма ввода окна (расширение X11 Shape, ShapeInput): клики вне заданных прямоугольников уходят окнам
+    под ним. Своё соединение с X-сервером через ctypes — GTK для этого нужен pycairo с gi-мостом, а его ставят не везде."""
+    SHAPE_INPUT, SHAPE_SET, UNSORTED = 2, 0, 0
+
+    def __init__(self):
+        self.x11 = ctypes.cdll.LoadLibrary("libX11.so.6")
+        self.ext = ctypes.cdll.LoadLibrary("libXext.so.6")
+        self.x11.XOpenDisplay.restype = ctypes.c_void_p
+        self.x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+        self.x11.XFlush.argtypes = [ctypes.c_void_p]
+        self.ext.XShapeCombineRectangles.argtypes = [
+            ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+            ctypes.POINTER(_XRect), ctypes.c_int, ctypes.c_int, ctypes.c_int]
+        self.dpy = self.x11.XOpenDisplay(None)
+        if not self.dpy:
+            raise OSError("XOpenDisplay")
+
+    def set_input(self, xid, rects):
+        """rects — [(x, y, w, h)] в пикселях окна; пусто — окно целиком пропускает клики."""
+        arr = (_XRect * max(1, len(rects)))(*[_XRect(max(-32768, min(32767, x)), max(-32768, min(32767, y)),
+                                                     max(0, min(65535, w)), max(0, min(65535, h)))
+                                              for x, y, w, h in rects])
+        self.ext.XShapeCombineRectangles(self.dpy, xid, self.SHAPE_INPUT, 0, 0, arr, len(rects),
+                                         self.SHAPE_SET, self.UNSORTED)
+        self.x11.XFlush(self.dpy)
+
+
+class Strip:
+    """Лента важного (prefs.strip): закреплённое и подсвеченное строкой карточек над доской.
+
+    Окно без рамки, прозрачное, шириной с доску; стоит прямо над ней (сверху мало места — под ней) и ездит
+    за ней. Страница — та же /widget, но с ?strip=1: строка карточек у края окна, ближнего к доске, а
+    раскрытые чаты и меню — от доски прочь. На X11 окно высотой STRIP_H, и пустые места в нём пропускают
+    клики (XShape): страница шлёт прямоугольники всего, что нарисовано, — strip-shape:{"rects", "need"}.
+    На Wayland окно не поставить к доске: обычное окно без рамки высотой по содержимому ("need")."""
+
+    def __init__(self, board):
+        self.board, self.dock = board, "above"
+        self.fit = not board.x11              # Wayland: высота по содержимому, строка сверху
+        try:
+            self.shape = XShape() if board.x11 else None
+        except OSError as e:
+            log("лента: форма окна недоступна:", e)
+            self.shape, self.fit = None, True
+        self.h = 160 if self.fit else STRIP_H
+        win = self.win = Gtk.Window(type=Gtk.WindowType.TOPLEVEL)
+        win.set_title(f"{version.APP_NAME} — лента")
+        win.set_decorated(False)
+        win.set_skip_taskbar_hint(True)
+        win.set_skip_pager_hint(True)
+        win.set_focus_on_map(False)
+        win.set_resizable(True)
+        vis = win.get_screen().get_rgba_visual()
+        if vis is not None:
+            win.set_visual(vis)
+        win.set_app_paintable(True)
+        ucm = WebKit2.UserContentManager()
+        ucm.connect("script-message-received::widget", self._on_msg)
+        ucm.register_script_message_handler("widget")
+        self.web = WebKit2.WebView.new_with_user_content_manager(ucm)
+        self.web.set_background_color(Gdk.RGBA(0, 0, 0, 0))
+        self.web.connect("decide-policy", board._on_policy)
+        self.web.connect("load-changed", lambda _w, ev: ev == WebKit2.LoadEvent.FINISHED and self._tell())
+        q = urllib.parse.parse_qs(urlsplit(board.url).query).get("only", [""])[0]
+        self.web.load_uri(board.base_url + "/widget?strip=1" + ("&only=" + urllib.parse.quote(q, safe=",:") if q else ""))
+        win.add(self.web)
+        if board.x11:
+            win.stick()
+        self.set_below(board.locked or board.below)
+        win.realize()
+        self._set_shape([])                   # пока страница не нарисовалась — окно не мешает кликать
+        self.follow()
+        win.show_all()
+        GLib.timeout_add(60, self.follow)     # после маппинга оконный менеджер мог поставить окно по-своему
+        log("лента важного: открыта")
+
+    def destroy(self):
+        self.win.destroy()
+        log("лента важного: закрыта")
+
+    def set_below(self, below):
+        if self.board.x11:
+            self.win.set_keep_below(below)
+
+    def follow(self):
+        """Встать к доске: той же ширины, вплотную сверху (или снизу, если сверху мало места)."""
+        b = self.board
+        bw, bh = b.get_size()
+        if self.fit:
+            self.win.resize(bw, self.h)
+            return False
+        bx, by = b.get_position()
+        mon = b.get_display().get_monitor_at_window(b.get_window()) if b.get_window() else None
+        area = mon.get_workarea() if mon else None
+        above = by - (area.y if area else 0) - STRIP_GAP
+        below = ((area.y + area.height) if area else by + bh + STRIP_H) - (by + bh) - STRIP_GAP
+        dock = "above" if above >= 220 or above >= below else "below"
+        h = max(80, min(STRIP_H, above if dock == "above" else below))
+        y = by - STRIP_GAP - h if dock == "above" else by + bh + STRIP_GAP
+        self.win.resize(bw, h)
+        self.win.move(bx, y)
+        if dock != self.dock:
+            self.dock = dock
+            self._tell()
+        return False
+
+    def _tell(self):
+        js = f"window.hostStrip && hostStrip({json.dumps({'dock': 'below' if self.fit else self.dock, 'fit': self.fit})})"
+        self.web.evaluate_javascript(js, -1, None, None, None, None)
+
+    def _set_shape(self, rects):
+        gw = self.win.get_window()
+        if self.shape and gw is not None:
+            sc = self.win.get_scale_factor()
+            self.shape.set_input(GdkX11.X11Window.get_xid(gw), [tuple(int(v * sc) for v in r) for r in rects])
+
+    def _on_msg(self, _ucm, res):
+        try:
+            cmd = res.get_js_value().to_string()
+        except Exception:
+            return
+        b = self.board
+        if cmd.startswith("strip-shape:"):
+            try:
+                d = json.loads(cmd[12:])
+                rects = [tuple(int(v) for v in r[:4]) for r in d.get("rects") or []][:200]
+                need = int(d.get("need") or 0)
+            except (ValueError, TypeError):
+                return
+            if self.fit:                                     # Wayland: окно по содержимому
+                self.h = max(40, min(STRIP_H, need))
+                self.win.resize(b.get_size()[0], self.h)
+            else:
+                self._set_shape(rects)
+        elif cmd.startswith("open:"):
+            try:
+                req = json.loads(cmd[5:])
+                b._open_source(str(req.get("app") or ""), str(req.get("site") or ""), web=self.web)
+            except ValueError:
+                pass
+        elif cmd == "settings" or cmd.startswith("settings:"):
+            b._open_settings(cmd.partition(":")[2])
+        else:
+            b._page_cmd(cmd, web=self.web)
+
+
 class Widget(Gtk.Window):
     def __init__(self, url, state_path, reset, width, height, bottom_margin, below):
         super().__init__(type=Gtk.WindowType.TOPLEVEL)
@@ -191,7 +347,9 @@ class Widget(Gtk.Window):
         if not self.x11:
             log("не X11 (Wayland?): место окна не восстанавливается, под окна не уходит")
         u = urlsplit(url)
+        self.url = url
         self.base_url = f"{u.scheme}://{u.netloc}"   # тот же сервер отдаёт и /settings
+        self.strip = None            # лента важного над доской (Strip), если включена в настройках
         self.settings_win = None
         self.page_wins = {}          # отдельные окна страниц: message, assistant (по одному каждого)
         self.find_win = None         # окно результатов поиска из шапки (над панелью)
@@ -311,6 +469,17 @@ class Widget(Gtk.Window):
         if cmd == "settings" or cmd.startswith("settings:"):
             self._open_settings(cmd.partition(":")[2])
             return
+        if cmd.startswith("strip:"):         # страница: включена ли лента важного (prefs.strip)
+            try:
+                on = bool(json.loads(cmd[6:]).get("on"))
+            except (ValueError, AttributeError):
+                return
+            if on and self.strip is None:
+                self.strip = Strip(self)
+            elif not on and self.strip is not None:
+                self.strip.destroy()
+                self.strip = None
+            return
         if cmd.startswith("share:"):         # страница: следить ли за показом экрана и по каким признакам
             try:
                 cfg = json.loads(cmd[6:])
@@ -354,6 +523,8 @@ class Widget(Gtk.Window):
     def _on_configure(self, *_):
         if not self.placed:
             return False
+        if self.strip is not None:            # лента важного едет за доской
+            self.strip.follow()
         self._search_close()                  # окно двигают или тянут — результаты поиска не висят в стороне
         if self.locked:
             # закреплено, но окно сдвинули в обход страницы — вернуть, когда утихнет
@@ -371,6 +542,8 @@ class Widget(Gtk.Window):
         self.locked = locked
         if self.x11:
             self.set_keep_below(locked or self.below)
+        if self.strip is not None:
+            self.strip.set_below(locked or self.below)
         if self._save_id:
             GLib.source_remove(self._save_id)
         self._save()      # зафиксировать текущее место/размер вместе с замком

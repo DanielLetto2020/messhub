@@ -81,6 +81,16 @@ it into sub-columns, each with its own counter and "read all". Press it again to
 
 ![Sub-columns](docs/screens/en/widget-split.png)
 
+**Important strip** - pinned messages and those highlighted by rules (and mentions, if you like) leave the
+columns for a separate row right above the board: pinned ones stay on the left, new important ones slide in
+from the right. The cards are the same as in the columns, with the same buttons and the source name; when
+they do not fit, arrows appear at the edges. Several important messages from one chat gather into one card
+that opens upwards. The strip follows the board and moves below it when there is no room above. Turn it on
+in settings, "Appearance" - "Important strip". On Linux the empty parts of the row are transparent and let
+clicks through to the windows below; on Windows and Mac the strip is a band as tall as its content.
+
+![Important strip above the board](docs/screens/en/widget-strip.png)
+
 **Focus mode** (key F) - only what matters: pinned, highlighted and mentions.
 
 ![Focus mode](docs/screens/en/widget-focus.png)
@@ -212,7 +222,7 @@ call moved?") through an AI model that runs on your own computer.
 
 ![Search](docs/screens/en/settings-search.png)
 
-**Appearance** - language, opacity, text size, theme, density, avatars.
+**Appearance** - language, opacity, text size, theme, density, avatars, the important strip.
 
 ![Appearance](docs/screens/en/settings-look.png)
 

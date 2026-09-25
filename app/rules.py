@@ -132,6 +132,8 @@ PREF_DEFAULTS = {
     "time_hints": True,       # «⏰ 15:00» на плашке, если в тексте есть время, — напомнить (reminders.py)
     "share_blur": True,       # размывать доску, пока показывается экран (screen.py)
     "share_patterns": [],     # свои признаки показа экрана: части заголовков окон
+    # лента важного: закреплённое, подсвеченное (и упоминания) — не в колонках, а строкой над доской (widget.py)
+    "strip": {"on": False, "pinned": True, "highlight": True, "mentions": False},
     "quiet": {"enabled": False, "schedule": [], "manual_until": "", "sound": False, "forward": True,
               "follow_dnd": False, "set_dnd": False, "summary": True},  # тихие часы (quiet.py); своё состояние,
                                                                         # «Не беспокоить» системы — только если попросят
@@ -148,7 +150,8 @@ STATE_PREFS = ("backup_last", "report_last", "services_win_last", "quiet_state",
 # от этих настроек зависит вид доски — по их хэшу (X-Prefs-Ver) виджет перечитывает её
 DISPLAY_PREFS = ("language", "opacity", "font_size", "compact", "theme", "group_by_chat",
                  "avatars", "col_order", "split_cols", "hidden_cols", "closed_cols", "mail_channel", "mentions",
-                 "source_names", "profiles", "profile", "time_hints", "share_blur", "share_patterns", "quiet")
+                 "source_names", "profiles", "profile", "time_hints", "share_blur", "share_patterns", "quiet",
+                 "strip")
 
 
 # ── источники ───────────────────────────────────────────────────────────────
@@ -426,6 +429,8 @@ def _clean_pref(k, v):
         return [str(x).strip()[:80] for x in items if str(x).strip()][:30]
     if k == "quiet":
         return clean_quiet(v)
+    if k == "strip":
+        return {x: bool(v.get(x, d)) for x, d in PREF_DEFAULTS["strip"].items()}
     if k == "scripts":
         items = {}
         for name, o in dict(v.get("items") or {}).items():
@@ -642,11 +647,11 @@ def set_prefs(conn, patch, cloud_ok=False):
         raise ValueError(L("Ожидался объект настроек", "Expected a settings object"))
     for k, v in patch.items():
         try:
-            # тематические колонки, тихие часы, скрипты и ассистент меняют по одной настройке —
+            # тематические колонки, тихие часы, скрипты, ассистент и лента важного меняют по одной настройке —
             # остальное берём из сохранённого
             if k == "themed":
                 val = clean_themed(v, get_prefs(conn)["themed"])
-            elif k in ("quiet", "ai", "scripts"):
+            elif k in ("quiet", "ai", "scripts", "strip"):
                 if not isinstance(v, dict):
                     raise TypeError(k)
                 cur = get_prefs(conn)[k]

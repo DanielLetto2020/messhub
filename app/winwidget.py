@@ -12,7 +12,10 @@ window.pywebview.api.post(…):
   settings / settings:<раздел> — окно настроек;  message:<id> — окно одного сообщения (/message?id=N);
   assistant — окно ассистента (/assistant);
   open:{"app","site"} — сайт открыть в браузере, приложение — по его AUMID (shell:AppsFolder), на Mac —
-      по bundle id (open -b).
+      по bundle id (open -b);
+  strip:{"on"} — лента важного (prefs.strip): закреплённое и подсвеченное строкой над доской, в своём окне
+      (/widget?strip=1). Прозрачного по пикселям окна тут нет, поэтому окно ленты — по высоте содержимого:
+      страница шлёт strip-shape:{"rects", "need"}, окно встаёт вплотную над доской (или под ней), пустое — прячется.
 
 Прозрачность (настройка «Непрозрачность»): по-настоящему прозрачное окно с WebView2 на Windows рисуется
 серым, а на Mac не показывается вовсе (проверено в CI), поэтому подложка сплошная (класс pyw на странице),
@@ -38,6 +41,7 @@ WINDOWS = os.name == "nt"
 MAC = sys.platform == "darwin"
 
 MIN_W, MIN_H = 360, 160
+STRIP_GAP, STRIP_MAX = 6, 620              # лента важного: зазор до доски и предельная высота окна
 DEF_W, DEF_H = 1000, 300
 HWND_BOTTOM, SWP_KEEP = 1, 0x0001 | 0x0002 | 0x0010        # NOSIZE | NOMOVE | NOACTIVATE
 GWL_EXSTYLE, WS_EX_LAYERED, LWA_ALPHA = -20, 0x80000, 0x2
@@ -72,6 +76,8 @@ class Api:
         self._find = None            # окно результатов поиска из шапки (над панелью)
         self._g0 = None
         self._save_timer = None
+        self._only = ""
+        self._strip = self._strip_api = None      # окно ленты важного и его мост
 
     # ── страница → окно ──
     def post(self, msg):
@@ -127,6 +133,8 @@ class Api:
             self._open(json.loads(msg[5:]))
         elif msg.startswith("opacity:"):
             self._set_alpha(float(msg[8:]))
+        elif msg.startswith("strip:"):
+            self._strip_set(bool(json.loads(msg[6:]).get("on")))
 
     # ── окно ──
     def _remember(self, *_):
@@ -143,23 +151,24 @@ class Api:
         self._save_timer.daemon = True
         self._save_timer.start()
 
-    def _hwnd(self):
+    def _hwnd(self, win=None):
         try:
-            return self._win.native.Handle.ToInt32()
+            return (win or self._win).native.Handle.ToInt32()
         except Exception:  # noqa: BLE001
             return None
 
-    def _set_alpha(self, opacity):
+    def _set_alpha(self, opacity, win=None):
         """Окно целиком полупрозрачное. Текст бледнеет вместе с подложкой, поэтому шкала мягче, чем на
-        Linux: 0.3 → 55 %, 0.72 → 82 %, 1 → непрозрачное."""
+        Linux: 0.3 → 55 %, 0.72 → 82 %, 1 → непрозрачное. win — другое окно (лента важного)."""
         alpha = 0.35 + 0.65 * max(0.3, min(1.0, opacity))
-        if MAC and self._win and self._win.native is not None:
+        win = win or self._win
+        if MAC and win and win.native is not None:
             from PyObjCTools import AppHelper           # AppKit — только из главного потока
-            AppHelper.callAfter(self._win.native.setAlphaValue_, alpha)
+            AppHelper.callAfter(win.native.setAlphaValue_, alpha)
             return
         if not WINDOWS:
             return
-        h = self._hwnd()
+        h = self._hwnd(win)
         if not h:
             return
         import ctypes
@@ -171,10 +180,55 @@ class Api:
 
     def _keep_below(self):
         if WINDOWS and self._state.get("locked"):       # на Mac замок только не даёт двигать и тянуть
-            h = self._hwnd()
-            if h:
-                import ctypes
-                ctypes.windll.user32.SetWindowPos(h, HWND_BOTTOM, 0, 0, 0, 0, SWP_KEEP)
+            import ctypes
+            for win in (self._win, self._strip):         # и лента важного — под окнами вместе с доской
+                h = self._hwnd(win) if win else None
+                if h:
+                    ctypes.windll.user32.SetWindowPos(h, HWND_BOTTOM, 0, 0, 0, 0, SWP_KEEP)
+
+    # ── лента важного над доской ──
+    def _strip_set(self, on):
+        import webview
+        if on and not self._strip and self._win:
+            w, bridge = self._win, StripApi(self)
+            url = self._base + "/widget?strip=1&host=pywebview" + ("&only=" + self._only if self._only else "")
+            self._strip = webview.create_window(f"{version.APP_NAME} — лента", url, js_api=bridge, x=w.x,
+                                                y=max(0, w.y - 150), width=w.width, height=140, frameless=True,
+                                                easy_drag=False, resizable=False, focus=False, hidden=True,
+                                                background_color="#12151c", text_select=True)
+            bridge._win, self._strip_api = self._strip, bridge
+            self._strip.events.closed += lambda: setattr(self, "_strip", None)
+            self._strip.events.loaded += lambda: self._strip_place(tell=True)
+        elif not on and self._strip:
+            try:
+                self._strip.destroy()
+            except Exception:  # noqa: BLE001 — окно уже закрыли
+                pass
+            self._strip = None
+
+    def _strip_place(self, *_, tell=False):
+        """Окно ленты — вплотную над доской (сверху мало места — под ней), высотой по содержимому; пустое — спрятать."""
+        s, w, b = self._strip, self._win, self._strip_api
+        if not s or not w or not b:
+            return
+        # над доской или под ней — по постоянной высоте (строка и раскрытый чат), а не по текущей:
+        # иначе лента перескакивала бы, когда раскрывают чат
+        dock = "above" if w.y - STRIP_GAP - 320 >= 0 else "below"
+        if tell or dock != b._dock:
+            b._dock = dock
+            s.evaluate_js(f"window.hostStrip && hostStrip({json.dumps({'dock': dock, 'fit': True})})")
+        if b._h <= 0:
+            if b._shown:
+                s.hide()
+                b._shown = False
+            return
+        h = min(b._h, w.y - STRIP_GAP) if dock == "above" else b._h
+        s.resize(w.width, h)
+        s.move(w.x, w.y - STRIP_GAP - h if dock == "above" else w.y + w.height + STRIP_GAP)
+        if not b._shown:
+            s.show()
+            b._shown = True
+            self._keep_below()
 
     def _below_loop(self):
         while self._win:
@@ -319,6 +373,30 @@ def _window_titles():
     return out
 
 
+class StripApi:
+    """Мост окна ленты важного: strip-shape — сколько окну нужно в высоту (пусто — спрятать), opacity — прозрачность
+    этого окна; остальное (open, message, assistant, settings) — как с доски."""
+
+    def __init__(self, main):
+        self._main, self._win, self._h, self._shown, self._dock = main, None, 0, False, "above"
+
+    def post(self, msg):
+        try:
+            msg = str(msg)
+            if msg.startswith("strip-shape:"):
+                d = json.loads(msg[12:])
+                self._h = max(40, min(STRIP_MAX, int(d.get("need") or 0))) if d.get("rects") else 0
+                self._main._strip_place()
+            elif msg.startswith("opacity:"):
+                self._main._set_alpha(float(msg[8:]), self._win)
+            elif msg.startswith("open:"):
+                self._main._open(json.loads(msg[5:]))
+            elif not msg.startswith(("geom", "lock:", "strip:", "share:")):
+                self._main._handle(msg)
+        except Exception as e:  # noqa: BLE001 — ошибка одной команды не роняет окно
+            print(f"лента: {msg!r}: {e!r}", flush=True)
+
+
 class PageApi:
     """Мост отдельного окна (сообщение, ассистент): close — закрыть, open:{…} — перейти в приложение,
     message:<id> / assistant / settings — открыть другое окно (как с доски)."""
@@ -363,6 +441,7 @@ def run(base_url, state_path=paths.WIDGET_STATE, only="", open_settings=False):
     """Открыть доску и крутить окна до закрытия (главный поток). → когда окно закрыли."""
     import webview
     api = Api(base_url, state_path)
+    api._only = only
     st = api._state
     geo = (st.get("x"), st.get("y"), st.get("w"), st.get("h"))
     if None in geo or not _visible(*geo):
@@ -376,12 +455,15 @@ def run(base_url, state_path=paths.WIDGET_STATE, only="", open_settings=False):
     win.events.loaded += api._on_loaded
     win.events.moved += api._remember
     win.events.resized += api._remember
+    win.events.moved += api._strip_place        # лента важного едет за доской
+    win.events.resized += api._strip_place
     if WINDOWS:
         win.events.shown += lambda: threading.Thread(target=api._below_loop, daemon=True).start()
 
     def closed():
         api._remember()
         api._win = None
+        api._strip_set(False)
     win.events.closed += closed
     if open_settings:
         api._open_settings("")

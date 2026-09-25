@@ -524,6 +524,10 @@ const EN = {
   'Модель «думающая» (qwen3, deepseek-r1 и подобные): сначала рассуждает, потом отвечает. «Не просить» ускоряет гибридные модели, но модели, которые думают всегда, будут рассуждать прямо в ответе.':
     'A “thinking” model (qwen3, deepseek-r1 and similar) reasons first and answers after. “Do not ask” speeds up hybrid models, but always-thinking models will reason right in the answer.',
   'Эта модель не размышляет — настройка на неё не влияет.': 'This model does not think — the setting has no effect.',
+  'Лента важного': 'Important strip', 'Показывать ленту над доской': 'Show the strip above the board',
+  'Что в неё уходит:': 'What goes into it:', 'закреплённое': 'pinned', 'подсвеченное правилами': 'highlighted by rules',
+  'упоминания': 'mentions', 'Свернуть': 'Collapse',
+  'Важное уходит из колонок в отдельную строку прямо над доской: закреплённое стоит слева, новое важное въезжает справа. Карточки те же, что в колонках, с названием источника; не влезают — по краям стрелки. Несколько важных из одного чата собираются в плашку, она раскрывается вверх. Пустые места строки прозрачны и пропускают клики к окнам под ней.': 'Important messages leave the columns for a separate row right above the board: pinned ones stay on the left, new important ones slide in from the right. The cards are the same as in the columns, with the source name; when they do not fit, arrows appear at the edges. Several important messages from one chat gather into one card that opens upwards. Empty parts of the row are transparent and let clicks through to the windows below.',
   'Эта модель размышляет всегда: «Не просить» лишь просит думать как можно меньше.': 'This model always thinks: “Don’t ask” only asks it to think as little as possible.',
   'Берётся у самой модели: {n} токенов. Сколько сообщений отдать — решает «Сообщений в выборке» ниже.': 'Taken from the model itself: {n} tokens. How many messages to send is set by “Messages in the selection” below.',
   'Берётся у самой модели.': 'Taken from the model itself.',

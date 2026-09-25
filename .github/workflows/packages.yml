@@ -171,6 +171,27 @@ jobs:
           Start-Sleep -Seconds 4
           Shot "dist\ci\board-after-eye-click.png"
           Stop-Process -Id $p.Id -Force; Start-Sleep -Seconds 2
+      - name: Лента важного над доской (снимок для проверки)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          function Shot($path) {
+            $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            $bmp.Save($path)
+          }
+          New-Item -ItemType Directory dist\ci\strip-logs -Force | Out-Null
+          $env:MESSHUB_HOME = "$env:RUNNER_TEMP\mh-strip"
+          python tools/demo_data.py --home $env:MESSHUB_HOME --lang ru
+          $p = Start-Process dist\win\messhub\messhub.exe -PassThru
+          Start-Sleep -Seconds 20
+          Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8765/api/prefs -ContentType "application/json" -Body '{"strip":{"on":true}}' | Out-Null
+          Start-Sleep -Seconds 8
+          Shot "dist\ci\board-strip.png"
+          Stop-Process -Id $p.Id -Force; Start-Sleep -Seconds 2
+          Copy-Item "$env:MESSHUB_HOME\share\logs\*.log" dist\ci\strip-logs\ -ErrorAction SilentlyContinue
       - name: Снимок экрана - доска и настройки на демо-данных
         continue-on-error: true
         run: |
@@ -268,6 +289,22 @@ jobs:
           set +e; wait $pid; code=$?; set -e
           cat "$RUNNER_TEMP/capture.json" || true
           test "$code" = 0 || { echo "notification not captured (the CI Mac may deny Full Disk Access)"; exit 1; }
+      - name: Лента важного над доской (снимок для проверки)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          export MESSHUB_HOME="$RUNNER_TEMP/mh-strip"
+          python tools/demo_data.py --home "$MESSHUB_HOME" --lang ru
+          dist/mac/messhub.app/Contents/MacOS/messhub &
+          pid=$!
+          sleep 20
+          curl -s -X POST http://127.0.0.1:8765/api/prefs -H 'Content-Type: application/json' -d '{"strip":{"on":true}}' >/dev/null || true
+          sleep 8
+          mkdir -p dist/ci/strip-logs
+          screencapture -x dist/ci/board-strip.png
+          python -c "import Quartz; ws=Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionOnScreenOnly, 0); [print('окно', w.get('kCGWindowName'), dict(w.get('kCGWindowBounds', {})), 'alpha', w.get('kCGWindowAlpha')) for w in ws if w.get('kCGWindowOwnerName') == 'messhub']" || true
+          kill $pid || true; sleep 2
+          cp "$MESSHUB_HOME"/share/logs/*.log dist/ci/strip-logs/ 2>/dev/null || true
       - name: Снимок экрана - доска и настройки на демо-данных
         continue-on-error: true
         timeout-minutes: 5

@@ -95,6 +95,20 @@ class DbTest(unittest.TestCase):
         w = rules.why(self.conn, rec["id"])
         self.assertEqual(sorted(h["action"] for h in w["insert_hits"]), ["pin", "sound"])
 
+    def test_strip_prefs(self):
+        """Лента важного: по умолчанию выключена; галочки меняются по одной, остальное не сбрасывается;
+        переключение меняет версию настроек — доска и лента перечитываются сами."""
+        p = rules.get_prefs(self.conn)
+        self.assertEqual(p["strip"], {"on": False, "pinned": True, "highlight": True, "mentions": False})
+        v0 = rules.prefs_ver(p)
+        rules.set_prefs(self.conn, {"strip": {"on": 1}})
+        rules.set_prefs(self.conn, {"strip": {"mentions": True, "junk": 1}})
+        p = rules.get_prefs(self.conn)
+        self.assertEqual(p["strip"], {"on": True, "pinned": True, "highlight": True, "mentions": True})
+        self.assertNotEqual(rules.prefs_ver(p), v0)
+        with self.assertRaises(ValueError):
+            rules.set_prefs(self.conn, {"strip": "on"})
+
     def test_vis_pair_is_exclusive(self):
         rules.save_rule(self.conn, rules.clean_rule({"src": "express", "chat": "Флуд", "action": "hide"}))
         rules.save_rule(self.conn, rules.clean_rule({"src": "express", "chat": "Флуд", "action": "show"}))

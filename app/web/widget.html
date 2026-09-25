@@ -266,6 +266,55 @@
   /* закреплено замком: ни перетащить, ни растянуть */
   .locked .rz { display: none; }
   .locked .bar { cursor: default; }
+  /* ── лента важного (/widget?strip=1): отдельное прозрачное окно над доской (widget.py, класс Strip).
+     Строка карточек — у края, ближнего к доске; раскрытый чат и меню — от доски прочь ── */
+  #strip { display: none; }
+  body.strip #strip { display: block; position: fixed; left: 0; right: 0; bottom: 0; --cw: calc(var(--fs) * 21); }
+  body.strip.dock-below #strip { top: 0; bottom: auto; }
+  body.strip .wrap, body.strip .rz { display: none; }
+  #srow { overflow-x: auto; overflow-y: hidden; padding: 10px 12px 8px; scrollbar-width: none; }
+  #srow::-webkit-scrollbar { display: none; }
+  #sin { display: flex; align-items: flex-end; width: max-content; min-height: 1px; }
+  body.dock-below #sin { align-items: flex-start; }
+  .sit { flex: 0 0 auto; margin-right: 8px; }
+  .sit > .msg, .sit > .grp { width: var(--cw); margin: 0; }
+  #strip .msg, #strip .grp, #spop { background: rgba(var(--glass), max(var(--op), .9)); border-color: rgba(128,128,128,.28);
+    box-shadow: 0 6px 22px rgba(0,0,0,.42); }
+  #strip .msg.hl, #strip .grp.hl { background: color-mix(in srgb, var(--hl) 16%, rgba(var(--glass), max(var(--op), .9))); }
+  #strip .msg > .body { -webkit-line-clamp: 4; }
+  .compact #strip .msg > .body { -webkit-line-clamp: 3; }
+  .srcl { font-size: 10px; color: var(--muted); margin: -1px 0 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .grp > .srcl { padding: 6px 9px 0; margin: 0; }
+  /* новое важное въезжает справа, прочитанное схлопывается */
+  .sit.enter { overflow: hidden; animation: sit-in .45s cubic-bezier(.2,.8,.2,1) both; }
+  .sit.enter > * { animation: sit-slide .45s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes sit-in { from { max-width: 0; opacity: 0; margin-right: 0; } to { max-width: calc(var(--cw) + 24px); opacity: 1; } }
+  @keyframes sit-slide { from { transform: translateX(46px); } to { transform: none; } }
+  .sit.leaving { overflow: hidden; max-width: 0 !important; opacity: 0; margin-right: 0; pointer-events: none;
+    transition: max-width .28s ease, opacity .2s ease, margin-right .28s ease; }
+  .sit.bump > * { animation: flash 1.3s ease; }
+  /* строка не влезла — стрелки по краям */
+  .sarr { position: absolute; top: 50%; z-index: 12; width: 30px; height: 30px; margin-top: -15px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text);
+    background: rgba(var(--glass), .96); border: 1px solid rgba(128,128,128,.32); box-shadow: 0 4px 14px rgba(0,0,0,.45); }
+  .sarr:hover { color: var(--accent); }
+  .sarr.l { left: 4px; } .sarr.r { right: 4px; }
+  .sarr.l svg { transform: rotate(180deg); }
+  .sarr[hidden] { display: none; }
+  /* раскрытый чат: окошко над плашкой (под ней, если лента под доской) */
+  #spop { position: fixed; z-index: 14; width: calc(var(--cw) + 50px); overflow-y: auto; padding: 6px;
+    border: 1px solid rgba(128,128,128,.28); border-radius: 12px; }
+  #spop[hidden] { display: none; }
+  #spop .sph { display: flex; align-items: center; gap: 6px; position: sticky; top: -6px; z-index: 2;
+    margin: -6px -6px 0; padding: 8px 9px 6px 11px; background: rgba(var(--glass), .98); border-radius: 12px 12px 0 0; }
+  #spop .sph .chat { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #spop .sph .srcl { margin: 0; flex: 1 1 auto; }
+  #spop .sph .c { color: var(--muted); font-size: 11px; background: var(--card-hover); border-radius: 999px; padding: 0 7px; }
+  #strip #spop .msg { background: var(--card); box-shadow: none; margin: 0 0 6px; width: auto; }
+  #strip #spop .msg.hl { background: color-mix(in srgb, var(--hl) 11%, var(--card)); }
+  #strip.privacy #srow, #strip.privacy #spop { filter: blur(11px); }
+  body.strip #toast { bottom: calc(100% + 6px); }
+  body.strip.dock-below #toast { top: calc(100% + 6px); bottom: auto; }
   ::-webkit-scrollbar { width: 7px; height: 7px; }
   ::-webkit-scrollbar-thumb { background: rgba(128,128,128,.3); border-radius: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -322,6 +371,9 @@
   <div id="toast" role="status" aria-live="polite"><span class="tt"></span><button class="tb" type="button" hidden></button></div>
 </div>
 <div class="menu" id="menu" hidden></div>
+<div id="strip"><div id="srow"><div id="sin"></div></div>
+  <span class="sarr l" id="sarrL" hidden></span><span class="sarr r" id="sarrR" hidden></span>
+  <div id="spop" hidden></div></div>
 <div class="rz n" data-edge="n"></div><div class="rz s" data-edge="s"></div>
 <div class="rz e" data-edge="e"></div><div class="rz w" data-edge="w"></div>
 <div class="rz ne" data-edge="ne"></div><div class="rz nw" data-edge="nw"></div>
@@ -350,6 +402,12 @@ if (PYW) {
 if (!host) document.body.classList.add('nohost');
 // второй виджет с отбором: widget.py --only express,telegram → /widget?only=express,telegram
 const ONLY = (QS.get('only') || '').split(',').map(s => s.trim()).filter(Boolean);
+// лента важного (prefs.strip): эта же страница с ?strip=1 в отдельном прозрачном окне над доской
+const STRIP = QS.get('strip') === '1';
+if (STRIP) document.body.classList.add('strip');
+// ленте окно-хозяин говорит, где доска (above — лента над ней, below — под ней) и растёт ли окно по содержимому
+let dock = 'above', fitMode = false, spOpen = null, stripFirst = true, stripHover = false, shapeT = 0;
+let stripGroups = new Map();
 
 const ICON = {
   check: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
@@ -383,6 +441,10 @@ function escRe(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
 function fmtTime(iso){if(!iso)return'';const x=iso.replace('T',' ');return x.length>=19?x.slice(11,16):x;}
 function gid(g){if(!gids.has(g)){const i=gids.size+1;gids.set(g,i);gkeys.set(i,g);}return gids.get(g);}
 const important = m => !!(m.pinned || m.highlight || m.mention);
+// что уходит в ленту важного; доска в окне программы при включённой ленте это в колонках не показывает
+// (в обычном браузере ленты нет — там всё остаётся в колонках)
+function inStrip(m){const s=prefs.strip||{};return !!(s.on&&((s.pinned&&m.pinned)||(s.highlight&&m.highlight)||(s.mentions&&m.mention)));}
+const inStripHere = m => !STRIP && !!host && inStrip(m);
 let toastT = 0, toastAct = null;
 // подсказка внизу; opts.action — кнопка («Вернуть») на 5 секунд
 function toast(text, opts){
@@ -392,7 +454,8 @@ function toast(text, opts){
   toastAct=opts.action||null;
   b.hidden=!toastAct; if(toastAct) b.textContent=toastAct.label;
   el.className='show'+(opts.err?' err':'')+(toastAct?' act':'');
-  clearTimeout(toastT); toastT=setTimeout(()=>{el.className='';toastAct=null;},toastAct?5000:2200);
+  clearTimeout(toastT); toastT=setTimeout(()=>{el.className='';toastAct=null;shapeSoon();},toastAct?5000:2200);
+  shapeSoon();
 }
 $('toast').querySelector('.tb').addEventListener('click',()=>{const a=toastAct;$('toast').className='';toastAct=null;if(a)a.run();});
 function setOnline(ok){dot.style.background=ok?'var(--ok)':'var(--bad)';dot.classList.toggle('on',ok);}
@@ -460,12 +523,15 @@ function ensureCol(meta){
   return c;
 }
 function colItems(key){
-  return [...msgs.values()].filter(m=>m.src===key&&(!focus||important(m))).sort((a,b)=>b.id-a.id);
+  return [...msgs.values()].filter(m=>m.src===key&&!inStripHere(m)&&(!focus||important(m))).sort((a,b)=>b.id-a.id);
 }
 // куда ведёт «перейти»: письма из ящиков (mail.py) и карточки тематических колонок (events.py) приходят
 // не из окна приложения — переходить некуда
 const goTitle = m => m.app==='mail-imap'||/^messhub-/.test(m.app||'')?'':m.site?t('Открыть {site}',{site:m.site}):t('Перейти в {app}',{app:m.src_name});
-function cardHtml(m, withChat){
+// источник строкой над карточкой — в ленте важного, где карточки из разных колонок стоят рядом
+// (сайт или ящик — через точку; имя программы вроде telegram-desktop ничего не добавляет)
+const srcLine = m => `<div class="srcl">${esc(m.src_ico||'')} ${esc(m.src_name||'')}${/^(site|imap):/.test(m.sub||'')&&m.sub_name!==m.src_name?' · '+esc(m.sub_name):''}</div>`;
+function cardHtml(m, withChat, withSrc){
   let b='';
   if(m.pinned) b+=`<span class="badge pin" title="${attr(t('Закреплено'))}">${ICON.pinS}</span>`;
   if(m.mention) b+=`<span class="badge at" title="${attr(t('Упоминание'))}">@</span>`;
@@ -484,7 +550,7 @@ function cardHtml(m, withChat){
     :(m.times&&m.times.length)?`<div>${m.times.slice(0,2).map((x,i)=>`<span class="tchip" data-act="remind" data-ti="${i}" title="${attr(t('Напомнить об этом'))}">⏰ ${esc(whenLabel(x.at,x.date_only))}</span>`).join('')}</div>`:'';
   const go=goTitle(m);
   const goAttr=go?` data-act="open" title="${attr(go)}"`:'';
-  return `<div class="${cls}" data-id="${m.id}"><div class="top"><span class="who${go?'':' nogo'}"${goAttr}>${avatar(m)}${b}${who}</span><span class="time">${esc(fmtTime(m.event_iso))}</span>
+  return `<div class="${cls}" data-id="${m.id}">${withSrc?srcLine(m):''}<div class="top"><span class="who${go?'':' nogo'}"${goAttr}>${avatar(m)}${b}${who}</span><span class="time">${esc(fmtTime(m.event_iso))}</span>
     <span class="acts"><span class="ab" data-act="full" title="${attr(t('Открыть целиком'))}">${ICON.full}</span>${go?`<span class="ab" data-act="open" title="${attr(go)}">${ICON.go}</span>`:''}<span class="ab" data-act="why" title="${attr(t('Почему так?'))}">${ICON.why}</span>
     <span class="ab" data-act="snooze" title="${attr(t('Отложить'))}">${ICON.clock}</span>
     <span class="ab${m.pinned?' on':''}" data-act="pin" title="${attr(m.pinned?t('Открепить'):t('Закрепить — не прочитается само через 24 ч'))}">${ICON.pin}</span></span>
@@ -533,8 +599,8 @@ function subsOf(items){
   return [...subs.entries()];
 }
 function renderCol(key){
-  const c=cols.get(key); if(!c) return;
-  const items=colItems(key), subs=subsOf([...msgs.values()].filter(m=>m.src===key));
+  const c=cols.get(key); if(!c||STRIP) return;
+  const items=colItems(key), subs=subsOf([...msgs.values()].filter(m=>m.src===key&&!inStripHere(m)));
   const split=(prefs.split_cols||[]).includes(key)&&subs.length>1;
   c.col.classList.toggle('can-split',subs.length>1||(prefs.split_cols||[]).includes(key));
   c.col.classList.toggle('split',split);
@@ -565,10 +631,10 @@ function markLong(root){
     if(cut&&!more) b.insertAdjacentHTML('afterend',`<span class="more" data-act="full">${esc(t('Показать целиком'))}</span>`);
   });
 }
-function renderAll(){for(const k of cols.keys())renderCol(k);fresh.clear();updateCount();}
-function renderKeys(keys){keys.forEach(renderCol);fresh.clear();updateCount();}
+function renderAll(){for(const k of cols.keys())renderCol(k);renderStrip();fresh.clear();updateCount();}
+function renderKeys(keys){keys.forEach(renderCol);renderStrip();fresh.clear();updateCount();}
 function updateCount(){
-  const n=cols.size, shown=[...msgs.values()].filter(m=>cols.has(m.src)&&(!focus||important(m))).length;
+  const n=cols.size, shown=[...msgs.values()].filter(m=>cols.has(m.src)&&!inStripHere(m)&&(!focus||important(m))).length;
   empty.style.display=n?'none':'block';
   let s=shown+' · '+t('{n} ист.',{n});
   if(focus) s=t('фокус')+' · '+s;
@@ -605,6 +671,8 @@ async function savePrefs(patch){
 
 // ── убрать с доски (прочитано, отложено, пропало при сверке) ──
 function dropIds(ids){
+  if(!ids.length) return;
+  if(STRIP){ids.forEach(id=>msgs.delete(id));renderStrip();return;}
   const keys=new Set();
   for(const id of ids){const m=msgs.get(id);if(!m)continue;keys.add(m.src);
     const el=board.querySelector(`.msg[data-id="${id}"]`);
@@ -627,9 +695,9 @@ async function readIds(ids, label){
   if(!ids.length) return;
   try{await post('/api/read',{ids});}
   catch(e){toast(t('Не удалось отметить прочитанным — сервер не отвечает'),{err:true});setOnline(false);return;}
-  dropIds(ids);
+  dropIds(ids); bcPost({type:'read',ids});
   toast(label||t('Прочитано'),{action:{label:t('Вернуть'),run:async()=>{
-    try{await post('/api/read',{ids,unread:true});await fetchBack(ids);toast(t('Возвращено'));}
+    try{await post('/api/read',{ids,unread:true});await fetchBack(ids);bcPost({type:'back',ids});toast(t('Возвращено'));}
     catch(e){toast(t('Не удалось вернуть — сервер не отвечает'),{err:true});}}}});
 }
 const readable = key => colItems(key).filter(m=>!m.pinned).map(m=>m.id);
@@ -702,10 +770,10 @@ async function closeCol(key){
   if(res.status===409){const b=c.col.querySelector('[data-act="close-col"]');showMenu(b,blockedHtml(r),'close',key);return;}
   if(!res.ok){toast(r.error||t('Сервер ответил {c}',{c:res.status}),{err:true});return;}
   prefsVer=r._ver; prefs.closed_cols=[...new Set([...(prefs.closed_cols||[]),key])];
-  dropCol(key);
+  dropCol(key); bcPost({type:'read',ids:r.ids||[]});
   toast(r.read?t('Колонка «{name}» закрыта, прочитано: {n}',{name:c.meta.name,n:r.read}):t('Колонка «{name}» закрыта',{name:c.meta.name}),
     {action:{label:t('Вернуть'),run:async()=>{
-      try{await post('/api/reopen-column',{src:key,ids:r.ids});await initial();toast(t('Возвращено'));}
+      try{await post('/api/reopen-column',{src:key,ids:r.ids});await initial();bcPost({type:'back',ids:r.ids||[]});toast(t('Возвращено'));}
       catch(e){toast(t('Не удалось вернуть — сервер не отвечает'),{err:true});}}}});
 }
 async function hideCol(key){
@@ -716,7 +784,7 @@ async function hideCol(key){
   toast(t('Колонка «{name}» скрыта. Вернуть — в настройках, «Внешний вид»',{name:c.meta.name}));
 }
 // двойной клик по тексту — скопировать сообщение целиком
-board.addEventListener('dblclick',e=>{
+function onDblCopy(e){
   const log=e.target.closest('pre.log');
   const body=log||e.target.closest('.body'); if(!body||e.target.closest('a')) return;
   const card=body.closest('[data-id]'), m=msgs.get(+card.dataset.id); if(!m) return;
@@ -725,7 +793,8 @@ board.addEventListener('dblclick',e=>{
     card.dataset.note=ok?t('Скопировано'):t('Не скопировалось');
     card.classList.add(ok?'copied':'copyfail');setTimeout(()=>card.classList.remove('copied','copyfail'),1200);
   });
-});
+}
+board.addEventListener('dblclick',onDblCopy);
 async function copyText(s){
   try{await navigator.clipboard.writeText(s);return true;}
   catch(e){const ta=document.createElement('textarea');ta.value=s;ta.style.cssText='position:fixed;opacity:0';
@@ -744,7 +813,7 @@ async function togglePin(id){
   const m=msgs.get(id); if(!m) return;
   try{await post('/api/pin',{ids:[id],pinned:!m.pinned});}
   catch(e){toast(t('Не удалось закрепить — сервер не отвечает'),{err:true});return;}
-  m.pinned=m.pinned?0:1; renderKeys([m.src]);
+  m.pinned=m.pinned?0:1; renderKeys([m.src]); bcPost({type:'pin',id,pinned:m.pinned});
   toast(m.pinned?t('Закреплено: не прочитается само'):t('Откреплено'));
 }
 
@@ -755,14 +824,17 @@ function openFull(id){
   if(host) host.postMessage('message:'+id);
   else window.open('/message?id='+id,'messhub-message','width=900,height=640');
 }
-// окно сообщения говорит доске, что его прочитали или закрепили (сверка раз в 15 с догонит и без этого)
-try{
-  new BroadcastChannel('messhub').onmessage=e=>{
-    const d=e.data||{}, m=msgs.get(d.id); if(!m) return;
-    if(d.type==='read') dropIds([d.id]);
-    else if(d.type==='pin'){m.pinned=d.pinned?1:0;renderKeys([m.src]);}
-  };
-}catch(e){}
+// окна говорят друг другу, что прочитали, вернули, закрепили или завели напоминание: доска ↔ лента важного,
+// окно сообщения → доска (сверка раз в 15 с догонит и без этого)
+const bc=(()=>{try{return new BroadcastChannel('messhub');}catch(e){return null;}})();
+function bcPost(d){try{if(bc)bc.postMessage(d);}catch(e){}}
+if(bc) bc.onmessage=e=>{
+  const d=e.data||{}, ids=(d.ids||(d.id?[d.id]:[])).map(Number);
+  if(d.type==='read') dropIds(ids.filter(id=>msgs.has(id)));
+  else if(d.type==='back') fetchBack(ids.filter(id=>!msgs.has(id))).catch(()=>{});
+  else if(d.type==='pin'||d.type==='remind'){const m=msgs.get(+d.id);if(!m)return;
+    if(d.type==='pin')m.pinned=d.pinned?1:0;else m.remind_at=d.at||'';renderKeys([m.src]);}
+};
 
 // ── напоминания по времени из текста (сервер: reminders.py) ──
 const pad=n=>String(n).padStart(2,'0');
@@ -792,13 +864,13 @@ function openRemind(btn,id,ti){
 }
 async function setRemind(id,at,eventAt){
   const m=msgs.get(id); if(!m) return;
-  try{const r=await post('/api/remind',{id,at,event_at:eventAt});m.remind_at=r.at;renderKeys([m.src]);
+  try{const r=await post('/api/remind',{id,at,event_at:eventAt});m.remind_at=r.at;renderKeys([m.src]);bcPost({type:'remind',id,at:r.at});
     toast(t('Напомню {w}',{w:whenLabel(r.at)}));}
   catch(e){toast(t('Не удалось завести напоминание — сервер не отвечает'),{err:true});}
 }
 async function cancelRemind(id){
   const m=msgs.get(id); if(!m) return;
-  try{await post('/api/remind/cancel',{id});m.remind_at='';renderKeys([m.src]);toast(t('Напоминание отменено'));}
+  try{await post('/api/remind/cancel',{id});m.remind_at='';renderKeys([m.src]);bcPost({type:'remind',id,at:''});toast(t('Напоминание отменено'));}
   catch(e){toast(t('Не удалось отменить — сервер не отвечает'),{err:true});}
 }
 
@@ -864,9 +936,15 @@ function showMenu(anchor, html, kind, forId){
   menuFor=forId; menuKind=kind; menu.innerHTML=html; menu.hidden=false;
   const r=anchor.getBoundingClientRect(), mw=menu.offsetWidth, mh=menu.offsetHeight;
   menu.style.left=Math.max(6,Math.min(r.right-mw,innerWidth-mw-6))+'px';
+  if(STRIP){                        // лента: меню открывается от доски прочь; снизу — окно может вырасти вверх
+    if(dock==='below'){menu.style.bottom='';menu.style.top=(r.bottom+4)+'px';}
+    else{menu.style.top='';menu.style.bottom=(innerHeight-r.top+4)+'px';}
+    shapeSoon(); return;
+  }
+  menu.style.bottom='';
   menu.style.top=(r.bottom+mh+6<innerHeight?r.bottom+4:Math.max(6,r.top-mh-4))+'px';
 }
-function hideMenu(){menu.hidden=true;menuFor=null;menuKind=null;}
+function hideMenu(){menu.hidden=true;menuFor=null;menuKind=null;shapeSoon();}
 document.addEventListener('mousedown',e=>{if(!menu.hidden&&!menu.contains(e.target)&&!e.target.closest('[data-act="snooze"],[data-act="why"],[data-act="close-col"],#profBtn'))hideMenu();});
 
 function snoozeOptions(){
@@ -930,7 +1008,8 @@ menu.addEventListener('click',async e=>{
   const b=e.target.closest('button'); if(!b) return;
   if(menuKind==='snooze'&&b.dataset.p){
     const id=menuFor; hideMenu();
-    try{const r=await post('/api/snooze',{ids:[id],preset:b.dataset.p});dropIds([id]);toast(t('Отложено до {t}',{t:r.until.slice(11,16)}));}
+    try{const r=await post('/api/snooze',{ids:[id],preset:b.dataset.p});dropIds([id]);bcPost({type:'read',ids:[id]});
+      toast(t('Отложено до {t}',{t:r.until.slice(11,16)}));}
     catch(e){toast(t('Не удалось отложить — сервер не отвечает'),{err:true});}
   } else if(menuKind==='prof'){
     hideMenu();
@@ -1018,15 +1097,18 @@ document.addEventListener('mouseup',()=>{dragCmd=null;});
 const wrap=document.querySelector('.wrap'), eye=$('eye');
 let priv=false; try{priv=localStorage.getItem('privacy')==='1';}catch(e){}
 function applyPriv(){
-  wrap.classList.toggle('privacy',priv);
+  wrap.classList.toggle('privacy',priv); $('strip').classList.toggle('privacy',priv);
   eye.classList.toggle('active',priv);
   $('eyeOpen').style.display=priv?'none':''; $('eyeOff').style.display=priv?'':'none';
   eye.title=priv?t('Показать содержимое · клавиша B'):t('Скрыть содержимое (для показа экрана) · клавиша B');
   try{localStorage.setItem('privacy',priv?'1':'0');}catch(e){}
 }
 eye.addEventListener('click',()=>{priv=!priv;applyPriv();});
+// доска и лента важного размываются вместе: глаз (и показ экрана) на доске — и лента следом
+window.addEventListener('storage',e=>{if(e.key==='privacy'&&(e.newValue==='1')!==priv){priv=e.newValue==='1';applyPriv();}});
 $('gear').addEventListener('click',()=>{if(host)host.postMessage('settings');else window.open('/settings','_blank');});
 document.addEventListener('keydown',e=>{
+  if(STRIP){if(e.key==='Escape'){if(!menu.hidden)hideMenu();else if(spOpen){spOpen=null;renderStrip();}}return;}
   if(e.target&&e.target.id==='hq') return;                   // печатают в поиске — клавиши B, F и т.п. не трогаем
   if(e.key==='Escape'){if(!menu.hidden)hideMenu();return;}    // окно виджета по Esc не закрывается
   if(e.ctrlKey||e.metaKey||e.altKey)return;
@@ -1045,8 +1127,160 @@ function applyPrefs(p){
   document.documentElement.style.setProperty('--fs',p.font_size+'px');
   mentionRe=buildMentionRe(p.mentions);
   renderProf();
-  if(host) host.postMessage('share:'+JSON.stringify({on:!!p.share_blur,patterns:p.share_patterns||[]}));
+  if(host&&!STRIP){
+    host.postMessage('share:'+JSON.stringify({on:!!p.share_blur,patterns:p.share_patterns||[]}));
+    host.postMessage('strip:'+JSON.stringify({on:!!(p.strip&&p.strip.on)}));   // лента важного: окно-хозяин открывает её
+  }
   if(PYW) host.postMessage('opacity:'+p.opacity);     // подложка сплошная — прозрачным окно делает хозяин
+}
+
+// ── лента важного: строка карточек в своём окне (widget.py, класс Strip; winwidget.py на Windows и Mac) ──
+// закреплённое — слева, дальше подсвеченное и упоминания по времени прихода: новое въезжает справа.
+// Несколько важных из одного чата — одна плашка, раскрывается от доски прочь (над строкой)
+function stripModel(){
+  const all=[...msgs.values()].filter(inStrip);
+  const pinned=all.filter(m=>m.pinned).sort((a,b)=>a.id-b.id), rest=all.filter(m=>!m.pinned).sort((a,b)=>a.id-b.id);
+  const out=pinned.map(m=>({k:'m'+m.id,html:cardHtml(m,true,true)}));
+  if(prefs.group_by_chat){
+    const groups=new Map();
+    for(const m of rest){const g=m.src+'\u0001'+(m.chat||'');if(!groups.has(g))groups.set(g,[]);groups.get(g).push(m);}
+    // плашка чата встаёт по самому свежему сообщению: новое важное из того же чата сдвигает её вправо
+    [...groups.entries()].sort((a,b)=>a[1][a[1].length-1].id-b[1][b[1].length-1].id).forEach(([g,list])=>
+      out.push(list.length>1?{k:'g'+g,g,list,html:stripGroupHtml(g,list)}:{k:'m'+list[0].id,html:cardHtml(list[0],true,true)}));
+  } else rest.forEach(m=>out.push({k:'m'+m.id,html:cardHtml(m,true,true)}));
+  return out;
+}
+function stripGroupHtml(g,list){
+  const chat=g.split('\u0001')[1], last=list[list.length-1];
+  const color=(list.find(m=>m.highlight)||{}).highlight, men=list.some(m=>m.mention), flash=list.some(m=>fresh.has(m.id));
+  const prev=(last.sender&&last.sender!==chat?`<span class="sender">${esc(last.sender)}:</span> `:'')+marks(last.message||'');
+  return `<div class="grp${spOpen===g?' open':''}${flash?' flash':''}${color?' hl hl-'+color:''}">${srcLine(last)}
+    <div class="gtop" data-act="stoggle"><span class="tw">${ICON.chev}</span>
+      <span class="who">${avatar(last)}${men?`<span class="badge at" title="${attr(t('Есть упоминание'))}">@</span>`:''}<span class="chat">${esc(chat||'—')}</span></span>
+      <span class="gn" title="${attr(tp(list.length,...W.newMsg))}">${list.length}</span>
+      <span class="time">${esc(fmtTime(last.event_iso))}</span>
+      <span class="ab read" data-act="sread-group" title="${attr(t('Прочитать весь чат'))}">${ICON.check2}</span></div>
+    <div class="gprev" data-act="stoggle">${prev}</div></div>`;
+}
+const liveSits = () => [...$('sin').children].filter(el=>!el.classList.contains('leaving'));
+function renderStrip(){
+  if(!STRIP) return;
+  const model=stripModel(), inner=$('sin'), row=$('srow');
+  stripGroups=new Map(model.filter(x=>x.g).map(x=>[x.g,x.list]));
+  const live=new Map(liveSits().map(el=>[el.dataset.k,el])), entered=[];
+  const nextLive=n=>{while(n&&n.classList.contains('leaving'))n=n.nextElementSibling;return n;};
+  let prev=null;
+  for(const it of model){
+    let el=live.get(it.k);
+    if(el){live.delete(it.k);if(el._h!==it.html){el.innerHTML=it.html;el._h=it.html;}}
+    else{
+      el=document.createElement('div');el.className='sit';el.dataset.k=it.k;el.innerHTML=it.html;el._h=it.html;
+      if(!stripFirst){el.classList.add('enter');entered.push(el);
+        el.addEventListener('animationend',()=>{el.classList.remove('enter');stripArrows();shapeSoon();},{once:true});}
+    }
+    const want=nextLive(prev?prev.nextElementSibling:inner.firstElementChild);
+    if(el!==want){if(!el.classList.contains('enter')&&el.parentNode){el.classList.remove('bump');el.offsetWidth;el.classList.add('bump');}
+      inner.insertBefore(el,want);}
+    prev=el;
+  }
+  for(const el of live.values()){                 // прочитано, отложено, открепили — схлопнуть
+    el.style.maxWidth=el.offsetWidth+'px';el.offsetWidth;el.classList.add('leaving');
+    setTimeout(()=>{el.remove();stripArrows();shapeSoon();},300);
+  }
+  stripFirst=false;
+  markLong(inner);
+  if(entered.length&&!stripHover){                 // показать только что пришедшее, если строку не листают мышкой
+    const last=entered[entered.length-1];
+    const reveal=()=>{if(stripHover||!last.isConnected)return;
+      const w=last.firstElementChild?last.firstElementChild.offsetWidth:0, right=last.offsetLeft+w+16-row.clientWidth;
+      if(right>row.scrollLeft)row.scrollTo({left:right,behavior:'smooth'});
+      else if(last.offsetLeft<row.scrollLeft)row.scrollTo({left:Math.max(0,last.offsetLeft-12),behavior:'smooth'});};
+    setTimeout(reveal,30);                                              // пока въезжает — уже листаем к ней,
+    last.addEventListener('animationend',reveal,{once:true});          // въехала целиком — докручиваем
+  }
+  renderPop(); stripArrows(); shapeSoon();
+}
+// раскрытый чат — окошко над плашкой: самое свежее — ближе к строке
+function renderPop(){
+  const pop=$('spop'), list=spOpen&&stripGroups.get(spOpen), el=list&&liveSits().find(x=>x.dataset.k==='g'+spOpen);
+  if(!el){spOpen=null;if(!pop.hidden){pop.hidden=true;shapeSoon();}return;}
+  const [src,chat]=spOpen.split('\u0001'), first=pop.hidden;
+  const items=dock==='below'?[...list].reverse():list;
+  pop.innerHTML=`<div class="sph"><span class="chat">${esc(chat||'—')}</span>${srcLine(list[0])}<span class="c">${list.length}</span>
+      <span class="ab read" data-act="sread-group" title="${attr(t('Прочитать весь чат'))}">${ICON.check2}</span>
+      <span class="ab" data-act="stoggle" title="${attr(t('Свернуть'))}">${ICON.close}</span></div>`+items.map(m=>cardHtml(m,false)).join('');
+  pop.hidden=false; markLong(pop);
+  placePop(first);
+}
+function placePop(first){
+  const pop=$('spop'), el=spOpen&&liveSits().find(x=>x.dataset.k==='g'+spOpen);
+  if(!el||pop.hidden) return;
+  const r=el.getBoundingClientRect(), w=pop.offsetWidth, row=$('srow').getBoundingClientRect();
+  // плашку чата увели за край строки — окошко прячется, вернётся вместе с ней
+  pop.style.visibility=r.right<row.left+24||r.left>row.right-24?'hidden':'';
+  pop.style.left=Math.max(6,Math.min(r.left,innerWidth-w-6))+'px';
+  // сколько места — окно ленты на X11 высотой с запасом; растущее по содержимому (Windows, Mac, Wayland) — до 380 px
+  const room=fitMode?380:Math.max(120,(dock==='below'?innerHeight-r.bottom:r.top)-14);
+  pop.style.maxHeight=room+'px';
+  if(dock==='below'){pop.style.bottom='';pop.style.top=(r.bottom+6)+'px';}
+  else{pop.style.top='';pop.style.bottom=(innerHeight-r.top+6)+'px';}
+  if(first) pop.scrollTop=dock==='below'?0:pop.scrollHeight;
+  shapeSoon();
+}
+function stripArrows(){
+  if(!STRIP) return;
+  const r=$('srow');
+  $('sarrL').hidden=r.scrollLeft<=2; $('sarrR').hidden=r.scrollLeft+r.clientWidth>=r.scrollWidth-2;
+}
+// окну-хозяину — что нарисовано: там клики ловит лента, в остальных местах окна они уходят окнам под ним.
+// need — сколько окну нужно в высоту (Windows, Mac и Wayland растят окно под раскрытый чат и меню)
+function shapeSoon(){if(STRIP&&host&&!shapeT)shapeT=setTimeout(sendShape,40);}
+function sendShape(){
+  shapeT=0;
+  const rects=[], add=(l,tp,w,h)=>{if(w>1&&h>1)rects.push([Math.floor(l)-3,Math.floor(tp)-3,Math.ceil(w)+6,Math.ceil(h)+6]);};
+  const row=$('srow').getBoundingClientRect();
+  for(const el of liveSits()){const c=el.firstElementChild||el, r=c.getBoundingClientRect();
+    const l=Math.max(r.left,row.left), rr=Math.min(r.right,row.right); add(l,r.top,rr-l,r.height);}
+  for(const el of [$('sarrL'),$('sarrR'),$('spop'),menu]) if(!el.hidden&&el.style.visibility!=='hidden'){const r=el.getBoundingClientRect();add(r.left,r.top,r.width,r.height);}
+  const tt=$('toast'); if(tt.classList.contains('show')){const r=tt.getBoundingClientRect();add(r.left,r.top,r.width,r.height);}
+  const need=!rects.length?0:dock==='below'?Math.max(...rects.map(r=>r[1]+r[3])):innerHeight-Math.min(...rects.map(r=>r[1]));
+  host.postMessage('strip-shape:'+JSON.stringify({rects,need:Math.ceil(need)+2}));
+}
+window.hostStrip=o=>{
+  dock=o&&o.dock==='below'?'below':'above'; fitMode=!!(o&&o.fit);
+  document.body.classList.toggle('dock-below',dock==='below');
+  renderPop(); stripArrows(); shapeSoon();
+};
+if(STRIP){
+  const st=$('strip'), row=$('srow');
+  st.appendChild($('toast'));                       // подсказки — над строкой, а не в спрятанной доске
+  st.addEventListener('mouseenter',()=>{stripHover=true;});
+  st.addEventListener('mouseleave',()=>{stripHover=false;});
+  row.addEventListener('wheel',e=>{if(Math.abs(e.deltaY)>Math.abs(e.deltaX)){row.scrollLeft+=e.deltaY;e.preventDefault();}},{passive:false});
+  let scT=0;
+  row.addEventListener('scroll',()=>{stripArrows();placePop(false);clearTimeout(scT);scT=setTimeout(shapeSoon,60);});
+  $('sarrL').innerHTML=$('sarrR').innerHTML=ICON.chev.replace(/width="11" height="11"/,'width="16" height="16"');
+  $('sarrL').addEventListener('click',()=>row.scrollBy({left:-row.clientWidth*.8,behavior:'smooth'}));
+  $('sarrR').addEventListener('click',()=>row.scrollBy({left:row.clientWidth*.8,behavior:'smooth'}));
+  window.addEventListener('resize',()=>{stripArrows();placePop(false);shapeSoon();});
+  st.addEventListener('dblclick',onDblCopy);
+  st.addEventListener('click',e=>{
+    if(e.target.closest('a.lnk')) return;
+    const a=e.target.closest('[data-act]'); if(!a) return;
+    const act=a.dataset.act, card=a.closest('[data-id]'), id=card&&+card.dataset.id;
+    const sit=a.closest('.sit'), g=sit&&sit.dataset.k[0]==='g'?sit.dataset.k.slice(1):a.closest('#spop')?spOpen:null;
+    if(act==='read') readIds([id]);
+    else if(act==='pin') togglePin(id);
+    else if(act==='snooze') openSnooze(a,id);
+    else if(act==='open') openSource(msgs.get(id));
+    else if(act==='why') openWhy(a,id);
+    else if(act==='full') openFull(id);
+    else if(act==='remind') openRemind(a,id,+(a.dataset.ti||0));
+    else if(act==='det'){openDet.has(id)?openDet.delete(id):openDet.add(id);renderStrip();}
+    else if(act==='stoggle'){spOpen=spOpen===g?null:g;renderStrip();}
+    else if(act==='sread-group'){const ids=(stripGroups.get(g)||[]).map(m=>m.id);
+      if(ids.length)readIds(ids,t('Прочитано: {n}',{n:ids.length}));}
+  });
 }
 
 // ── загрузка, опрос новых и сверка ──
@@ -1126,7 +1360,7 @@ async function checkUpdate(){
 }
 applyLock(); applyPriv();
 initial(); setInterval(poll,1500); setInterval(sync,15000);
-checkUpdate(); setTimeout(checkUpdate,10000); setInterval(checkUpdate,3*36e5);
+if(!STRIP){checkUpdate(); setTimeout(checkUpdate,10000); setInterval(checkUpdate,3*36e5);}
 </script>
 </body>
 </html>

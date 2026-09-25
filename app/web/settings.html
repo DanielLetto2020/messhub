@@ -1003,6 +1003,12 @@ async function showLook(){
     <p class="hint">${esc(t('«Показ экрана»: пока идёт демонстрация (Zoom, Meet и другие сайты в Chrome, Firefox, портал PipeWire), доска размывается, а потом возвращается. Свои признаки — части заголовков окон через запятую:'))}</p>
     <div class="erow"><input class="inp" id="lShare" value="${attr((p.share_patterns||[]).join(', '))}" placeholder="${attr(t('например: Screen sharing, Демонстрация'))}" style="width:420px">
       <button class="btn" type="button" id="lShareSave">${esc(t('Сохранить'))}</button></div>
+    <h3>${esc(t('Лента важного'))}</h3>
+    <p class="hint">${esc(t('Важное уходит из колонок в отдельную строку прямо над доской: закреплённое стоит слева, новое важное въезжает справа. Карточки те же, что в колонках, с названием источника; не влезают — по краям стрелки. Несколько важных из одного чата собираются в плашку, она раскрывается вверх. Пустые места строки прозрачны и пропускают клики к окнам под ней.'))}</p>
+    <div class="erow"><label class="switch"><input type="checkbox" id="stOn"${p.strip.on?' checked':''}> <b>${esc(t('Показывать ленту над доской'))}</b></label></div>
+    <div class="erow" id="stWhat"><span class="muted">${esc(t('Что в неё уходит:'))}</span>
+      ${[['pinned','закреплённое'],['highlight','подсвеченное правилами'],['mentions','упоминания']].map(([k,l])=>
+        `<label class="switch"><input type="checkbox" data-st="${k}"${p.strip[k]?' checked':''}> ${esc(t(l))}</label>`).join('')}</div>
     <h3>${esc(t('Колонки'))}</h3>
     <p class="hint">${esc(t('Порядок колонок меняется перетаскиванием прямо в виджете. Скрытые колонки:'))}</p>
     <div class="tags" id="hidCols">${p.hidden_cols.length?p.hidden_cols.map(k=>`<span class="tagx">${esc(nameOf(k))}<button type="button" data-show="${attr(k)}" aria-label="${attr(t('Показать'))}">↩</button></span>`).join(''):`<span class="muted">${esc(t('скрытых нет'))}</span>`}</div>
@@ -1021,6 +1027,12 @@ async function showLook(){
     try{PREFS=await api('/api/prefs',{hidden_cols:p.hidden_cols.filter(k=>k!==b.dataset.show)});toast(t('Сохранено'));showLook();}catch(e){toast(e.message,true);}});
   if($('resetOrder'))$('resetOrder').onclick=async()=>{await api('/api/prefs',{col_order:[]});toast(t('Порядок сброшен'));showLook();};
   $('lShareSave').onclick=async()=>{try{PREFS=await api('/api/prefs',{share_patterns:$('lShare').value});toast(t('Сохранено'));}catch(e){toast(e.message,true);}};
+  const stWhat=()=>{$('stWhat').style.opacity=$('stOn').checked?'':'.5';};
+  stWhat();
+  // сразу, без задержки save: две галочки подряд не должны затереть друг друга
+  const stSave=async patch=>{try{PREFS=await api('/api/prefs',{strip:patch});toast(t('Сохранено'));}catch(e){toast(e.message,true);}};
+  $('stOn').onchange=e=>{stWhat();stSave({on:e.target.checked});};
+  page.querySelectorAll('[data-st]').forEach(cb=>cb.onchange=()=>stSave({[cb.dataset.st]:cb.checked}));
 }
 
 // ── Тихие часы ──
