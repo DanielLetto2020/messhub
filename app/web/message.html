@@ -117,6 +117,9 @@ function rich(s){
   }
   return out+marks(s.slice(last));
 }
+// оформление из уведомления (m.fmt): только <b>, <i>, <u> как есть, текст — через rich (как на доске)
+const unesc = s => s.replace(/&(lt|gt|amp|quot|apos);/g,(_,e)=>({lt:'<',gt:'>',amp:'&',quot:'"',apos:"'"})[e]);
+function richFmt(f){return String(f).split(/(<\/?[biu]>)/).map((p,i)=>i%2?p:rich(unesc(p))).join('');}
 let toastT=0;
 function toast(text, err){const el=$('toast');el.textContent=text;el.className='show'+(err?' err':'');
   clearTimeout(toastT);toastT=setTimeout(()=>el.className='',2200);}
@@ -148,7 +151,7 @@ function draw(){
   $('when').textContent=when(m.event_iso);
   const n=m.details?m.details.split('\n').length:0;
   $('main').innerHTML=`<p class="veil">${esc(t('Содержимое скрыто для показа экрана.'))} <button class="btn ghost" type="button" id="unveil">${esc(t('Показать'))}</button></p>
-    <div class="text">${rich(m.message||'')}</div>
+    <div class="text">${m.fmt?richFmt(m.fmt):rich(m.message||'')}</div>
     ${m.details?`<h2>${esc(t('Лог'))} · ${esc(tp(n,...W.line))}</h2><pre class="log">${esc(m.details)}</pre>`:''}`;
   const unveil=$('unveil'); if(unveil) unveil.onclick=()=>document.body.classList.remove('blurred');
   // перейти можно только в приложение с окном: не у писем из ящиков и не у тематических колонок

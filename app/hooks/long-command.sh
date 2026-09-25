@@ -58,12 +58,26 @@ elif [ -n "${BASH_VERSION:-}" ]; then
     preexec_functions+=(__em_preexec)
     precmd_functions+=(__em_precmd)
   else
+    # DEBUG срабатывает и на команды из PROMPT_COMMAND (у GNOME Terminal там __vte_prompt_command):
+    # засекаем только первую команду, введённую после приглашения, — «взводит» её __em_arm в самом
+    # конце PROMPT_COMMAND. Иначе отсчёт шёл бы от показа приглашения, с простоем в придачу.
+    __em_armed=""
     __em_debug() {
       [ -n "${COMP_LINE:-}" ] && return                  # автодополнение
+      [ -z "$__em_armed" ] && return                     # не после приглашения или не первая в строке
       case "$BASH_COMMAND" in __em_*) return ;; esac      # наши же функции
-      [ -z "$__em_start" ] && __em_preexec "$BASH_COMMAND" # только первая команда строки
+      __em_armed=""
+      __em_preexec "$BASH_COMMAND"
     }
+    __em_arm() { __em_armed=1; }
     trap '__em_debug' DEBUG
-    PROMPT_COMMAND="__em_precmd${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
+    if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then     # bash 5.1+: массив
+      PROMPT_COMMAND=(__em_precmd "${PROMPT_COMMAND[@]}" __em_arm)
+    else
+      __em_pc="${PROMPT_COMMAND:-}"
+      __em_pc="${__em_pc%"${__em_pc##*[![:space:];]}"}"   # хвостовые «;» и пробелы — иначе «;;»
+      PROMPT_COMMAND="__em_precmd${__em_pc:+; $__em_pc}; __em_arm"
+      unset __em_pc
+    fi
   fi
 fi

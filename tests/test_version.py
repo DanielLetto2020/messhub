@@ -1,5 +1,4 @@
 """Номер версии: 1.0.<номер коммита с нуля>; в пакете — из файла VERSION."""
-import os
 import re
 import unittest
 from unittest import mock

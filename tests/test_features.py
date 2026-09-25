@@ -4,7 +4,6 @@ import json
 import os
 import sqlite3
 import stat
-import sys
 import tempfile
 import threading
 import time
@@ -86,6 +85,27 @@ class QuietTest(unittest.TestCase):
         self.assertTrue(ev("2026-09-25 12:00", q=dict(self.q, manual_until="2099-01-01 00:00:00"))[0])
         self.assertFalse(ev("2026-09-25 23:10", q=dict(self.q, manual_until="-2099-01-01 00:00:00"))[0])
 
+    def test_off_while_dnd(self):
+        """«Выключить сейчас» при «Не беспокоить» GNOME работает, пока оно включено; выключили его —
+        тихие часы снова идут за ним."""
+        db = common.new_db("quiet-dnd.db")
+        conn = sqlite3.connect(db)
+        dnd = {"on": True}
+        with mock.patch.object(quiet, "gnome_dnd", side_effect=lambda: dnd["on"]):
+            self.assertFalse(quiet.step(conn)["active"])           # по умолчанию «Не беспокоить» не наша тишина
+            self.assertTrue(quiet.step(conn)["dnd"])               # но видно, что оно включено
+            rules.set_prefs(conn, {"quiet": {"follow_dnd": True}})
+            conn.commit()
+            self.assertEqual(quiet.step(conn)["reason"], "dnd")
+            self.assertFalse(quiet.set_manual(conn, "off")["active"])
+            self.assertFalse(quiet.step(conn)["active"])           # «Не беспокоить» всё ещё включено
+            dnd["on"] = False
+            quiet.step(conn)
+            self.assertEqual(rules.get_prefs(conn)["quiet"]["manual_until"], "")
+            dnd["on"] = True
+            self.assertTrue(quiet.step(conn)["active"])            # включили снова — снова тихо
+        conn.close()
+
     def test_quiet_mutes_sound_and_summary(self):
         db = common.new_db("quiet.db")
         prefs(db, {"quiet": {"enabled": True, "manual_until": "2099-01-01 00:00:00", "summary": True}})
@@ -151,6 +171,11 @@ class CalendarTest(unittest.TestCase):
         tue = calendar_src.parse_events(self.ICS.format(start="20260929T110000", end="20260929T113000"))[0]
         occ = calendar_src.occurrences(tue, datetime(2026, 9, 28), datetime(2026, 10, 3))
         self.assertEqual([d.strftime("%a %d") for d in occ], ["Tue 29", "Wed 30", "Fri 02"])
+        # давний повтор (ежедневный с 2005 года) — не теряется за пределом 5000 шагов
+        old = calendar_src.parse_events(self.ICS.format(start="20050103T093000", end="20050103T100000")
+                                        .replace("FREQ=WEEKLY;BYDAY=MO,WE,FR", "FREQ=DAILY"))[0]
+        occ = calendar_src.occurrences(old, datetime(2026, 9, 25), datetime(2026, 9, 27))
+        self.assertEqual([d.strftime("%d %H:%M") for d in occ], ["25 09:30", "26 09:30"])
         # за 10 минут до начала — карточка; второй проверкой — не повторяется
         start = (datetime.now() + timedelta(minutes=7)).replace(second=0, microsecond=0)
         d = tempfile.mkdtemp(dir=common.TMP)

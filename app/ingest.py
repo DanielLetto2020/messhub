@@ -57,7 +57,8 @@ def new_token():
 def authorized(header):
     token = load_token()
     got = (header or "").removeprefix("Bearer ").strip()
-    return bool(token) and hmac.compare_digest(got, token)
+    # байтами: строки с не-ASCII compare_digest не сравнивает (TypeError вместо 401)
+    return bool(token) and hmac.compare_digest(got.encode(), token.encode())
 
 
 def _s(payload, key, limit, required=False):
@@ -142,6 +143,8 @@ def serve_network(db_path, bind):
                 self._reply(200, accept_api(db_path, json.loads(self.rfile.read(size) or b"{}")))
             except (ValueError, TypeError) as e:
                 self._reply(400, {"error": str(e)})
+            except sqlite3.Error as e:          # база занята — пусть отправитель повторит
+                self._reply(503, {"error": str(e)})
 
     httpd = ThreadingHTTPServer((host.strip("[]"), int(port)), H)
     threading.Thread(target=httpd.serve_forever, name="ingest-net", daemon=True).start()

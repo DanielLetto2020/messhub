@@ -122,7 +122,7 @@ TS = "%Y-%m-%d %H:%M:%S"
 
 FIELDS = ("id", "app", "site", "chat", "sender", "is_bot", "message", "has_media",
           "urgency", "event_iso", "received_at", "is_read", "pinned", "snooze_until", "avatar",
-          "resolved_at", "details")
+          "resolved_at", "details", "fmt")
 
 
 def open_db(path):
@@ -430,14 +430,14 @@ def mark_read(conn, ids, unread=False):
 
 
 def restore(conn, ids):
-    """Вернуть в виджет: непрочитано и не отложено. Если сообщение старше суток,
-    сдвигаем время записи на «почти сейчас», иначе авто-прочтение сразу заберёт его снова."""
+    """Вернуть в виджет: непрочитано и не отложено. Время записи сдвигаем на «сейчас»,
+    иначе авто-прочтение сразу (или через час-другой) заберёт старое сообщение снова."""
     if not ids:
         return 0
     _reopen_for(conn, ids)
     return conn.execute(f"""UPDATE messages SET is_read = 0, read_at = NULL, snooze_until = NULL,
                                received_at = MAX(received_at, ?) WHERE id IN ({_in(ids)})""",
-                        [catcher.msk_time(AUTO_READ_HOURS - 1), *ids]).rowcount
+                        [catcher.msk_time(), *ids]).rowcount
 
 
 def set_pinned(conn, ids, pinned):
@@ -495,6 +495,7 @@ def purge(conn, days):
     old = "SELECT id FROM messages WHERE received_at < ? AND pinned = 0"
     conn.execute(f"DELETE FROM embeddings WHERE message_id IN ({old})", (cutoff,))
     conn.execute(f"DELETE FROM rule_hits WHERE message_id IN ({old})", (cutoff,))
+    conn.execute(f"DELETE FROM reminders WHERE message_id IN ({old})", (cutoff,))
     return conn.execute("DELETE FROM messages WHERE received_at < ? AND pinned = 0", (cutoff,)).rowcount
 
 
@@ -519,8 +520,8 @@ def start_background(db_path):
                     name = backup.daily(db_path)
                     if name:
                         print(f"Резервная копия: {name}", flush=True)
-            except (sqlite3.Error, OSError) as e:
-                print(f"Фоновые задачи: ошибка: {e}", flush=True)
+            except Exception as e:  # noqa: BLE001 — любая ошибка не должна навсегда останавливать авто-прочтение
+                print(f"Фоновые задачи: ошибка: {e!r}", flush=True)
             tick += 1
             time.sleep(60)
 
@@ -880,6 +881,8 @@ def make_handler(db_path):
                     self._send(404, b"not found", "text/plain; charset=utf-8")
             except sqlite3.OperationalError as e:
                 self._json({"error": str(e)}, 503)
+            except (ValueError, TypeError) as e:      # например, /api/search?to=не-дата
+                self._json({"error": str(e) or L("Неверный запрос", "Bad request")}, 400)
 
         def do_POST(self):
             if not self._guard():
@@ -920,7 +923,7 @@ def make_handler(db_path):
                 payload = json.loads(self.rfile.read(size) or b"{}")
                 sid, text = int(payload.get("session")), str(payload.get("text") or "")
                 images = [str(x) for x in (payload.get("images") or [])][:ai.MAX_IMAGES]
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, AttributeError):
                 return self._json({"error": L("Неверный запрос", "Bad request")}, 400)
             self.send_response(200)
             self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
@@ -960,10 +963,8 @@ def make_handler(db_path):
                     raise BadRequest(L("Неизвестное событие", "Unknown event"))
                 return events.command(db_path, payload)
             if p == "/api/ai/setup":
-                upd = dict(payload.get("ai") or {})
-                upd.pop("openrouter", None)           # OpenRouter включается только через /api/ai/openrouter
-                upd.pop("openrouter_consent", None)
-                write(db_path, rules.set_prefs, {"ai": upd})
+                # OpenRouter так не включить: только /api/ai/openrouter (rules.set_prefs, cloud_ok)
+                write(db_path, rules.set_prefs, {"ai": dict(payload.get("ai") or {})})
                 return read(db_path, ai.status)
             if p == "/api/ai/openrouter":
                 return write(db_path, ai.or_setup, bool(payload.get("enabled")),
@@ -1059,6 +1060,8 @@ def make_handler(db_path):
                 return {"ok": True}
             if p == "/api/prefs":
                 write(db_path, rules.set_prefs, payload)
+                if "quiet" in payload:                # луна и раздел настроек — сразу, без ожидания фона
+                    write(db_path, quiet.step)
                 return read(db_path, _prefs_view)
             if p == "/api/purge":
                 days = int(payload.get("days"))

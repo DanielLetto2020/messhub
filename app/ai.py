@@ -43,6 +43,7 @@ from datetime import datetime, timedelta
 
 import base64
 import hashlib
+import http.client
 
 import catcher
 import i18n
@@ -278,11 +279,12 @@ def or_models(force=False):
                 return round(float(x or 0) * 1_000_000, 3)
             except ValueError:
                 return 0.0
+        p_in, p_out = per_m(pr.get("prompt")), per_m(pr.get("completion"))    # цена-не-число не роняет весь каталог
         out.append({"name": m.get("id", ""), "title": m.get("name", ""), "ctx": int(m.get("context_length") or 0),
                     "vision": "image" in (arch.get("input_modalities") or []),
                     "reasoning": "reasoning" in (m.get("supported_parameters") or []),
-                    "price_in": per_m(pr.get("prompt")), "price_out": per_m(pr.get("completion")),
-                    "free": m.get("id", "").endswith(":free") or (not float(pr.get("prompt") or 0) and not float(pr.get("completion") or 0))})
+                    "price_in": p_in, "price_out": p_out,
+                    "free": m.get("id", "").endswith(":free") or (not p_in and not p_out)})
     out.sort(key=lambda x: x["name"])
     _or_models.update(t=time.time(), list=out, error="")
     return out
@@ -308,12 +310,12 @@ def or_setup(conn, enabled, key=None, consent=False):
         if not consent:
             raise ValueError(L("Нужно согласие: выборка сообщений и вопросы будут уходить в OpenRouter",
                                "Consent is needed: message selections and questions will be sent to OpenRouter"))
-        rules.set_prefs(conn, {"ai": {"openrouter": True, "openrouter_consent": catcher.msk_time()}})
+        rules.set_prefs(conn, {"ai": {"openrouter": True, "openrouter_consent": catcher.msk_time()}}, cloud_ok=True)
     else:
         upd = {"openrouter": False}
         if rules.get_prefs(conn)["ai"]["provider"] == "openrouter":   # новые беседы не должны начинаться с облака
             upd.update(provider="", model="")
-        rules.set_prefs(conn, {"ai": upd})
+        rules.set_prefs(conn, {"ai": upd}, cloud_ok=True)
     return or_status(rules.get_prefs(conn)["ai"], with_models=enabled)
 
 
@@ -635,12 +637,12 @@ def build_context(conn, st, question, thinking=False):
     if not st["include_read"]:
         where.append("is_read = 0")
     wsql = (" WHERE " + " AND ".join(where)) if where else ""
-    rows = conn.execute(f"SELECT id, app, COALESCE(site, ''), chat, sender, message, event_iso, details, is_read, "
+    rows = conn.execute(f"SELECT id, app, COALESCE(site, ''), chat, sender, message, event_iso, details, "
                         f"resolved_at FROM messages{wsql} ORDER BY id DESC LIMIT 20000", params).fetchall()
     srcs = set(st.get("sources") or [])
     ql = question.casefold()
     items = []
-    for mid, app, site, chat, sender, message, iso, details, is_read, resolved in rows:
+    for mid, app, site, chat, sender, message, iso, details, resolved in rows:
         s = rules.source_of(app, site, names)
         if srcs and s["key"] not in srcs:
             continue
@@ -831,7 +833,7 @@ def chat(db_path, sid, question, emit, lang="ru", images=None):
                 tokens = ev.get("tokens") or tokens
                 reason = ev.get("done_reason") or reason
                 cost = ev.get("cost", cost)
-        except (OSError, ValueError, urllib.error.URLError) as e:
+        except (OSError, ValueError, urllib.error.URLError, http.client.HTTPException) as e:   # в т.ч. оборванный поток
             if not answer and not thought:
                 raise ValueError(L(f"Модель не ответила: {_human(e)}", f"The model did not answer: {_human(e)}"))
             stopped = True

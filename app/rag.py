@@ -240,7 +240,7 @@ def index_step(db_path, batch=32):
             conn.close()
 
 
-def search(conn, q, k=20, src=""):
+def search(conn, q, k=20):
     """Ближайшие по смыслу сообщения → [(близость, id)]."""
     p = rules.get_prefs(conn)["rag"]
     if not p["enabled"]:

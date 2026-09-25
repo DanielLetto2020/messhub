@@ -34,6 +34,7 @@ org.freedesktop.Notifications). Всё, что приложение (eXpress и 
 """
 
 import argparse
+import html
 import os
 import re
 import signal
@@ -76,7 +77,6 @@ TELEGRAM_CHANNEL_NAMES = ()   # напр.: ("Хабр", "РБК", "Точное 
 _MSG_START = re.compile(r"^(method call|signal|error) ")
 _RE_TIME = re.compile(r"\btime=([\d.]+)")
 _RE_SENDER = re.compile(r"\bsender=(\S+)")
-_RE_DEST = re.compile(r"\bdestination=(\S+)")
 
 # top-level значение = ровно 3 ведущих пробела + тип D-Bus + значение
 _RE_TOP = re.compile(
@@ -118,26 +118,20 @@ def parse_message_block(header, body_lines):
         typ, rest = mt.group(1), mt.group(2)
 
         if typ == "string":
-            # многострочная строка: копим, пока строка не закончится на "
-            val = rest
-            if val.startswith('"'):
-                val = val[1:]
-            if val.endswith('"') and len(rest) >= 2:
-                strings.append(val[:-1])
-                i += 1
-                continue
-            # продолжение на следующих сырых строках
-            acc = [val]
-            i += 1
-            while i < n:
-                cont = body_lines[i]
-                if cont.endswith('"'):
-                    acc.append(cont[:-1])
-                    i += 1
+            # строка бывает многострочной, а кавычки внутри dbus-monitor не экранирует:
+            # она кончается на " в конце строки, только если дальше идёт следующий
+            # аргумент или конец блока (иначе «Он сказал "да"\nи ушёл» обрезалось бы)
+            acc = [rest[1:] if rest.startswith('"') else rest]
+            while True:
+                if acc[-1].endswith('"') and (i + 1 >= n or _RE_TOP.match(body_lines[i + 1])):
+                    acc[-1] = acc[-1][:-1]
                     break
-                acc.append(cont)
                 i += 1
+                if i >= n:
+                    break
+                acc.append(body_lines[i])
             strings.append("\n".join(acc))
+            i += 1
             continue
 
         if typ == "uint32" and replaces_id is None:
@@ -177,7 +171,7 @@ def parse_message_block(header, body_lines):
                       or "image-path" in body_raw_all
                       or "image_path" in body_raw_all) else 0
 
-    chat, sender, message, site = parse_fields(app, summary, body)
+    chat, sender, message, site, fmt = parse_markup(app, summary, body)
 
     return {
         "app": app,
@@ -193,6 +187,7 @@ def parse_message_block(header, body_lines):
         "raw_summary": summary,
         "raw_body": body,
         "site": site,
+        "fmt": fmt,
         "avatar": avatars.extract(body_lines),
         "bus_sender": bus_sender,
     }
@@ -252,6 +247,76 @@ def parse_fields(app, summary, body):
     return (*split_sender(summary, body), "")
 
 
+# ── разметка в теле: служба уведомлений понимает <b>, <i>, <u> и &amp; &lt; &gt; &quot; &apos; ──
+# Так делает GNOME Shell (всё прочее показывает как есть), и приложения этим пользуются: Telegram
+# в групповом чате пишет автора первой строкой «<b>Имя</b>». В message кладём чистый текст (поиск,
+# правила, пересылка, ассистент), а оформление — в fmt: тот же текст, где экранированы & < >
+# и остались только эти три тега (виджет и окно сообщения его показывают).
+_RE_MARK = re.compile(r"<(/?)([biu])>|&(amp|quot|apos|lt|gt);")
+_ENTITIES = {"amp": "&", "quot": '"', "apos": "'", "lt": "<", "gt": ">"}
+_RE_BOLD_LINE = re.compile(r"^<b>([^<>\n]{1,200})</b>$")
+
+
+def from_markup(text):
+    """Текст с разметкой → (чистый текст, оформление или None, если тегов нет). Незакрытые или
+    перепутанные теги — как у GNOME Shell: такой текст показывается как есть."""
+    if not text or ("<" not in text and "&" not in text):
+        return text, None
+    plain, fmt, stack, pos, tags = [], [], [], 0, False
+    for m in _RE_MARK.finditer(text):
+        chunk = text[pos:m.start()]
+        plain.append(chunk)
+        fmt.append(html.escape(chunk, quote=False))
+        pos = m.end()
+        if m.group(3):
+            ch = _ENTITIES[m.group(3)]
+            plain.append(ch)
+            fmt.append(html.escape(ch, quote=False))
+        elif m.group(1):
+            if not stack or stack.pop() != m.group(2):
+                return text, None
+            fmt.append(m.group(0))
+        else:
+            stack.append(m.group(2))
+            fmt.append(m.group(0))
+            tags = True
+    if stack:
+        return text, None
+    plain.append(text[pos:])
+    fmt.append(html.escape(text[pos:], quote=False))
+    return "".join(plain), ("".join(fmt) if tags else None)
+
+
+def parse_markup(app, summary, body):
+    """Разбор тела уведомления D-Bus (с разметкой). → (chat, sender, message, site, fmt)."""
+    lines = (body or "").split("\n")
+    m = _RE_BOLD_LINE.match(lines[0].strip()) if len(lines) > 1 and app_kind(app) == "app" else None
+    if m:                                  # «<b>Автор</b>\nтекст» — групповой чат (так пишет Telegram)
+        name = from_markup(m.group(1))[0].strip()
+        text, fmt = from_markup("\n".join(lines[1:]))
+        if name and len(name) <= 60 and text.strip():
+            return (summary or "").strip(), name, text.strip(), "", (fmt.strip() if fmt else None)
+    plain, fmt = from_markup(body)
+    chat, sender, message, site = parse_fields(app, summary, plain)
+    if fmt:
+        fmt = fmt.strip() if message == (plain or "").strip() else _fmt_part(fmt, message)
+    return chat, sender, message, site, fmt
+
+
+def _fmt_part(fmt, message):
+    """Текст поделили («Имя: текст», строка с сайтом) — кусок оформления, в котором ровно message.
+    Не нашёлся или теги разрезаны — None (покажем просто текст)."""
+    head = "\n".join(fmt.split("\n", 3)[:3])        # автор и сайт — в первых строках
+    starts = {0} | {m.end() for m in re.finditer(": |\n", head)}
+    last = fmt.rfind("\n")
+    for i in sorted(starts):
+        for j in {len(fmt), last} if last > i else {len(fmt)}:
+            text, f = from_markup(fmt[i:j])     # в оформлении < > & экранированы — from_markup вернёт текст
+            if f and text.strip() == message:
+                return f.strip()
+    return None
+
+
 def split_sender(summary, body):
     """
     Групповой чат eXpress: summary = название группы, body = "Имя Фамилия: текст".
@@ -290,7 +355,9 @@ def telegram_should_skip(rec):
     """
     if TELEGRAM_MARK not in (rec.get("app") or "").lower():
         return False
-    name = (rec.get("sender") or rec.get("chat") or "").lower()
+    # бот — по названию чата (личка с ботом); отправителя в групповом чате не смотрим:
+    # «Abbott» или бот-помощник в группе не повод терять сообщения чата
+    name = (rec.get("chat") or rec.get("sender") or "").lower()
     if "bot" in name:                       # бот
         return True
     chat = (rec.get("chat") or "").lower()  # канал — по ручному списку названий
@@ -301,7 +368,8 @@ def telegram_should_skip(rec):
 
 NEW_COLUMNS = (("is_read", "INTEGER DEFAULT 0"), ("read_at", "TEXT"),
                ("pinned", "INTEGER DEFAULT 0"), ("snooze_until", "TEXT"), ("site", "TEXT"),
-               ("avatar", "TEXT"), ("event_key", "TEXT"), ("resolved_at", "TEXT"), ("details", "TEXT"))
+               ("avatar", "TEXT"), ("event_key", "TEXT"), ("resolved_at", "TEXT"), ("details", "TEXT"),
+               ("fmt", "TEXT"))
 RULES_NEWEST = ("text", "profile")    # колонки последней версии таблицы rules
 
 
@@ -314,17 +382,20 @@ def migrate(conn):
     перенесёт в неё правила. Свежую БД не трогаем.
     """
     cols = {r[1] for r in conn.execute("PRAGMA table_info(messages)")}
+    added = set()
     if cols:
         for name, ddl in NEW_COLUMNS:
             if name not in cols:
                 conn.execute(f"ALTER TABLE messages ADD COLUMN {name} {ddl}")
+                added.add(name)
     rcols = {r[1] for r in conn.execute("PRAGMA table_info(rules)")}
     if rcols and not all(c in rcols for c in RULES_NEWEST):
         conn.execute("DROP TABLE IF EXISTS rules_old")
         conn.execute("ALTER TABLE rules RENAME TO rules_old")
+    return added
 
 
-def migrate_after(conn):
+def migrate_after(conn, added=()):
     """ПОСЛЕ schema.sql: перенести правила из старой таблицы и разобрать заново
     сайт/почту у записей, сохранённых до появления этого разбора (site IS NULL)."""
     for old in ("rules_v1", "rules_old"):          # rules_v1 — имя из самых первых сборок (до публикации)
@@ -342,15 +413,26 @@ def migrate_after(conn):
                          "WHERE id = ?", (chat, sender, message, site, id_))
         else:
             conn.execute("UPDATE messages SET site = '' WHERE id = ?", (id_,))
+    # один раз, когда появилась колонка fmt: уведомления с разметкой, записанные раньше, — заново
+    # (было «<b>Имя</b>» прямо в тексте). Только Linux: на Windows тексты уведомлений простые.
+    if "fmt" in added and os.name != "nt":
+        marks = ("<b>", "<i>", "<u>", "&amp;", "&lt;", "&gt;", "&quot;", "&apos;")
+        for id_, app, summ, body in conn.execute(
+                "SELECT id, app, raw_summary, raw_body FROM messages WHERE app NOT LIKE 'messhub-%' "
+                "AND app != 'mail-imap' AND (" + " OR ".join("instr(raw_body, ?)" for _ in marks) + ")",
+                marks).fetchall():
+            chat, sender, message, site, fmt = parse_markup(app, summ, body)
+            conn.execute("UPDATE messages SET chat = ?, sender = ?, is_bot = ?, message = ?, site = ?, fmt = ? "
+                         "WHERE id = ?", (chat, sender, guess_is_bot(sender), message, site, fmt, id_))
 
 
 def init_db(path):
     conn = sqlite3.connect(path)
     conn.execute("PRAGMA journal_mode=WAL;")
-    migrate(conn)
+    added = migrate(conn)
     with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
         conn.executescript(f.read())
-    migrate_after(conn)
+    migrate_after(conn, added)
     conn.commit()
     return conn
 
@@ -361,12 +443,13 @@ def insert(conn, rec):
         """INSERT INTO messages
            (app, chat, sender, is_bot, message, notification_id, urgency,
             has_media, event_ts, event_iso, received_at, raw_summary, raw_body, site, avatar,
-            event_key, details)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            event_key, details, fmt)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (rec["app"], rec["chat"], rec["sender"], rec["is_bot"], rec["message"],
          rec["notification_id"], rec["urgency"], rec["has_media"],
          rec["event_ts"], rec["event_iso"], msk_time(), rec["raw_summary"], rec["raw_body"],
-         rec.get("site", ""), rec.get("avatar"), rec.get("event_key") or None, rec.get("details") or None),
+         rec.get("site", ""), rec.get("avatar"), rec.get("event_key") or None, rec.get("details") or None,
+         rec.get("fmt") or None),
     )
     conn.commit()
     return cur.lastrowid
@@ -454,15 +537,13 @@ def run(db_path, verbose, from_file, on_insert=None, skip=None):
         "dbus-monitor", "--session",
         f"type='method_call',interface='{NOTIFY_DEST}',member='Notify'",
     ]
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                            text=True, bufsize=1)
-
+    cur = {"proc": None}
     stopping = {"v": False}
 
     def stop(*_):
         stopping["v"] = True
         try:
-            proc.terminate()
+            cur["proc"].terminate()
         except Exception:
             pass
 
@@ -473,18 +554,36 @@ def run(db_path, verbose, from_file, on_insert=None, skip=None):
         print(f"Слушаю уведомления → {db_path}. Ctrl+C для остановки.", flush=True)
 
     try:
-        for header, body in blocks_from_stream(proc.stdout):
-            if stopping["v"]:
-                break
-            rec = parse_message_block(header, body)
-            if rec:
-                handle(rec)
+        # dbus-monitor может завершиться (перезапуск сеанса D-Bus и т.п.) — тогда запускаем заново:
+        # выход с кодом 0 systemd (Restart=on-failure) не перезапускает, и сбор молча встал бы
+        pause = 5
+        while not stopping["v"]:
+            started = time.time()
+            proc = cur["proc"] = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                                  text=True, encoding="utf-8", errors="replace", bufsize=1)
+            for header, body in blocks_from_stream(proc.stdout):
+                if stopping["v"]:
+                    break
+                try:
+                    rec = parse_message_block(header, body)
+                    if rec:
+                        handle(rec)
+                except Exception as e:  # noqa: BLE001 — одно уведомление (или занятая база) не роняет сбор
+                    print(f"Уведомление не записано: {e!r}", flush=True)
+            try:
+                proc.wait(timeout=3)
+            except Exception:
+                proc.kill()
+            if not stopping["v"]:
+                if time.time() - started > 60:
+                    pause = 5                        # проработал долго — снова быстро; падает сразу — всё реже
+                print(f"dbus-monitor завершился (код {proc.returncode}) — перезапускаю через {pause} с", flush=True)
+                until = time.time() + pause
+                while not stopping["v"] and time.time() < until:   # SIGTERM не ждёт конца паузы
+                    time.sleep(0.5)
+                pause = min(60, pause * 2)
     finally:
         conn.close()
-        try:
-            proc.wait(timeout=3)
-        except Exception:
-            proc.kill()
 
 
 def main():

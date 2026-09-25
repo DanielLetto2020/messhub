@@ -722,7 +722,7 @@ function drawMessages(){
       ${ready?'':`<div class="err">${esc(s.model?t('{p} не отвечает. Запусти его или выбери другую модель в настройках беседы.',{p:provName(s.provider)}):t('Модель не выбрана — открой «Модели» или настройки беседы.'))}</div>`}
       <div class="quick">${QUICK.map((x,i)=>`<button class="qa" type="button" data-qa="${i}"><b>${esc(t(x[0]))}</b><span>${esc(t(x[1]))}</span></button>`).join('')}</div></div>`;
     box.querySelectorAll('[data-qa]').forEach(b=>b.onclick=async()=>{
-      const [title,,per,prompt]=QUICK[+b.dataset.qa];
+      const [,,per,prompt]=QUICK[+b.dataset.qa];
       if(CUR.settings.period!==per){try{CUR=await api('/api/ai/session',{id:CUR.id,settings:{period:per}});$('per').value=per;}catch(e){}}
       const q=$('q');q.value=t(prompt);q.oninput();q.focus();
       if(!/«»|про $/.test(q.value)) send(); else {const p=q.value.indexOf('«»');q.setSelectionRange(p>=0?p+1:q.value.length,p>=0?p+1:q.value.length);}
@@ -815,7 +815,7 @@ async function send(){
   const liveMsg=box.lastElementChild, live=liveMsg.querySelector('.bub');
   $('chat').scrollTop=$('chat').scrollHeight;
   const ctl=new AbortController(); streaming=ctl; setSendState();
-  let acc='', thinkAcc='', meta=null, err='', drawT=0;
+  let acc='', thinkAcc='', err='', drawT=0;
   const redraw=()=>{
     if(thinkAcc){let d=liveMsg.querySelector('details.thk');const wasOpen=d?d.open:CUR.settings.think==='show';
       if(!d){live.insertAdjacentHTML('beforebegin',thinkHtml(thinkAcc,true));d=liveMsg.querySelector('details.thk');}
@@ -838,7 +838,6 @@ async function send(){
         if(ev.type==='context') $('ctxLine').textContent=t('Выборка: {s}',{s:ev.summary});
         else if(ev.type==='token'||ev.type==='think'){if(ev.type==='think')thinkAcc+=ev.t;else acc+=ev.t;
           if(!drawT)drawT=setTimeout(()=>{drawT=0;redraw();},60);}
-        else if(ev.type==='done') meta=ev;
         else if(ev.type==='error') err=ev.error;
       }
     }

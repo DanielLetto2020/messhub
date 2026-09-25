@@ -29,7 +29,7 @@ EVERY_S = 60                 # карточку обновляем не чаще
 KEEP = 30                    # строк в логе карточки
 
 status = {}                  # id наблюдения → {running, error, matches, last}
-_threads = {}                # id → (конфиг, Event остановки)
+_threads = {}                # id → (конфиг, Event остановки, запущенные journalctl)
 
 
 class Bucket:
@@ -85,7 +85,9 @@ def _follow_file(path, stop):
                     yield line.rstrip("\n")
         except OSError as e:
             yield OSError(str(e))
-            f, ino = None, ino
+            if f:
+                f.close()
+            f = None                             # ino помним: появится новый файл — читаем с начала
             stop.wait(10)
         stop.wait(2)
     if f:
@@ -103,15 +105,17 @@ def _follow_unit(w, stop, procs):
             break
         yield line.rstrip("\n")
     err = (p.stderr.read() or "").strip()
+    p.wait()                                     # без этого завершённый journalctl висел бы зомби
+    procs.remove(p)
     if err and not stop.is_set():
         yield OSError(err.splitlines()[-1][:300])
 
 
-def watch(db_path, w, stop):
+def watch(db_path, w, stop, procs):
     st = status.setdefault(w["id"], {})
     st.update(running=True, error="", matches=0, last="")
     rx = re.compile(w["pattern"], re.I if w["icase"] else 0)
-    b, procs = Bucket(), []
+    b = Bucket()
 
     def flusher():
         while not stop.wait(5):
@@ -160,16 +164,21 @@ def start(db_path):
                 finally:
                     conn.close()
                 want = {w["id"]: w for w in cfg["watches"]} if cfg["enabled"] else {}
-                for wid, (old, stop) in list(_threads.items()):
+                for wid, (old, stop, procs) in list(_threads.items()):
                     if want.get(wid) != old:
                         stop.set()
+                        for p in procs:           # journalctl ждёт новую строку — без этого жил бы до неё
+                            try:
+                                p.terminate()
+                            except OSError:
+                                pass
                         del _threads[wid]
                         status.pop(wid, None)
                 for wid, w in want.items():
                     if wid not in _threads:
-                        stop = threading.Event()
-                        _threads[wid] = (w, stop)
-                        threading.Thread(target=watch, args=(db_path, w, stop), name=f"logwatch-{wid}",
+                        stop, procs = threading.Event(), []
+                        _threads[wid] = (w, stop, procs)
+                        threading.Thread(target=watch, args=(db_path, w, stop, procs), name=f"logwatch-{wid}",
                                          daemon=True).start()
                         print(f"Журналы: слежу за «{w['name']}»", flush=True)
             except Exception as e:  # noqa: BLE001

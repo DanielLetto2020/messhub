@@ -1,4 +1,5 @@
 import os
+import sqlite3
 import struct
 import zlib
 import unittest
@@ -57,6 +58,58 @@ class ParseTest(unittest.TestCase):
         self.assertTrue(catcher.telegram_should_skip({"app": "telegram-desktop", "sender": "NewsBot", "chat": "NewsBot"}))
         self.assertFalse(catcher.telegram_should_skip({"app": "telegram-desktop", "sender": "Мама", "chat": "Семья"}))
         self.assertFalse(catcher.telegram_should_skip({"app": "eXpress", "sender": "CI Bot", "chat": "x"}))
+
+    def test_multiline_with_quotes(self):
+        # dbus-monitor не экранирует кавычки: строка с " в конце — ещё не конец текста
+        for body in ('Он сказал "да"\nи ушёл', 'строка\n"цитата"\nконец', 'a"\n"', '\nпосле пустой строки'):
+            h, lines = block("eXpress", "Анна", body)
+            r = catcher.parse_message_block(h, "\n".join(lines).split("\n"))
+            self.assertEqual(r["raw_body"], body)
+            self.assertEqual(r["urgency"], 1)
+
+    def test_markup(self):
+        """Разметка в теле (как понимает GNOME Shell): <b>, <i>, <u> и пять сущностей, остальное — как есть."""
+        tg = "telegram-desktop_telegram-desktop"
+        h, lines = block(tg, "Рабочий чат", "<b>Сергей А.</b>\nПривет &amp; пока, a &lt; b")
+        r = catcher.parse_message_block(h, "\n".join(lines).split("\n"))     # как в выводе dbus-monitor
+        self.assertEqual((r["chat"], r["sender"], r["message"], r["fmt"]),
+                         ("Рабочий чат", "Сергей А.", "Привет & пока, a < b", None))
+        self.assertEqual(catcher.parse_markup(tg, "Чат", "<b>Олег</b>\n<i>курсив</i> и <b>жирный</b>")[2:],
+                         ("курсив и жирный", "", "<i>курсив</i> и <b>жирный</b>"))
+        self.assertEqual(catcher.parse_markup("eXpress", "Команда", "Иван: <b>важно</b> &amp; всё")[1:],
+                         ("Иван", "важно & всё", "", "<b>важно</b> &amp; всё"))
+        # не разметка или сломанная — текст как есть, без оформления
+        for body in ("a<b then &#123;", "Незакрытый <b>тег", "<b><i>перепутаны</b></i>"):
+            self.assertEqual(catcher.parse_markup("eXpress", "Анна", body)[2:], (body, "", None), body)
+        # чужие теги — только текстом: в оформлении они экранированы
+        self.assertEqual(catcher.from_markup("<u>x</u><script>y</script>"),
+                         ("x<script>y</script>", "<u>x</u>&lt;script&gt;y&lt;/script&gt;"))
+        # Windows и приём событий: текст простой, разметку не трогаем
+        self.assertEqual(catcher.record("App", "Чат", "<b>x</b>")["message"], "<b>x</b>")
+
+    @unittest.skipIf(os.name == "nt", "на Windows тексты уведомлений простые — разметку не переразбираем")
+    def test_markup_migration(self):
+        """Записи с разметкой, сохранённые до колонки fmt, разбираются заново — один раз."""
+        path = os.path.join(common.TMP, "fmt-old.db")
+        if os.path.exists(path):
+            os.remove(path)
+        conn = catcher.init_db(path)
+        conn.execute("INSERT INTO messages (app, chat, sender, message, raw_summary, raw_body) VALUES "
+                     "('telegram-desktop', 'Группа', 'Группа', '<b>Оля</b>\nтекст', 'Группа', '<b>Оля</b>\nтекст')")
+        conn.commit()
+        conn.close()
+        c = sqlite3.connect(path)             # как база прошлой версии — без колонки fmt
+        cols = ", ".join(r[1] for r in c.execute("PRAGMA table_info(messages)") if r[1] != "fmt")
+        c.executescript(f"CREATE TABLE m2 AS SELECT {cols} FROM messages; DROP TABLE messages; "
+                        "ALTER TABLE m2 RENAME TO messages;")
+        c.close()
+        conn = catcher.init_db(path)
+        self.assertEqual(conn.execute("SELECT sender, message FROM messages").fetchone(), ("Оля", "текст"))
+        conn.close()
+
+    def test_telegram_group_member_bot_kept(self):
+        self.assertFalse(catcher.telegram_should_skip({"app": "telegram-desktop", "sender": "Abbott", "chat": "Семья"}))
+        self.assertTrue(catcher.telegram_should_skip({"app": "telegram-desktop", "sender": "Weather", "chat": "WeatherBot"}))
 
     def test_avatar_from_image_data(self):
         r = catcher.parse_message_block(*block("eXpress", "Анна", "Привет", image=True))

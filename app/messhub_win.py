@@ -186,6 +186,7 @@ def main():
         services.start(a.db)
         for mod in (resources, logwatch, calendar_src, scripts, quiet, reminders):
             mod.start(a.db)
+        collect.start_network_ingest(a.db)      # приём событий из сети, если включён (как на Linux)
     httpd = ThreadingHTTPServer((host, a.port), serve.make_handler(a.db))
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     if a.selftest:

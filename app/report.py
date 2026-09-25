@@ -65,7 +65,7 @@ def maybe_send(db_path):
         now = datetime.now(catcher.MSK).replace(tzinfo=None)
         if not due(prefs, now):
             return None
-        i18n.set_lang(i18n.pick(prefs["language"]))
+        i18n.set_lang(i18n.background(prefs["language"]))     # «авто» — язык системы, как у других фоновых карточек
         ok, err = actions.send(build(conn))
         if ok:
             rules.set_prefs(conn, {"report_last": now.strftime("%Y-%m-%d")})

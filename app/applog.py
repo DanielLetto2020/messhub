@@ -100,8 +100,11 @@ class _Tee:
     """Поток вывода, который заодно пишет законченные строки в журнал."""
 
     def __init__(self, orig, stream, bump=True):
-        self.orig, self.stream, self.buf = orig, stream, ""
+        self.orig, self.stream = orig, stream
         self.bump = bump and stream == "stderr"      # обычная строка в stderr — предупреждение
+        # недописанная строка — своя у каждого потока: print() пишет текст и "\n" двумя вызовами,
+        # и с общим буфером строки разных потоков слипались в одну запись
+        self._local = threading.local()
 
     def write(self, s):
         if self.orig is not None:
@@ -109,14 +112,15 @@ class _Tee:
                 self.orig.write(s)
             except (OSError, ValueError, UnicodeError):
                 pass
-        self.buf += s
-        while "\n" in self.buf:
-            line, self.buf = self.buf.split("\n", 1)
+        buf = getattr(self._local, "buf", "") + s
+        while "\n" in buf:
+            line, buf = buf.split("\n", 1)
             if line.strip():
                 lvl = guess_level(line)
                 if self.bump and lvl == "info":
                     lvl = "warn"
                 write(line, lvl)
+        self._local.buf = buf
         return len(s)
 
     def flush(self):

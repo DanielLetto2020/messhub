@@ -316,7 +316,7 @@ def build(home, lang):
     # ассистент: настроен, одна беседа с ответом (модель в снимках не нужна — ответ уже в базе)
     import ai as ai_mod
     rules.set_prefs(conn, {"ai": {"provider": "ollama", "model": "qwen3:8b", "setup_done": True,
-                                  "openrouter": True, "openrouter_consent": catcher.msk_time(24)}})
+                                  "openrouter": True, "openrouter_consent": catcher.msk_time(24)}}, cloud_ok=True)
     title, days, names = _CHART[lang]
     spec = {"type": "bar", "title": title, "labels": days, "series": [{"name": n, "data": d} for n, d in zip(names, _CHART_DATA)]}
     cs = ai_mod.create_session(conn, {"provider": "openrouter", "model": "google/gemini-2.5-flash", "period": "7d"}, AI_CHART[lang][0])

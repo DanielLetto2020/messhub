@@ -178,7 +178,7 @@ def info(db_path):
     finally:
         conn.close()
     items = []
-    for name, path, file_interval in discover():
+    for name, _path, file_interval in discover():
         it = cfg["items"].get(name, {})
         items.append({"name": name, "enabled": it.get("enabled", True),
                       "interval": it.get("interval") or file_interval or DEFAULT_INTERVAL,

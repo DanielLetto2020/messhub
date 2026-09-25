@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS messages (
     -- тематические колонки (events.py): одна «проблема» — один ключ; починилось — resolved_at
     event_key       TEXT,               -- container:podman:web, unit:system:backup.service, cmd:… ; NULL — обычное
     resolved_at     TEXT,               -- когда проблема ушла (МСК): карточка остаётся, но с «починилось»
-    details         TEXT                -- хвост лога / вывода команды: в виджете свёрнут, в Telegram не пересылается
+    details         TEXT,               -- хвост лога / вывода команды: в виджете свёрнут, в Telegram не пересылается
+    fmt             TEXT                -- оформление текста из разметки уведомления (<b>, <i>, <u>; < > & экранированы) или NULL
 );
 -- колонки после первой версии (is_read … details) в уже существующую БД досоздаёт catcher.migrate()
 

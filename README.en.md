@@ -183,10 +183,11 @@ them by hand or let a schedule do it.
 
 ![Profiles](docs/screens/en/settings-profiles.png)
 
-**Quiet hours** - by schedule (an interval may cross midnight), by hand from the board header ("quiet
-for an hour", "until morning") or together with GNOME "Do Not Disturb". While quiet, rules play no
-sound, and afterwards one digest arrives: how much came and from where. Optionally the app turns
-"Do Not Disturb" on by itself.
+**Quiet hours** - by schedule (an interval may cross midnight) or by hand from the board header ("quiet
+for an hour", "until morning"). While quiet, rules play no sound, and afterwards one digest arrives:
+how much came and from where. This is the app's own state: you can turn on "Do Not Disturb" in the
+system - pop-ups disappear, while messages keep being collected and shown on the board as usual.
+Optionally quiet hours can be linked with "Do Not Disturb" both ways.
 
 ![Quiet hours](docs/screens/en/settings-quiet.png)
 

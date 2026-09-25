@@ -1031,10 +1031,12 @@ async function showQuiet(){
   const sw=(key,label,hint)=>`<div class="erow"><label class="switch"><input type="checkbox" data-q="${key}"${q[key]?' checked':''}> ${esc(t(label))}</label>
     ${hint?`<span class="muted">${esc(t(hint))}</span>`:''}</div>`;
   const draw=()=>{
-    const why={schedule:t('по расписанию'),manual:t('включено вручную'),dnd:t('включено «Не беспокоить»')}[d.reason]||'';
+    const why={schedule:t('по расписанию'),manual:t('включено вручную'),dnd:t('включено «Не беспокоить» в системе')}[d.reason]||'';
     page.innerHTML=`<h1>${esc(t('Тихие часы'))}</h1>
       <p class="lead">${esc(t('Пока тихо, сообщения копятся как обычно, но правила не играют звук, а в шапке доски горит луна. Когда тихие часы кончатся, в колонку «Сводки» придёт одна карточка: сколько пришло, откуда, сколько упоминаний.'))}</p>
-      <div class="warnbox" style="${d.active?'':'display:none'}">🌙 ${esc(t('Сейчас тихо'))}${d.until?' '+esc(t('до {hm}',{hm:d.until})):''}${why?' · '+esc(why):''}</div>
+      <div class="warnbox" style="${d.active?'':'display:none'}">🌙 ${esc(t('Сейчас тихо'))}${d.until?' '+esc(t('до {hm}',{hm:d.until})):''}${why?' · '+esc(why):''}
+        <button class="btn ghost" type="button" id="qOff" style="margin-left:8px">${esc(t('Выключить сейчас'))}</button>
+        ${d.reason==='dnd'?`<p class="hint" style="margin:6px 0 0">${esc(t('Тихие часы идут вместе с «Не беспокоить» в системе. «Выключить сейчас» — до того, как «Не беспокоить» выключат; чтобы не связывать их совсем, сними галочку «Считать тихими часами…» ниже.'))}</p>`:''}</div>
       <div class="erow"><label class="switch"><input type="checkbox" id="qOn"${q.enabled?' checked':''}> <b>${esc(t('По расписанию'))}</b></label></div>
       <div id="qSlots"></div>
       <button class="btn ghost" type="button" id="qAdd">${esc(t('Добавить время'))}</button>
@@ -1043,8 +1045,10 @@ async function showQuiet(){
       ${sw('forward','Пересылать в Telegram по правилам','обычно полезно, если тебя нет за компьютером')}
       ${sw('summary','Сводка, когда тихие часы кончились')}
       <h3>${esc(t('«Не беспокоить» GNOME'))}</h3>
-      ${d.dnd===null||d.dnd===undefined?`<p class="hint">${esc(t('Не нашёл настройку «Не беспокоить» — это не GNOME или Windows.'))}</p>`:''}
-      ${sw('follow_dnd','Считать тихими часами, когда включено «Не беспокоить»')}
+      ${d.dnd===null||d.dnd===undefined?`<p class="hint">${esc(t('Не нашёл настройку «Не беспокоить» — это не GNOME или Windows.'))}</p>`
+        :`<p class="hint">${esc(t(d.dnd?'Сейчас в системе включено «Не беспокоить»: всплывающие уведомления скрыты, а доска собирает и показывает всё как обычно.'
+          :'Можно включить «Не беспокоить» в системе: всплывающие уведомления пропадут, а сообщения будут собираться и показываться на доске как обычно.'))}</p>`}
+      ${sw('follow_dnd','Считать тихими часами, когда включено «Не беспокоить»','обычно не нужно: тогда и здесь станет тихо — луна в шапке, звуки правил молчат')}
       ${sw('set_dnd','Включать «Не беспокоить» на время тихих часов','тогда и всплывающие уведомления системы молчат')}
       <div class="erow" style="margin-top:14px"><button class="btn primary" type="button" id="qSave">${esc(t('Сохранить'))}</button></div>`;
     const slots=$('qSlots');
@@ -1064,6 +1068,8 @@ async function showQuiet(){
     if(!q.schedule.length) slots.innerHTML=`<p class="hint">${esc(t('Интервала ещё нет. Например: будни с 22:00 до 08:00 — интервал может идти через полночь.'))}</p>`;
     $('qAdd').onclick=()=>{q.schedule.push({days:[0,1,2,3,4,5,6],from:'22:00',to:'08:00'});draw();};
     $('qOn').onchange=e=>{q.enabled=e.target.checked;};
+    $('qOff').onclick=async()=>{try{await api('/api/quiet',{action:'off'});d=await api('/api/quiet');draw();
+      toast(d.active?t('Тихо до {hm}',{hm:d.until||'…'}):t('Тихие часы выключены'));}catch(e){toast(e.message,true);}};
     page.querySelectorAll('[data-q]').forEach(cb=>cb.onchange=()=>{q[cb.dataset.q]=cb.checked;});
     $('qSave').onclick=async()=>{try{const p=await api('/api/prefs',{quiet:{enabled:q.enabled,schedule:q.schedule,sound:q.sound,forward:q.forward,
       summary:q.summary,follow_dnd:q.follow_dnd,set_dnd:q.set_dnd}});PREFS=p;q=JSON.parse(JSON.stringify(p.quiet));toast(t('Сохранено'));

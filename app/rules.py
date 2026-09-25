@@ -129,7 +129,8 @@ PREF_DEFAULTS = {
     "share_blur": True,       # размывать доску, пока показывается экран (screen.py)
     "share_patterns": [],     # свои признаки показа экрана: части заголовков окон
     "quiet": {"enabled": False, "schedule": [], "manual_until": "", "sound": False, "forward": True,
-              "follow_dnd": True, "set_dnd": False, "summary": True},   # тихие часы (quiet.py)
+              "follow_dnd": False, "set_dnd": False, "summary": True},  # тихие часы (quiet.py); своё состояние,
+                                                                        # «Не беспокоить» системы — только если попросят
     "scripts": {"enabled": True, "items": {}},   # свои источники: скрипты в <настройки>/sources.d (scripts.py)
     "ai": {"provider": "", "ollama_url": "http://127.0.0.1:11434", "lmstudio_url": "http://127.0.0.1:1234",
            "model": "", "temperature": 0.3, "num_ctx": 8192, "max_tokens": 1024, "system": "",
@@ -420,7 +421,7 @@ def _clean_pref(k, v):
         return [str(x)[:200] for x in list(v)][:100]
     if k == "mentions":
         out = []
-        for x in v:
+        for x in (v.split(",") if isinstance(v, str) else list(v)):    # строка — не по буквам
             x = str(x).strip()
             if x and len(x) <= 60 and x.casefold() not in (o.casefold() for o in out):
                 out.append(x)
@@ -605,7 +606,12 @@ def themed(prefs):
     return clean_themed(prefs.get("themed") or {})
 
 
-def set_prefs(conn, patch):
+OR_KEYS = ("openrouter", "openrouter_consent")   # облако — только через ai.or_setup (ключ + согласие)
+
+
+def set_prefs(conn, patch, cloud_ok=False):
+    """cloud_ok — можно менять OR_KEYS (только ai.or_setup): ни /api/prefs, ни загрузка
+    файла настроек не включают OpenRouter в обход согласия."""
     if not isinstance(patch, dict):
         raise ValueError(L("Ожидался объект настроек", "Expected a settings object"))
     for k, v in patch.items():
@@ -614,9 +620,13 @@ def set_prefs(conn, patch):
             # остальное берём из сохранённого
             if k == "themed":
                 val = clean_themed(v, get_prefs(conn)["themed"])
-            elif k in ("quiet", "ai", "scripts") and isinstance(v, dict):
+            elif k in ("quiet", "ai", "scripts"):
+                if not isinstance(v, dict):
+                    raise TypeError(k)
                 cur = get_prefs(conn)[k]
                 merged = {**cur, **v}
+                if k == "ai" and not cloud_ok:
+                    merged.update({x: cur[x] for x in OR_KEYS})
                 if k == "scripts" and isinstance(v.get("items"), dict):
                     merged["items"] = {**cur["items"], **v["items"]}
                 val = _clean_pref(k, merged)
@@ -657,12 +667,13 @@ def apply_on_insert(conn, rec):
     meta = source_of(rec["app"], rec.get("site", ""), prefs["source_names"])
     hits = rs.matching(INSERT_ACTIONS, meta["key"], rec["chat"], rec["sender"], rec["message"] or "")
     done = {r["action"] for r in hits}
+    if "pin" in done:
+        done.discard("read")                     # закрепить главнее «сразу прочитано»
     # закрытая колонка открывается снова, как только в ней появится что показать
     if meta["key"] in prefs["closed_cols"] and "read" not in done and \
             rs.visible(meta["key"], rec["chat"], rec["sender"], rec["message"] or ""):
         set_prefs(conn, {"closed_cols": [k for k in prefs["closed_cols"] if k != meta["key"]]})
     if "pin" in done:
-        done.discard("read")                     # закрепить главнее «сразу прочитано»
         conn.execute("UPDATE messages SET pinned = 1 WHERE id = ?", (rec["id"],))
     if "read" in done:
         conn.execute("UPDATE messages SET is_read = 1, read_at = ? WHERE id = ?",

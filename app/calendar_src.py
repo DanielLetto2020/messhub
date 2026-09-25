@@ -20,6 +20,7 @@ import re
 import sqlite3
 import threading
 import time
+import urllib.parse
 from datetime import datetime, timedelta, timezone
 
 import catcher
@@ -60,7 +61,7 @@ def read_texts(path, kind):
     if kind == "ics":
         with open(path, encoding="utf-8", errors="replace") as f:
             return [f.read()]
-    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2)
+    conn = sqlite3.connect(f"file:{urllib.parse.quote(path)}?mode=ro", uri=True, timeout=2)   # «#», «?» в пути
     try:
         return [r[0] for r in conn.execute("SELECT ECacheOBJ FROM ECacheObjects") if r[0]]
     except sqlite3.Error:
@@ -174,6 +175,13 @@ def occurrences(e, frm, to):
         n = 1
         if start < to and start + length > frm and start not in e["exdates"]:
             out.append(start)
+    step = {"DAILY": timedelta(days=interval), "WEEKLY": timedelta(weeks=interval)}.get(freq)
+    if step and count is None:
+        # давний ежедневный/еженедельный повтор: сразу к окну, иначе 5000 шагов кончились бы раньше
+        # (ежедневное событие, заведённое больше 13 лет назад, пропадало бы)
+        k = (frm - length - timedelta(weeks=1) - cur) // step
+        if k > 0:
+            cur += step * k
     for _ in range(5000):
         cands = [cur] if not byday else [
             (cur - timedelta(days=cur.weekday()) + timedelta(days=d)).replace(hour=start.hour, minute=start.minute)

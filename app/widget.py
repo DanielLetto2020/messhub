@@ -505,7 +505,7 @@ class Widget(Gtk.Window):
             self._open_page("find", "/find?q=" + urllib.parse.quote(q), 640, 480)
             return
         wx, wy = self.get_position()
-        ww, wh = self.get_size()
+        _ww, wh = self.get_size()
         geo = self.get_display().get_monitor_at_window(self.get_window()).get_geometry()
         width = max(460, min(640, geo.width - 40))
         x = min(max(wx + int(cfg.get("x") or 0) - 10, geo.x + 8), geo.x + geo.width - width - 8)

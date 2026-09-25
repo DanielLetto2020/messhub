@@ -9,6 +9,7 @@ from http.server import ThreadingHTTPServer
 from unittest import mock
 
 import common
+import catcher
 import ingest
 import serve
 
@@ -118,6 +119,49 @@ class ApiTest(unittest.TestCase):
             _, r, _ = self.req("/api/report/preview")
         self.assertIn("📊", r["text"])
         self.assertFalse(self.req("/api/forward")[1]["configured"])
+
+    def test_restore_old_message_stays(self):
+        """«Вернуть в виджет» у старого сообщения: авто-прочтение не забирает его снова (раньше — через час)."""
+        conn = sqlite3.connect(self.db)
+        mid = common.put(conn, "eXpress", "Архив", "старое")["id"]
+        conn.execute("UPDATE messages SET is_read = 1, received_at = ? WHERE id = ?", (catcher.msk_time(72), mid))
+        conn.commit()
+        conn.close()
+        self.req("/api/restore", {"ids": [mid]})
+        orig = catcher.msk_time
+        with mock.patch("catcher.msk_time", side_effect=lambda h=0: orig(h - 2)):
+            serve.auto_read(self.db)                      # «через два часа»
+        self.assertIn(mid, self.req("/api/visible")[1]["ids"])
+
+    def test_openrouter_only_with_consent(self):
+        """Облако не включается ни общими настройками, ни загрузкой файла настроек."""
+        self.req("/api/prefs", {"ai": {"openrouter": True, "openrouter_consent": "2026-01-01 00:00:00"}})
+        self.req("/api/config/import", {"data": {"prefs": {"ai": {"openrouter": True}}, "rules": []}})
+        ai = self.req("/api/prefs")[1]["ai"]
+        self.assertEqual((ai["openrouter"], ai["openrouter_consent"]), (False, ""))
+        self.assertEqual(self.req("/api/prefs", {"ai": [["openrouter", True]]})[0], 400)
+
+    def test_mentions_as_string_and_bad_date(self):
+        self.assertEqual(self.req("/api/prefs", {"mentions": "Анна, Олег"})[1]["mentions"], ["Анна", "Олег"])
+        self.req("/api/prefs", {"mentions": []})
+        self.assertEqual(self.req("/api/search?to=31-12-2026")[0], 400)      # не дата — ответ, а не обрыв
+
+    def test_ingest_key_non_ascii(self):
+        ingest.new_token()
+        self.assertFalse(ingest.authorized("Bearer \u0430\u0431\u0432"))   # не TypeError
+
+    def test_purge_takes_reminders(self):
+        conn = sqlite3.connect(self.db)
+        try:
+            mid = common.put(conn, "eXpress", "Старое", "в пятницу в 11")["id"]
+            conn.execute("UPDATE messages SET received_at = ? WHERE id = ?", (catcher.msk_time(24 * 40), mid))
+            conn.execute("INSERT INTO reminders (message_id, at) VALUES (?, '2099-01-01 10:00')", (mid,))
+            self.assertGreaterEqual(serve.purge(conn, 30), 1)
+            conn.commit()
+            self.assertIsNone(conn.execute("SELECT 1 FROM reminders WHERE message_id = ?", (mid,)).fetchone())
+        finally:
+            conn.rollback()
+            conn.close()
 
     def test_english(self):
         code, err, _ = self.req("/api/rules", {"src": "*", "action": "hide"}, headers={"Accept-Language": "en-US"})

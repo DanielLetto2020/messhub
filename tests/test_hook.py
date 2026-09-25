@@ -41,6 +41,37 @@ class HookTest(unittest.TestCase):
     def test_interactive_programs_skipped(self):
         self.assertEqual(self.run_hook('__em_preexec "vim notes.txt"; true; __em_precmd'), "")
 
+    def test_interactive_with_prompt_command(self):
+        """Настоящий интерактивный bash с чужим PROMPT_COMMAND (как у GNOME Terminal): отсчёт — от ввода
+        команды, а не от показа приглашения; команды из PROMPT_COMMAND карточек не дают."""
+        import pty
+        import select
+        import time
+        log = os.path.join(common.TMP, "notify-i.log")
+        open(log, "w").close()
+        pid, fd = pty.fork()
+        if pid == 0:
+            os.execvp("bash", ["bash", "--norc", "--noprofile", "-i"])
+
+        def send(text, wait=0.3):
+            os.write(fd, text.encode())
+            end = time.time() + wait
+            while time.time() < end:
+                if select.select([fd], [], [], 0.05)[0]:
+                    try:
+                        os.read(fd, 65536)
+                    except OSError:
+                        break
+        send(f'notify-send(){{ echo "$5" >> "{log}"; }}\nother_prompt(){{ :; }}\nPROMPT_COMMAND="other_prompt;"\n')
+        send(f'MESSHUB_LONG_CMD=1; LANG=ru_RU.UTF-8; source "{HOOK}"\n', 0.8)
+        send("", 1.5)                              # простой у приглашения
+        send("echo быстро\n", 0.8)
+        send("sleep 1.3; true\n", 2.2)
+        send("exit\n", 0.3)
+        os.waitpid(pid, 0)
+        with open(log, encoding="utf-8") as f:
+            self.assertEqual(f.read().splitlines(), ["sleep 1.3"])
+
 
 if __name__ == "__main__":
     unittest.main()

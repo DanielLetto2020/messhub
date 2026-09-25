@@ -29,7 +29,6 @@
 import hashlib
 import os
 import re
-import shutil
 import struct
 import zlib
 from urllib.parse import unquote, urlparse
@@ -171,8 +170,3 @@ def file_for(name):
         return None
     p = os.path.join(paths.AVATAR_DIR, name)
     return p if os.path.isfile(p) else None
-
-
-def clear():
-    shutil.rmtree(paths.AVATAR_DIR, ignore_errors=True)
-    os.makedirs(paths.AVATAR_DIR, exist_ok=True)

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Тихие часы: по расписанию, вручную («тихо на час», «до утра») или вместе с «Не беспокоить» GNOME.
+Тихие часы: по расписанию, вручную («тихо на час», «до утра»), а по желанию — и вместе с «Не беспокоить» GNOME.
+Это своё состояние программы: «Не беспокоить» в системе прячет только всплывающие уведомления, а сбор и
+доска работают как обычно (по умолчанию тихие часы на него не смотрят — follow_dnd выключено).
 
 Что меняется, пока тихо: правила не играют звук (можно разрешить), пересылка в Telegram — по
 настройке (по умолчанию идёт как обычно), в шапке доски — луна. Сообщения копятся как всегда.
@@ -28,6 +30,7 @@ from i18n import L
 WINDOWS = os.name == "nt"
 DND_KEY = ("org.gnome.desktop.notifications", "show-banners")
 current = {"active": False, "reason": "", "until": "", "dnd": None, "t": 0.0}
+DND_OFF = "-dnd"             # manual_until: тишину выключили кнопкой при «Не беспокоить» — до его выключения
 
 
 def gnome_dnd():
@@ -71,6 +74,8 @@ def evaluate(q, now=None, dnd=None):
     now = now or datetime.now(catcher.MSK).replace(tzinfo=None)
     mu = q.get("manual_until") or ""
     ts = now.strftime("%Y-%m-%d %H:%M:%S")
+    if mu == DND_OFF:                               # выключили, пока включено «Не беспокоить»: его не слушаем,
+        mu, dnd = "", False                         # расписание — как обычно
     if mu.startswith("-") and mu[1:] > ts:          # вручную выключили до конца интервала
         return False, "", ""
     if mu and not mu.startswith("-") and mu > ts:
@@ -136,7 +141,11 @@ def step(conn):
     """Одна проверка: переходы «стало тихо / кончилось» → «Не беспокоить» GNOME и сводка."""
     prefs = rules.get_prefs(conn)
     q = prefs["quiet"]
-    dnd = gnome_dnd() if q["follow_dnd"] or q["set_dnd"] else None
+    dnd = gnome_dnd()                   # узнаём всегда: в настройках видно, включено ли оно в системе
+    if q["manual_until"] == DND_OFF and not dnd:    # «Не беспокоить» выключили — дальше снова идём за ним
+        rules.set_prefs(conn, {"quiet": {"manual_until": ""}})
+        conn.commit()
+        q = rules.get_prefs(conn)["quiet"]
     st = _state(conn)
     # «Не беспокоить», включённое нами, — не повод считать тихим (иначе тишина не кончится)
     a, why, until = evaluate(q, dnd=dnd and not st.get("dnd_set"))
@@ -162,7 +171,8 @@ def step(conn):
 
 
 def set_manual(conn, action):
-    """Кнопка на доске: hour — тихо на час, morning — до 08:00, off — выключить до конца интервала."""
+    """Кнопка на доске: hour — тихо на час, morning — до 08:00, off — выключить до конца интервала
+    (при «Не беспокоить» GNOME — пока оно не выключится)."""
     now = datetime.now(catcher.MSK).replace(tzinfo=None)
     q = rules.get_prefs(conn)["quiet"]
     if action == "hour":
@@ -175,6 +185,8 @@ def set_manual(conn, action):
         if why == "schedule":           # выключить до конца текущего интервала расписания
             e = now.replace(hour=int(end[:2]), minute=int(end[3:]), second=0)
             until = "-" + (e if e > now else e + timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
+        elif why == "dnd":              # «Не беспокоить» GNOME: не слушать его, пока его не выключат
+            until = DND_OFF
         else:
             until = ""
     else:

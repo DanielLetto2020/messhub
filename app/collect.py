@@ -64,6 +64,22 @@ def make_skip(db_path):
     return skip
 
 
+def start_network_ingest(db_path):
+    """Приём событий из сети — отдельный сервер только для /api/ingest, если он включён
+    (настройка ingest_bind). Зовут collect.py и messhub_win.py."""
+    conn = sqlite3.connect(db_path)
+    try:
+        bind = rules.get_prefs(conn)["ingest_bind"]
+    finally:
+        conn.close()
+    if bind:
+        try:
+            ingest.serve_network(db_path, bind)
+            print(f"Приём событий из сети: http://{bind}/api/ingest", flush=True)
+        except OSError as e:
+            print(f"Приём событий из сети не поднялся ({bind}): {e}", flush=True)
+
+
 def on_insert(conn, rec):
     """После записи уведомления — действия правил (сразу прочитано, закрепить,
     звук, переслать в Telegram)."""
@@ -99,16 +115,7 @@ def main():
     scripts.start(args.db)          # свои источники: скрипты в <настройки>/sources.d
     quiet.start(args.db)            # тихие часы: переходы, «Не беспокоить» GNOME, сводка
     reminders.start(args.db)        # напоминания по сообщениям
-    # приём событий из сети — отдельный сервер только для /api/ingest, если включён
-    conn = sqlite3.connect(args.db)
-    bind = rules.get_prefs(conn)["ingest_bind"]
-    conn.close()
-    if bind:
-        try:
-            ingest.serve_network(args.db, bind)
-            print(f"Приём событий из сети: http://{bind}/api/ingest", flush=True)
-        except OSError as e:
-            print(f"Приём событий из сети не поднялся ({bind}): {e}", flush=True)
+    start_network_ingest(args.db)
 
     # веб-сервер — в фоновом потоке
     httpd = ThreadingHTTPServer((args.host, args.port), serve.make_handler(args.db))
