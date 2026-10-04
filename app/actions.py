@@ -115,7 +115,7 @@ def send(text, cfg=None):
             desc = ""
         return False, L(f"Telegram ответил {e.code}: {desc}",
                         f"Telegram replied {e.code}: {desc}").replace(token, "***")
-    except Exception as e:  # сеть, DNS, таймаут
+    except Exception as e:  # noqa: BLE001 — сеть, DNS, таймаут
         return False, L(f"Не удалось связаться с Telegram: {e}",
                         f"Could not reach Telegram: {e}").replace(token, "***")
 

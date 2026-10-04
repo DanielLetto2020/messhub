@@ -32,8 +32,9 @@ def add(conn, mid, at, event_at=""):
         raise ValueError(L("Нет такого сообщения", "No such message"))
     try:
         datetime.strptime(at, "%Y-%m-%d %H:%M")
-    except ValueError:
-        raise ValueError(L("Время — в виде ГГГГ-ММ-ДД ЧЧ:ММ", "Time must look like YYYY-MM-DD HH:MM"))
+    except ValueError as e:
+        raise ValueError(L("Время — в виде ГГГГ-ММ-ДД ЧЧ:ММ",
+                               "Time must look like YYYY-MM-DD HH:MM")) from e
     if at <= now_s():
         raise ValueError(L("Это время уже прошло", "That time has passed"))
     conn.execute("DELETE FROM reminders WHERE message_id = ? AND fired = 0", (mid,))   # одно на сообщение
@@ -69,14 +70,14 @@ def fire_due(conn):
     """Наступившие напоминания → карточки. → сколько сработало."""
     import actions
     import quiet
-    due = conn.execute("SELECT r.id, r.message_id, r.event_at, m.app, COALESCE(m.site, ''), m.chat, m.sender, m.message "
+    due = conn.execute("SELECT r.id, r.event_at, m.app, COALESCE(m.site, ''), m.chat, m.sender, m.message "
                        "FROM reminders r JOIN messages m ON m.id = r.message_id "
                        "WHERE r.fired = 0 AND r.at <= ? ORDER BY r.at", (now_s(),)).fetchall()
     if not due:
         return 0
     prefs = rules.get_prefs(conn)
     events._lang(conn)
-    for rid, mid, event_at, app, site, chat, sender, message in due:
+    for rid, event_at, app, site, chat, sender, message in due:
         conn.execute("UPDATE reminders SET fired = 1 WHERE id = ?", (rid,))
         src = rules.source_of(app, site, prefs["source_names"])
         head = (L(f"в {event_at[11:16]}", f"at {event_at[11:16]}") + " · ") if event_at else ""

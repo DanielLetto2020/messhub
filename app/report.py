@@ -51,14 +51,31 @@ def build(conn, days=7):
     return "\n".join(lines)
 
 
+RETRY_MIN = 30            # после неудачи пробуем ещё раз не раньше, чем через полчаса
+
+TS = "%Y-%m-%d %H:%M:%S"
+
+
 def due(prefs, now):
+    """Пора ли отправлять отчёт. Отчёт уже отправленный сегодня — нет; неудачная попытка
+    (например, Telegram недоступен) — не раньше RETRY_MIN назад."""
     r = prefs["report"]
-    return (r["enabled"] and now.weekday() == r["weekday"] and now.strftime("%H:%M") >= r["time"]
-            and prefs["report_last"] != now.strftime("%Y-%m-%d"))
+    if not (r["enabled"] and now.weekday() == r["weekday"] and now.strftime("%H:%M") >= r["time"]):
+        return False
+    if prefs["report_last"] == now.strftime("%Y-%m-%d"):
+        return False
+    try:                      # когда последняя попытка; пусто или мусор - пробуем сразу
+        last = datetime.strptime(prefs["report_try"], TS)
+    except (TypeError, ValueError):
+        return True
+    return (now - last) >= timedelta(minutes=RETRY_MIN)
 
 
 def maybe_send(db_path):
-    """Из фонового цикла (раз в минуту): пора — отправить. → текст ошибки или None."""
+    """Из фонового цикла (раз в минуту): пора — отправить. → текст ошибки или None.
+
+    Попытку запоминаем всегда, успех - отдельно. Иначе при недоступном Telegram отчёт
+    повторялся бы раз в минуту весь день."""
     conn = sqlite3.connect(db_path, timeout=5)
     try:
         prefs = rules.get_prefs(conn)
@@ -66,11 +83,14 @@ def maybe_send(db_path):
         if not due(prefs, now):
             return None
         i18n.set_lang(i18n.background(prefs["language"]))     # «авто» — язык системы, как у других фоновых карточек
-        ok, err = actions.send(build(conn))
-        if ok:
-            rules.set_prefs(conn, {"report_last": now.strftime("%Y-%m-%d")})
-            conn.commit()
-            return None
-        return err
+        try:
+            ok, err = actions.send(build(conn))
+        except Exception as e:  # noqa: BLE001 — Telegram недоступен: отчёт уйдёт при следующей попытке
+            ok, err = False, str(e)
+        # «report_try» — всегда (чтобы не повторяться каждую минуту), «report_last» — только при успехе
+        rules.set_prefs(conn, {"report_try": now.strftime(TS),
+                               **({"report_last": now.strftime("%Y-%m-%d")} if ok else {})})
+        conn.commit()
+        return None if ok else err
     finally:
         conn.close()

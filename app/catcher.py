@@ -533,7 +533,7 @@ def make_handler(conn, verbose=False, on_insert=None, skip=None):
         if on_insert:
             try:
                 on_insert(conn, rec)
-            except Exception as e:          # правило не должно ронять сбор
+            except Exception as e:          # noqa: BLE001 — правило не должно ронять сбор
                 print(f"Действия правил: ошибка: {e!r}", flush=True)
         if verbose:
             bot = " [бот]" if rec["is_bot"] else ""
@@ -570,7 +570,7 @@ def run(db_path, verbose, from_file, on_insert=None, skip=None):
         stopping["v"] = True
         try:
             cur["proc"].terminate()
-        except Exception:
+        except Exception:  # noqa: BLE001
             pass
 
     signal.signal(signal.SIGINT, stop)
@@ -598,7 +598,7 @@ def run(db_path, verbose, from_file, on_insert=None, skip=None):
                     print(f"Уведомление не записано: {e!r}", flush=True)
             try:
                 proc.wait(timeout=3)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 proc.kill()
             if not stopping["v"]:
                 if time.time() - started > 60:

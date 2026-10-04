@@ -8,7 +8,9 @@
     /message?id=N → message.html — отдельное окно: сообщение и лог целиком
     /assistant → assistant.html — ассистент на локальной модели (ai.py; API /api/ai/…)
     /find?q=… → find.html — результаты поиска из шапки доски (окно выпадает над панелью)
-    /i18n.js — переводы страниц     /avatar/<файл> — аватары из уведомлений
+    /i18n.js — переводы страниц     /common.js — общие esc(), api(), буфер обмена
+                         (её подключают все страницы вместо копий в каждой)
+    /avatar/<файл> — аватары из уведомлений
     /ai-image/<файл> — картинки, приложенные к вопросам ассистенту
 
   Сообщения:
@@ -40,9 +42,26 @@
     /api/source-mode,
     /api/prefs, /api/stats, /api/data, /api/purge, /api/export, /api/config/export|import,
     /api/backups(/make|/restore), /api/report/preview|send, /api/forward(/test),
-    /api/rag/status|install|disable|retry|remove-model|search|ask, /api/ingest/config|token,
+    /api/rag/status|install|disable|retry|remove-model|search|ask, /api/ingest/config|token, /api/session/token (сменить токен сеанса; см. session.py),
     /api/diag, /api/autostart, /api/restart, /api/version, /api/update (новая версия на GitHub),
     /api/mail (ящики IMAP, см. mail.py) + /api/mail/channel|account|delete|test|check
+
+  Ассистент на локальной модели (ai.py):
+    GET  /api/ai/status, /api/ai/sessions, /api/ai/session?id=N, /api/ai/pull, /api/ai/defaults,
+         /api/ai/model-info?provider=&model=, /api/ai/openrouter/models, /api/ai/export?id=N
+    POST /api/ai/setup {ai}, /api/ai/openrouter {enabled, key, consent} — облако только так,
+         /api/ai/session {id?, title, settings}, /api/ai/session/delete {id},
+         /api/ai/defaults {settings}, /api/ai/pull {model}, /api/ai/pull/cancel,
+         /api/ai/delete-model {model}, /api/ai/lmstudio/start
+    POST /api/ai/chat — ответ потоком (NDJSON), отдельно от таблицы: тело до 48 МБ (картинки)
+
+  Прочее:
+    GET  /api/quiet (луна и «Не беспокоить»), /api/scripts (свои источники из sources.d)
+    POST /api/quiet {action}, /api/remind {id, at}, /api/remind/cancel {id},
+         /api/logwatch/preview {watch}, /api/scripts/example|run|open
+
+  Все пути перечислены в GET_ROUTES и POST_ROUTES (словари «путь → функция»); каждый
+  упомянут в этом докстринге - проверяет tests/test_api.py.
 
 Защита от чужих страниц в браузере: сервер отвечает, только если в Host стоит localhost или
 IP-адрес (так не пройдёт DNS rebinding — подмена имени сайта на 127.0.0.1), не отвечает на
@@ -100,6 +119,7 @@ import resources
 import rules
 import scripts
 import services
+import session
 import stats
 import updates
 import when
@@ -116,6 +136,7 @@ PAGES = {
     "/assistant": ("assistant.html", "text/html; charset=utf-8"), # окно ассистента на локальной модели
     "/find": ("find.html", "text/html; charset=utf-8"),           # результаты поиска из шапки доски
     "/i18n.js": ("i18n.js", "text/javascript; charset=utf-8"),
+    "/common.js": ("common.js", "text/javascript; charset=utf-8"),
 }
 
 AUTO_READ_HOURS = 24      # лежит в БД дольше — считается прочитанным
@@ -255,45 +276,129 @@ def _casefold(s):
     return s.casefold() if isinstance(s, str) else s
 
 
+def src_where(conn, src, names):
+    """SQL-условие «сообщения из колонки src» по парам (app, site) → (фрагмент, параметры).
+
+    Колонку определяет rules.source_of, но он считается на Python, поэтому условие строится по
+    реальным парам из базы (их единицы, не строки). None — выразить нельзя: свои колонки
+    (my:…) собирает правило «перенести в колонку» по тексту сообщения, это решается построчно."""
+    if src.startswith(rules.MY_PREFIX):
+        return None
+    keep = [(r[0], r[1] or "") for r in conn.execute("SELECT DISTINCT app, site FROM messages")
+            if rules.source_of(r[0], r[1] or "", names)["key"] == src]
+    if not keep:
+        return "0", []                        # ни одного приложения/сайта не попадает в колонку
+    frag = "(" + " OR ".join(["(app = ? AND COALESCE(site, '') = ?)"] * len(keep)) + ")"
+    return frag, [x for pair in keep for x in pair]
+
+
+def _search_where(q, chat, date_from, date_to, status, prefix=""):
+    """Условия выборки поиска (без источника) → (фрагмент, параметры). prefix — псевдоним
+    таблицы, чтобы этим же кодом собирать условие и для messages, и для другого запроса."""
+    where, params = [], []
+    if q:
+        # подстрока без учёта регистра, в т.ч. кириллица: встроенный LIKE SQLite это не умеет,
+        # поэтому своя функция cf() и LIKE по её результату
+        pat = "%" + q.casefold().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        where.append("(" + " OR ".join(f"cf({prefix}{col}) LIKE ? ESCAPE '\\'"
+                                       for col in ("message", "chat", "sender")) + ")")
+        params += [pat] * 3
+    if chat:
+        where.append(f"{prefix}chat = ?"); params.append(chat)
+    if date_from:
+        where.append(f"{prefix}received_at >= ?"); params.append(date_from)
+    if date_to:
+        where.append(f"{prefix}received_at < ?")
+        params.append((datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d"))
+    if status == "unread":
+        where.append(f"{prefix}is_read = 0")
+    elif status == "read":
+        where.append(f"{prefix}is_read = 1")
+    elif status == "pinned":
+        where.append(f"{prefix}pinned = 1")
+    return where, params
+
+
+def _where_sql(where):
+    return (" WHERE " + " AND ".join(where)) if where else ""
+
+
 def search(db_path, q="", src="", chat="", date_from="", date_to="", status="all", limit=50, offset=0):
     """Поиск по истории: подстрока без учёта регистра (в т.ч. кириллица — встроенный
-    LIKE SQLite этого не умеет) по тексту, чату и отправителю + фильтры."""
+    LIKE SQLite этого не умеет) по тексту, чату и отправителю + фильтры.
+
+    Источник, если он выразим в SQL (src_where), и постраничный отбор делает база: раньше
+    подряд читались все строки, каждая прогонялась через правила, и только потом брались
+    нужные 50 — на 20 тыс. сообщений это 0.3 с вместо 0.002 с."""
+    if not os.path.exists(db_path):
+        return {"total": 0, "rows": []}
     conn = open_db(db_path)
     conn.create_function("cf", 1, _casefold, deterministic=True)
     try:
         v = View(conn)
-        where, params = [], []
-        if q:
-            pat = "%" + q.casefold().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
-            where.append("(cf(message) LIKE ? ESCAPE '\\' OR cf(chat) LIKE ? ESCAPE '\\' "
-                         "OR cf(sender) LIKE ? ESCAPE '\\')")
-            params += [pat] * 3
-        if chat:
-            where.append("chat = ?"); params.append(chat)
-        if date_from:
-            where.append("received_at >= ?"); params.append(date_from)
-        if date_to:
-            where.append("received_at < ?")
-            params.append((datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d"))
-        if status == "unread":
-            where.append("is_read = 0")
-        elif status == "read":
-            where.append("is_read = 1")
-        elif status == "pinned":
-            where.append("pinned = 1")
-        wsql = (" WHERE " + " AND ".join(where)) if where else ""
-        rows = []
-        for r in conn.execute(f"SELECT {', '.join(FIELDS)} FROM messages{wsql} ORDER BY id DESC", params):
-            d = v.row(dict(r))
-            if src and d["src"] != src:
-                continue
-            rows.append(d)
-        page = rows[offset:offset + limit]
-        for d in page:
+        sw = src_where(conn, src, v.names) if src else None
+        if src and sw is None:                  # своя колонка — фильтр в Python, как раньше
+            return _search_scan(conn, v, q, src, chat, date_from, date_to, status, limit, offset)
+        where, params = _search_where(q, chat, date_from, date_to, status)
+        if sw:
+            where = [sw[0]] + where
+            params = sw[1] + params
+        wsql = _where_sql(where)
+        rows, total = _search_page(conn, v, FIELDS, wsql, params, limit, offset, count_in_page=bool(q))
+        for d in rows:
             d["visible"] = v.visible(d)
-        return {"total": len(rows), "rows": page}
+        return {"total": total, "rows": rows}
     finally:
         conn.close()
+
+
+def _search_page(conn, v, fields, wsql, params, limit, offset, count_in_page):
+    """Страница результатов и их всего. С текстовым фильтром считаем и берём страницу
+    одним проходом (оконная функция): два прохода с casefold на каждой строке вдвое дороже.
+    Без текста считаем отдельно - там COUNT быстрый, а оконная функция заставляет
+    вычитать все строки. На сборках SQLite без оконных функций - просто два запроса."""
+    if count_in_page:
+        try:
+            out = list(conn.execute(
+                f"SELECT {', '.join(fields)}, COUNT(*) OVER () AS _n FROM messages{wsql} "
+                f"ORDER BY id DESC LIMIT ? OFFSET ?", [*params, limit, offset]))
+        except sqlite3.OperationalError:
+            out = None
+        if out is not None:
+            total = out[0]["_n"] if out else 0
+            if not out:                 # страница за концом - считать всё равно нужно
+                total = conn.execute(f"SELECT COUNT(*) FROM messages{wsql}", params).fetchone()[0]
+            return [v.row({k: r[k] for k in fields}) for r in out], total
+    total = conn.execute(f"SELECT COUNT(*) FROM messages{wsql}", params).fetchone()[0]
+    rows = [v.row(dict(r)) for r in conn.execute(
+        f"SELECT {', '.join(fields)} FROM messages{wsql} ORDER BY id DESC LIMIT ? OFFSET ?",
+        [*params, limit, offset])]
+    return rows, total
+
+
+def _empty_my_column(v, src):
+    """Свою колонку наполняет правило «перенести в колонку». Если такого правила нет,
+    колонка пуста - и перебор всей базы ради неё не нужен."""
+    return src not in v.rs.my_columns()
+
+
+def _search_scan(conn, v, q, src, chat, date_from, date_to, status, limit, offset):
+    """Поиск, когда источник в SQL не выразить (своя колонка): фильтруем построчно.
+    Таких колонок мало и наполняются они правилами, поэтому полный проход здесь - редкость."""
+    if _empty_my_column(v, src):
+        return {"total": 0, "rows": []}
+    where, params = _search_where(q, chat, date_from, date_to, status)
+    wsql = _where_sql(where)
+    rows = []
+    for r in conn.execute(f"SELECT {', '.join(FIELDS)} FROM messages{wsql} ORDER BY id DESC", params):
+        d = v.row(dict(r))
+        if d["src"] != src:
+            continue
+        rows.append(d)
+    page = rows[offset:offset + limit]
+    for d in page:
+        d["visible"] = v.visible(d)
+    return {"total": len(rows), "rows": page}
 
 
 def rag_rows(db_path, hits):
@@ -346,16 +451,62 @@ def sources(db_path, apply_rules=False):
         conn.close()
 
 
+_visible_cache = {"key": None, "val": None}
+_visible_lock = threading.Lock()
+
+
+def _board_key(conn, v):
+    """Подпись состояния доски: что изменилось с прошлого запроса /api/visible.
+
+    max(id) и счётчики по видимым строкам ловят новые сообщения и отметки «прочитано»,
+    «закреплено», «отложено» и «починилось» у тематических карточек; версии правил и
+    настроек - их правку. Единственное, что подпись пропускает, - перенос сообщения между
+    колонками правилом «перенести в колонку», но такое правило меняет версию правил."""
+    unread = conn.execute("SELECT COUNT(*), COALESCE(SUM(is_read), 0), COALESCE(SUM(pinned), 0), "
+                          "COALESCE(SUM(snooze_until IS NOT NULL), 0), "
+                          "COALESCE(SUM(resolved_at IS NOT NULL), 0) FROM messages "
+                          "WHERE is_read = 0 OR pinned = 1 OR snooze_until IS NOT NULL "
+                          "OR resolved_at IS NOT NULL").fetchone()
+    return (conn.execute("SELECT COALESCE(MAX(id), 0) FROM messages").fetchone()[0], *unread,
+            v.rs.ver, rules.prefs_ver(v.prefs))
+
+
 def visible_ids(db_path):
-    """Что сейчас должно быть на доске виджета (id <= max_id)."""
+    """Что сейчас должно быть на доске виджета (id <= max_id). Виджет спрашивает это раз в
+    15 с, а пересборка ответа — это прогон всех непрочитанных строк через правила. Между
+    сообщениями это десятки тысяч вычислений впустую, поэтому результат кэшируем по подписи
+    состояния (см. _board_key): пока база и правила не менялись, отдаём прошлый."""
     if not os.path.exists(db_path):
         return {"max_id": 0, "ids": []}
-    max_id = read(db_path, lambda c: c.execute("SELECT COALESCE(MAX(id), 0) FROM messages").fetchone()[0])
-    rows, _, _ = query(db_path, limit=10 ** 6, unread=True, widget=True, upto=max_id)
-    # «починилось» у карточек тематических колонок — виджет перерисует их на месте
-    return {"max_id": max_id, "ids": [r["id"] for r in rows],
-            "resolved": {str(r["id"]): r["resolved_at"] for r in rows if r.get("resolved_at")},
-            "pinned": [r["id"] for r in rows if r.get("pinned")]}     # закрепили в окне сообщения
+    conn = open_db(db_path)
+    try:
+        v = View(conn)
+        sign = _board_key(conn, v)
+        key = (os.path.abspath(db_path), sign)
+        with _visible_lock:
+            if _visible_cache["key"] == key:
+                return _visible_cache["val"]
+        rows = _visible_rows(conn, v, sign[0])
+        val = {"max_id": sign[0], "ids": [r["id"] for r in rows],
+               "resolved": {str(r["id"]): r["resolved_at"] for r in rows if r.get("resolved_at")},
+               "pinned": [r["id"] for r in rows if r.get("pinned")]}   # закрепили в окне сообщения
+        with _visible_lock:
+            _visible_cache.update(key=key, val=val)
+        return val
+    finally:
+        conn.close()
+
+
+def _visible_rows(conn, v, max_id):
+    """Непрочитанные, которые виджет должен показать (до max_id), — как видит правила."""
+    out = []
+    for r in conn.execute(f"SELECT {', '.join(FIELDS)} FROM messages "
+                          f"WHERE is_read = 0 AND id <= ? AND (snooze_until IS NULL OR snooze_until <= ?) "
+                          f"ORDER BY id", (max_id, catcher.msk_time())):
+        d = v.row(dict(r))
+        if v.visible(d):
+            out.append(d)
+    return out
 
 
 def column_state(db_path, src):
@@ -364,8 +515,15 @@ def column_state(db_path, src):
     conn = open_db(db_path)
     try:
         v, now = View(conn), catcher.msk_time()
+        sw = src_where(conn, src, v.names)
         ids, pinned, snoozed = [], 0, 0
-        for r in conn.execute(f"SELECT {', '.join(FIELDS)} FROM messages WHERE is_read = 0"):
+        if sw is None and _empty_my_column(v, src):
+            return {"src": src, "unread": 0, "ids": [], "pinned": 0, "snoozed": 0}
+        if sw is None:                      # своя колонка: решает правило, в SQL не отсечь
+            rows = conn.execute(f"SELECT {', '.join(FIELDS)} FROM messages WHERE is_read = 0")
+        else:
+            rows = conn.execute(f"SELECT {', '.join(FIELDS)} FROM messages WHERE is_read = 0 AND {sw[0]}", sw[1])
+        for r in rows:
             d = v.row(dict(r))
             if d["src"] != src or not v.visible(d):
                 continue
@@ -553,7 +711,7 @@ def start_background(db_path):
             try:
                 n = rag.index_step(db_path)
                 pause = 20
-            except Exception as e:  # Ollama выключили, модель удалили — не падаем
+            except Exception as e:  # noqa: BLE001 — Ollama выключили, модель удалили — не падаем
                 msg = rag.human_error(e)
                 if msg != rag.state["error"]:
                     applog.warn(f"Умный поиск: векторы не посчитались ({msg}), повторяю сам")
@@ -723,6 +881,438 @@ def _prefs_view(conn):
                 _active_profile=rules.active_profile(prefs))
 
 
+class Json:
+    """Ответ, которому нужен не только код 200: Json(данные, code=…, headers=…)."""
+
+    def __init__(self, data, code=200, headers=None):
+        self.data = data
+        self.code = code
+        self.headers = headers
+
+
+class Req:
+    """Параметры одного запроса: база, путь, строка запроса и тело."""
+
+    def __init__(self, db, path, query, payload):
+        self.db = db
+        self.path = path
+        self.q = query
+        self.payload = payload
+
+    def arg(self, key, default=""):
+        v = (self.q.get(key, [""])[0] or "").strip()
+        return v or default
+
+    def num(self, key, default=0):
+        v = self.arg(key)
+        return int(v) if v.isdigit() else default
+
+    def flag(self, key):
+        return self.arg(key) == "1"
+
+    def query_ids(self):
+        return [int(x) for x in self.arg("ids").split(",") if x.isdigit()][:5000]
+
+
+# ── маршруты ─────────────────────────────────────────────────────────────────
+# Маршруты - обычные словари «путь → функция», а не цепочки if/elif: все ~90 путей видно
+# в одном месте, по ним можно пройтись (tools/route_check.py печатает список и сверяет
+# с докстрингом модуля). Функция возвращает данные ответа, Json(...) - если нужен другой
+# код или заголовки, и бросает исключение - оно превращается в код ответа в do_GET/do_POST.
+
+def _r_version(c):
+    return {"name": version.APP_NAME, "id": version.APP_ID, "version": version.__version__,
+            "author": version.AUTHOR, "email": version.AUTHOR_EMAIL, "repo": version.REPO_URL}
+
+
+def _r_update(c):
+    return updates.status(read(c.db, rules.get_prefs)["update_check"], force=c.flag("force"))
+
+
+def _r_messages(c):
+    data, rver, pver = query(c.db, after=c.num("after") or None,
+                             limit=max(1, min(1000, c.num("limit", 100))),
+                             app=c.arg("app"), q=c.arg("q"),
+                             unread=c.flag("unread"), widget=c.flag("rules"), ids=c.query_ids())
+    q = quiet.current
+    return Json(data, headers={"X-Rules-Ver": rver, "X-Prefs-Ver": pver,
+                               "X-Quiet": f"{int(bool(q['active']))};{q['reason']};{q['until']}"})
+
+
+def _r_sources(c):
+    return sources(c.db, apply_rules=c.flag("rules"))
+
+
+def _r_visible(c):
+    return visible_ids(c.db)
+
+
+def _r_column(c):
+    src = c.arg("src")
+    if not src:
+        return Json({"error": L("Нужен источник", "A source is needed")}, 400)
+    st = column_state(c.db, src)
+    st.pop("ids")                     # сами id на доске уже есть (их берёт /api/messages)
+    return st
+
+
+def _r_search(c):
+    return search(c.db, q=c.arg("q"), src=c.arg("src"), chat=c.arg("chat"),
+                  date_from=c.arg("from"), date_to=c.arg("to"), status=c.arg("status") or "all",
+                  limit=max(1, min(200, c.num("limit", 50))), offset=c.num("offset", 0))
+
+
+def _r_why(c):
+    return read(c.db, rules.why, c.num("id")) or \
+        {"error": L("Нет такого сообщения", "No such message")}
+
+
+def _r_openrouter_models(c):
+    if not read(c.db, rules.get_prefs)["ai"]["openrouter"]:
+        return Json({"error": L("OpenRouter выключен", "OpenRouter is off")}, 400)
+    return {"models": ai.or_models(force=c.flag("force")), "error": ai._or_models["error"]}
+
+
+def _r_quiet(c):
+    st = quiet.public_status()
+    if os.environ.get(f"{paths.ENV_PREFIX}_THEMED_DEMO") == "1" and st["dnd"] is None:
+        st["dnd"] = False             # снимки экрана: как на GNOME, «Не беспокоить» выключено
+    return dict(st, prefs=read(c.db, rules.get_prefs)["quiet"])
+
+
+def _r_scripts(c):
+    return dict(scripts.info(c.db), dir=scripts.DIR.replace(os.path.expanduser("~"), "~")
+                if os.environ.get(f"{paths.ENV_PREFIX}_THEMED_DEMO") else scripts.DIR)
+
+
+def _r_logs(c):
+    return applog.query(c.arg("level") or "all", c.arg("q"), c.arg("src"),
+                        max(1, min(5000, c.num("limit", 1000))))
+
+
+def _r_setting_source(c):
+    src = c.arg("src")
+    return read(c.db, rules.detail, src) if src else \
+        Json({"error": L("Нужен источник", "A source is needed")}, 400)
+
+
+GET_ROUTES = {
+    "/api/version": _r_version,
+    "/api/update": _r_update,
+    "/api/messages": _r_messages,
+    "/api/sources": _r_sources,
+    "/api/visible": _r_visible,
+    "/api/column": _r_column,
+    "/api/mail": lambda c: {"channel": read(c.db, mail.channel),
+                            "accounts": read(c.db, mail.public_accounts),
+                            "presets": mail.PRESETS},
+    "/api/search": _r_search,
+    "/api/why": _r_why,
+    "/api/settings/sources": lambda c: read(c.db, rules.overview),
+    "/api/settings/source": _r_setting_source,
+    "/api/settings/rules": lambda c: read(c.db, rules.global_rules),
+    "/api/prefs": lambda c: read(c.db, _prefs_view),
+    "/api/stats": lambda c: read(c.db, stats.stats, c.num("days"), c.arg("src")),
+    "/api/data": lambda c: data_info(c.db),
+    "/api/backups": lambda c: backup.list_backups(),
+    "/api/report/preview": lambda c: {"text": read(c.db, report.build)},
+    "/api/forward": lambda c: actions.public_cfg(),
+    "/api/rag/status": lambda c: read(c.db, rag.status),
+    "/api/ingest/config": lambda c: {"token": ingest.load_token(),
+                                      "bind": read(c.db, lambda x: rules.get_prefs(x)["ingest_bind"]),
+                                      "session": session.script_help()},
+    # ключ приёма событий отдаёт этот GET - поэтому он под токеном сеанса (session.GUARDED_GET).
+    "/api/themed": lambda c: themed_info(c.db),
+    "/api/ai/status": lambda c: read(c.db, ai.status),
+    "/api/ai/sessions": lambda c: read(c.db, ai.list_sessions),
+    "/api/ai/session": lambda c: read(c.db, ai.get_session, c.num("id")),
+    "/api/ai/pull": lambda c: dict(ai.pull),
+    "/api/ai/model-info": lambda c: read(c.db, ai.model_info, c.arg("provider"), c.arg("model")),
+    "/api/ai/openrouter/models": _r_openrouter_models,
+    "/api/ai/export": lambda c: {"text": read(c.db, ai.export_markdown, c.num("id"))},
+    "/api/quiet": _r_quiet,
+    "/api/scripts": _r_scripts,
+    "/api/logs": _r_logs,
+    "/api/diag": lambda c: diag.checks(c.db),
+    "/api/autostart": lambda c: diag.autostart_status(),
+}
+
+
+# POST: путь → функция(Req). Тело запроса - c.payload, база - c.db.
+def _p_read(c):
+    return {"updated": write(c.db, mark_read, _ids(c.payload), bool(c.payload.get("unread")))}
+
+
+def _p_restore(c):
+    return {"updated": write(c.db, restore, _ids(c.payload))}
+
+
+def _p_pin(c):
+    return {"updated": write(c.db, set_pinned, _ids(c.payload), bool(c.payload.get("pinned")))}
+
+
+def _p_snooze(c):
+    if c.payload.get("preset") not in SNOOZE_PRESETS:
+        raise BadRequest(L("Неизвестный вариант «отложить»", "Unknown snooze option"))
+    n, until = write(c.db, set_snooze, _ids(c.payload), c.payload["preset"])
+    return {"updated": n, "until": until}
+
+
+def _p_event(c):
+    if c.payload.get("kind") != "command":
+        raise BadRequest(L("Неизвестное событие", "Unknown event"))
+    return events.command(c.db, c.payload)
+
+
+def _p_ai_setup(c):
+    # OpenRouter так не включить: только /api/ai/openrouter (rules.set_prefs, cloud_ok)
+    write(c.db, rules.set_prefs, {"ai": dict(c.payload.get("ai") or {})})
+    return read(c.db, ai.status)
+
+
+def _p_ai_openrouter(c):
+    return write(c.db, ai.or_setup, bool(c.payload.get("enabled")),
+                 None if c.payload.get("key") is None else str(c.payload.get("key")),
+                 bool(c.payload.get("consent")))
+
+
+def _p_ai_session(c):
+    if c.payload.get("id"):
+        return write(c.db, ai.update_session, int(c.payload["id"]), c.payload.get("title"),
+                     c.payload.get("settings"))
+    return write(c.db, ai.create_session, c.payload.get("settings"), str(c.payload.get("title") or ""))
+
+
+def _p_ai_session_delete(c):
+    return {"deleted": write(c.db, ai.delete_session, int(c.payload.get("id")))}
+
+
+def _p_remind(c):
+    at = write(c.db, reminders.add, int(c.payload.get("id")), str(c.payload.get("at") or ""),
+               str(c.payload.get("event_at") or ""))
+    return {"at": at}
+
+
+def _p_remind_cancel(c):
+    return {"cancelled": write(c.db, reminders.cancel, int(c.payload.get("id")))}
+
+
+def _p_logwatch_preview(c):
+    try:
+        return logwatch.preview(dict(c.payload.get("watch") or {}))
+    except OSError as e:
+        raise BadRequest(L(f"Не открыть: {e}", f"Can't open: {e}")) from None
+
+
+def _p_scripts_open(_c):
+    os.makedirs(scripts.DIR, exist_ok=True)
+    if os.name == "nt":
+        os.startfile(scripts.DIR)      # noqa: S606 — своя папка настроек
+    else:
+        subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", scripts.DIR],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return {"ok": True}
+
+
+def _p_mail_channel(c):
+    ch = c.payload.get("channel")
+    if ch not in ("notify", "imap"):
+        raise BadRequest(L("Канал почты — notify или imap", "Mail channel must be notify or imap"))
+
+    def upd(conn):
+        # письма, пришедшие, пока почта шла уведомлениями, уже в базе — не дублируем
+        if ch == "imap" and mail.channel(conn) != "imap":
+            mail.forget(conn)
+        rules.set_prefs(conn, {"mail_channel": ch})
+    write(c.db, upd)
+    return {"channel": ch}
+
+
+def _p_mail_account(c):
+    write(c.db, mail.save_account, c.payload)
+    return {"accounts": read(c.db, mail.public_accounts)}
+
+
+def _p_mail_delete(c):
+    write(c.db, mail.delete_account, str(c.payload.get("id") or ""))
+    return {"accounts": read(c.db, mail.public_accounts)}
+
+
+def _p_mail_test(c):
+    ok, err, n = mail.test(c.payload)
+    return {"ok": ok, "error": err, "count": n}
+
+
+def _p_mail_check(c):
+    return {"new": mail.check_now(c.db, str(c.payload.get("id") or "")),
+            "accounts": read(c.db, mail.public_accounts)}
+
+
+def _p_rules(c):
+    r = rules.clean_rule(c.payload)
+
+    def save(conn):
+        rules.save_rule(conn, r)
+        if r["action"] == "move":          # значок своей колонки выбирают в самом правиле
+            rules.set_my_icon(conn, r["param"], c.payload.get("ico"))
+    write(c.db, save)
+    return {"ok": True}
+
+
+def _p_source_mode(c):
+    src, mode = c.payload.get("src"), c.payload.get("mode")
+    if not isinstance(src, str) or not src or mode not in rules.VIS_ACTIONS:
+        raise BadRequest(L("Нужны источник и режим show/hide", "A source and show/hide mode are needed"))
+    write(c.db, rules.set_mode, src, mode)
+    return {"ok": True}
+
+
+def _p_prefs(c):
+    write(c.db, rules.set_prefs, c.payload)
+    if "quiet" in c.payload:                # луна и раздел настроек — сразу, без ожидания фона
+        write(c.db, quiet.step)
+    return read(c.db, _prefs_view)
+
+
+def _p_purge(c):
+    days = int(c.payload.get("days"))
+    if days < 1:
+        raise BadRequest(L("Срок — от 1 дня", "The period must be at least 1 day"))
+    return {"deleted": write(c.db, purge, days)}
+
+
+def _p_export(c):
+    fmt = c.payload.get("format")
+    if fmt not in ("csv", "json"):
+        raise BadRequest(L("Формат — csv или json", "Format must be csv or json"))
+    path, n = export(c.db, fmt, int(c.payload.get("days") or 0))
+    return {"path": path, "rows": n}
+
+
+def _p_config_import(c):
+    return write(c.db, rules.import_config, c.payload.get("data"), bool(c.payload.get("replace")))
+
+
+def _p_report_send(c):
+    text = read(c.db, report.build)
+    ok, err = actions.send(text)
+    return {"ok": ok, "error": err, "text": text}
+
+
+def _p_forward(c):
+    actions.save_cfg(str(c.payload.get("token") or ""), str(c.payload.get("chat_id") or ""),
+                     str(c.payload.get("thread_id") or ""))
+    return actions.public_cfg()
+
+
+def _p_forward_test(_c):
+    ok, err = actions.send(L(f"✅ {version.APP_NAME}: проверка пересылки. Если вы это видите — всё настроено.",
+                             f"✅ {version.APP_NAME}: forwarding test. If you see this, it works."))
+    return {"ok": ok, "error": err}
+
+
+def _p_rag_install(c):
+    rag.install(c.db, str(c.payload.get("model") or "bge-m3").strip(),
+                str(c.payload.get("chat_model") or "").strip())
+    return {"ok": True}
+
+
+def _p_rag_disable(c):
+    write(c.db, rag.disable, bool(c.payload.get("drop")))
+    return {"ok": True}
+
+
+def _p_rag_remove_model(c):
+    rag.remove_model(str(c.payload.get("model") or ""))
+    return {"ok": True}
+
+
+def _p_rag_search(c):
+    q = str(c.payload.get("q") or "").strip()
+    if not q:
+        raise BadRequest(L("Пустой запрос", "Empty query"))
+    return {"rows": rag_rows(c.db, read(c.db, rag.search, q, int(c.payload.get("k") or 30)))}
+
+
+def _p_rag_ask(c):
+    q = str(c.payload.get("q") or "").strip()
+    if not q:
+        raise BadRequest(L("Пустой вопрос", "Empty question"))
+    rows = rag_rows(c.db, read(c.db, rag.search, q, 12))
+    answer, model = read(c.db, rag.ask, q, {r["id"]: r for r in rows})
+    return {"answer": answer, "model": model, "rows": rows}
+
+
+def _p_autostart(c):
+    return diag.set_autostart(str(c.payload.get("which")), bool(c.payload.get("enabled")))
+
+
+def _p_restart(c):
+    diag.restart_later(str(c.payload.get("which")))
+    return {"ok": True}
+
+
+POST_ROUTES = {
+    "/api/read": _p_read,
+    "/api/restore": _p_restore,
+    "/api/pin": _p_pin,
+    "/api/snooze": _p_snooze,
+    "/api/ingest": lambda c: ingest.accept_api(c.db, c.payload),
+    "/api/event": _p_event,
+    "/api/ai/setup": _p_ai_setup,
+    "/api/ai/openrouter": _p_ai_openrouter,
+    "/api/ai/session": _p_ai_session,
+    "/api/ai/session/delete": _p_ai_session_delete,
+    "/api/ai/defaults": lambda c: write(c.db, ai.save_defaults, dict(c.payload.get("settings") or {})),
+    "/api/ai/pull": lambda c: read(c.db, ai.start_pull, str(c.payload.get("model") or "")),
+    "/api/ai/pull/cancel": lambda c: ai.cancel_pull(),
+    "/api/ai/delete-model": lambda c: read(c.db, ai.delete_model, str(c.payload.get("model") or "")),
+    "/api/ai/lmstudio/start": lambda c: ai.lmstudio_start(),
+    "/api/quiet": lambda c: write(c.db, quiet.set_manual, str(c.payload.get("action") or "")),
+    "/api/remind": _p_remind,
+    "/api/remind/cancel": _p_remind_cancel,
+    "/api/logwatch/preview": _p_logwatch_preview,
+    "/api/scripts/example": lambda c: {"path": scripts.make_example(), **scripts.info(c.db)},
+    "/api/scripts/run": lambda c: scripts.run_now(c.db, str(c.payload.get("name") or "")),
+    "/api/scripts/open": _p_scripts_open,
+    "/api/logs/clear": lambda c: {"cleared": applog.clear()},
+    "/api/logs/export": lambda c: dict(zip(("path", "rows"),
+                                           export_logs(str(c.payload.get("level") or "all"),
+                                                       str(c.payload.get("q") or "")))),
+    "/api/logs/client": lambda c: {"ok": applog.client_error(c.payload)},
+    "/api/close-column": lambda c: close_column(c.db, str(c.payload.get("src") or "")),
+    "/api/reopen-column": lambda c: reopen_column(c.db, str(c.payload.get("src") or ""), _ids(c.payload)),
+    "/api/mail/channel": _p_mail_channel,
+    "/api/mail/account": _p_mail_account,
+    "/api/mail/delete": _p_mail_delete,
+    "/api/mail/test": _p_mail_test,
+    "/api/mail/check": _p_mail_check,
+    "/api/rules": _p_rules,
+    "/api/rules/delete": lambda c: {"ok": True, "deleted": write(c.db, rules.delete_rule, int(c.payload.get("id")))},
+    "/api/source-mode": _p_source_mode,
+    "/api/prefs": _p_prefs,
+    "/api/purge": _p_purge,
+    "/api/export": _p_export,
+    "/api/config/export": lambda c: dict(zip(("path", "rules"), export_config(c.db))),
+    "/api/config/import": _p_config_import,
+    "/api/backups/make": lambda c: {"name": backup.make(c.db, "manual"), "backups": backup.list_backups()},
+    "/api/backups/restore": lambda c: {"before": backup.restore(c.db, str(c.payload.get("name") or ""))},
+    "/api/report/send": _p_report_send,
+    "/api/forward": _p_forward,
+    "/api/forward/test": _p_forward_test,
+    "/api/rag/install": _p_rag_install,
+    "/api/rag/retry": lambda c: {"queued": rag.retry_skipped(c.db)},
+    "/api/rag/disable": _p_rag_disable,
+    "/api/rag/remove-model": _p_rag_remove_model,
+    "/api/rag/search": _p_rag_search,
+    "/api/rag/ask": _p_rag_ask,
+    "/api/ingest/token": lambda c: {"token": ingest.new_token()},
+    "/api/session/token": lambda c: {"ok": True, "token": session.rotate()},
+    "/api/autostart": _p_autostart,
+    "/api/restart": _p_restart,
+}
+
+
 def make_handler(db_path):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *a):  # тихо
@@ -778,14 +1368,15 @@ def make_handler(db_path):
                 return
             parsed = urlparse(self.path)
             qs = parse_qs(parsed.query)
-            arg = lambda k: (qs.get(k, [""])[0] or "").strip()  # noqa: E731
-            num = lambda k, d: int(arg(k)) if arg(k).isdigit() else d  # noqa: E731
             p = parsed.path
 
             if p in PAGES:
                 name, ctype = PAGES[p]
                 return self._file(os.path.join(HERE, "web", name), ctype, {
-                    "X-Frame-Options": "DENY", "Content-Security-Policy": "frame-ancestors 'none'"})
+                    "X-Frame-Options": "DENY", "Content-Security-Policy": "frame-ancestors 'none'",
+                    # страница получает токен сеанса cookie - дальше браузер шлёт его сам
+                    # (см. session.py); скрипты и curl - заголовком X-Messhub-Token
+                    "Set-Cookie": session.cookie_header()})
             if p.startswith("/avatar/"):
                 f = avatars.file_for(unquote(p[8:]))
                 if not f:
@@ -800,100 +1391,17 @@ def make_handler(db_path):
 
             self._lang()
             try:
-                if p == "/api/version":
-                    self._json({"name": version.APP_NAME, "id": version.APP_ID, "version": version.__version__,
-                                "author": version.AUTHOR, "email": version.AUTHOR_EMAIL, "repo": version.REPO_URL})
-                elif p == "/api/update":
-                    enabled = read(db_path, rules.get_prefs)["update_check"]
-                    self._json(updates.status(enabled, force=arg("force") == "1"))
-                elif p == "/api/messages":
-                    after = arg("after")
-                    ids = [int(x) for x in arg("ids").split(",") if x.isdigit()][:5000]
-                    data, rver, pver = query(
-                        db_path, after=int(after) if after.isdigit() else None,
-                        limit=max(1, min(1000, num("limit", 100))), app=arg("app"), q=arg("q"),
-                        unread=arg("unread") == "1", widget=arg("rules") == "1", ids=ids)
-                    q = quiet.current
-                    self._json(data, headers={"X-Rules-Ver": rver, "X-Prefs-Ver": pver,
-                                              "X-Quiet": f"{int(bool(q['active']))};{q['reason']};{q['until']}"})
-                elif p == "/api/sources":
-                    self._json(sources(db_path, apply_rules=arg("rules") == "1"))
-                elif p == "/api/visible":
-                    self._json(visible_ids(db_path))
-                elif p == "/api/column" and arg("src"):
-                    st = column_state(db_path, arg("src"))
-                    st.pop("ids")
-                    self._json(st)
-                elif p == "/api/mail":
-                    self._json({"channel": read(db_path, mail.channel),
-                                "accounts": read(db_path, mail.public_accounts), "presets": mail.PRESETS})
-                elif p == "/api/search":
-                    self._json(search(db_path, q=arg("q"), src=arg("src"), chat=arg("chat"),
-                                      date_from=arg("from"), date_to=arg("to"), status=arg("status") or "all",
-                                      limit=max(1, min(200, num("limit", 50))), offset=num("offset", 0)))
-                elif p == "/api/why":
-                    self._json(read(db_path, rules.why, num("id", 0))
-                               or {"error": L("Нет такого сообщения", "No such message")})
-                elif p == "/api/settings/sources":
-                    self._json(read(db_path, rules.overview))
-                elif p == "/api/settings/source" and arg("src"):
-                    self._json(read(db_path, rules.detail, arg("src")))
-                elif p == "/api/settings/rules":
-                    self._json(read(db_path, rules.global_rules))
-                elif p == "/api/prefs":
-                    self._json(read(db_path, _prefs_view))
-                elif p == "/api/stats":
-                    self._json(read(db_path, stats.stats, num("days", 0), arg("src")))
-                elif p == "/api/data":
-                    self._json(data_info(db_path))
-                elif p == "/api/backups":
-                    self._json(backup.list_backups())
-                elif p == "/api/report/preview":
-                    self._json({"text": read(db_path, report.build)})
-                elif p == "/api/forward":
-                    self._json(actions.public_cfg())
-                elif p == "/api/rag/status":
-                    self._json(read(db_path, rag.status))
-                elif p == "/api/ingest/config":
-                    self._json({"token": ingest.load_token(),
-                                "bind": read(db_path, lambda c: rules.get_prefs(c)["ingest_bind"])})
-                elif p == "/api/themed":
-                    self._json(themed_info(db_path))
-                elif p == "/api/ai/status":
-                    self._json(read(db_path, ai.status))
-                elif p == "/api/ai/sessions":
-                    self._json(read(db_path, ai.list_sessions))
-                elif p == "/api/ai/session":
-                    self._json(read(db_path, ai.get_session, num("id", 0)))
-                elif p == "/api/ai/pull":
-                    self._json(dict(ai.pull))
-                elif p == "/api/ai/model-info":
-                    self._json(read(db_path, ai.model_info, arg("provider"), arg("model")))
-                elif p == "/api/ai/openrouter/models":
-                    ai_p = read(db_path, rules.get_prefs)["ai"]
-                    if not ai_p["openrouter"]:
-                        self._json({"error": L("OpenRouter выключен", "OpenRouter is off")}, 400)
-                    else:
-                        self._json({"models": ai.or_models(force=arg("force") == "1"), "error": ai._or_models["error"]})
-                elif p == "/api/ai/export":
-                    self._json({"text": read(db_path, ai.export_markdown, num("id", 0))})
-                elif p == "/api/quiet":
-                    st = quiet.public_status()
-                    if os.environ.get(f"{paths.ENV_PREFIX}_THEMED_DEMO") == "1" and st["dnd"] is None:
-                        st["dnd"] = False                 # снимки экрана: как на GNOME, «Не беспокоить» выключено
-                    self._json(dict(st, prefs=read(db_path, rules.get_prefs)["quiet"]))
-                elif p == "/api/scripts":
-                    self._json(dict(scripts.info(db_path), dir=scripts.DIR.replace(os.path.expanduser("~"), "~")
-                                    if os.environ.get(f"{paths.ENV_PREFIX}_THEMED_DEMO") else scripts.DIR))
-                elif p == "/api/logs":
-                    self._json(applog.query(arg("level") or "all", arg("q"), arg("src"),
-                                            max(1, min(5000, num("limit", 1000)))))
-                elif p == "/api/diag":
-                    self._json(diag.checks(db_path))
-                elif p == "/api/autostart":
-                    self._json(diag.autostart_status())
+                route = GET_ROUTES.get(p)
+                if route is None:
+                    return self._send(404, b"not found", "text/plain; charset=utf-8")
+                if p in session.GUARDED_GET and not session.ok(self.headers):
+                    return self._json({"error": L("Нужен токен сеанса", "Session token required"),
+                                       "token_header": session.HEADER}, 401)
+                result = route(Req(db_path, p, qs, {}))
+                if isinstance(result, Json):
+                    self._json(result.data, result.code, result.headers)
                 else:
-                    self._send(404, b"not found", "text/plain; charset=utf-8")
+                    self._json(result)
             except sqlite3.OperationalError as e:
                 self._json({"error": str(e)}, 503)
             except (ValueError, TypeError) as e:      # например, /api/search?to=не-дата
@@ -909,6 +1417,13 @@ def make_handler(db_path):
                 return
             if p == "/api/ingest" and not ingest.authorized(self.headers.get("Authorization")):
                 return self._json({"error": L("Неверный ключ приёма событий", "Bad ingest key")}, 401)
+            # токен сеанса: без него любой местный процесс и любая страница в этом браузере
+            # могли вызвать POST (удалить базу, сменить настройки, выполнить скрипт).
+            # Страница получила токен cookie вместе с собой, скрипт - заголовком.
+            if not session.ok(self.headers):
+                return self._json({"error": L("Нужен токен сеанса (см. настройки → «Система»)",
+                                              "Session token required (see settings → “System”)"),
+                                   "token_header": session.HEADER}, 401)
             if p == "/api/ai/chat":
                 return self._ai_chat()
             try:
@@ -917,7 +1432,14 @@ def make_handler(db_path):
                 payload = json.loads(self.rfile.read(min(size, cap)) or b"{}")
                 if not isinstance(payload, dict):
                     raise BadRequest(L("Ожидался JSON-объект", "Expected a JSON object"))
-                self._json(self._post(p, payload))
+                route = POST_ROUTES.get(p)
+                if route is None:
+                    return self._send(404, b"not found", "text/plain; charset=utf-8")
+                result = route(Req(db_path, p, {}, payload))
+                if isinstance(result, Json):
+                    self._json(result.data, result.code, result.headers)
+                else:
+                    self._json(result)
             except LookupError:
                 self._send(404, b"not found", "text/plain; charset=utf-8")
             except Conflict as e:
@@ -958,197 +1480,6 @@ def make_handler(db_path):
                 ai.chat(db_path, sid, text, emit, i18n.lang(), images)
             except (ValueError, sqlite3.Error) as e:
                 emit({"type": "error", "error": str(e)})
-
-        def _post(self, p, payload):
-            if p == "/api/read":
-                return {"updated": write(db_path, mark_read, _ids(payload), bool(payload.get("unread")))}
-            if p == "/api/restore":
-                return {"updated": write(db_path, restore, _ids(payload))}
-            if p == "/api/pin":
-                return {"updated": write(db_path, set_pinned, _ids(payload), bool(payload.get("pinned")))}
-            if p == "/api/snooze":
-                if payload.get("preset") not in SNOOZE_PRESETS:
-                    raise BadRequest(L("Неизвестный вариант «отложить»", "Unknown snooze option"))
-                n, until = write(db_path, set_snooze, _ids(payload), payload["preset"])
-                return {"updated": n, "until": until}
-            if p == "/api/ingest":
-                return ingest.accept_api(db_path, payload)
-            if p == "/api/event":
-                if payload.get("kind") != "command":
-                    raise BadRequest(L("Неизвестное событие", "Unknown event"))
-                return events.command(db_path, payload)
-            if p == "/api/ai/setup":
-                # OpenRouter так не включить: только /api/ai/openrouter (rules.set_prefs, cloud_ok)
-                write(db_path, rules.set_prefs, {"ai": dict(payload.get("ai") or {})})
-                return read(db_path, ai.status)
-            if p == "/api/ai/openrouter":
-                return write(db_path, ai.or_setup, bool(payload.get("enabled")),
-                             None if payload.get("key") is None else str(payload.get("key")),
-                             bool(payload.get("consent")))
-            if p == "/api/ai/session":
-                if payload.get("id"):
-                    return write(db_path, ai.update_session, int(payload["id"]), payload.get("title"),
-                                 payload.get("settings"))
-                return write(db_path, ai.create_session, payload.get("settings"), str(payload.get("title") or ""))
-            if p == "/api/ai/session/delete":
-                return {"deleted": write(db_path, ai.delete_session, int(payload.get("id")))}
-            if p == "/api/ai/defaults":
-                return write(db_path, ai.save_defaults, dict(payload.get("settings") or {}))
-            if p == "/api/ai/pull":
-                return read(db_path, ai.start_pull, str(payload.get("model") or ""))
-            if p == "/api/ai/pull/cancel":
-                return ai.cancel_pull()
-            if p == "/api/ai/delete-model":
-                return read(db_path, ai.delete_model, str(payload.get("model") or ""))
-            if p == "/api/ai/lmstudio/start":
-                return ai.lmstudio_start()
-            if p == "/api/quiet":
-                return write(db_path, quiet.set_manual, str(payload.get("action") or ""))
-            if p == "/api/remind":
-                at = write(db_path, reminders.add, int(payload.get("id")), str(payload.get("at") or ""),
-                           str(payload.get("event_at") or ""))
-                return {"at": at}
-            if p == "/api/remind/cancel":
-                return {"cancelled": write(db_path, reminders.cancel, int(payload.get("id")))}
-            if p == "/api/logwatch/preview":
-                try:
-                    return logwatch.preview(dict(payload.get("watch") or {}))
-                except OSError as e:
-                    raise BadRequest(L(f"Не открыть: {e}", f"Can't open: {e}"))
-            if p == "/api/scripts/example":
-                path = scripts.make_example()
-                return {"path": path, **scripts.info(db_path)}
-            if p == "/api/scripts/run":
-                return scripts.run_now(db_path, str(payload.get("name") or ""))
-            if p == "/api/scripts/open":
-                os.makedirs(scripts.DIR, exist_ok=True)
-                if os.name == "nt":
-                    os.startfile(scripts.DIR)      # noqa: S606 — своя папка настроек
-                else:
-                    subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", scripts.DIR],
-                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                return {"ok": True}
-            if p == "/api/logs/clear":
-                return {"cleared": applog.clear()}
-            if p == "/api/logs/export":
-                path, n = export_logs(str(payload.get("level") or "all"), str(payload.get("q") or ""))
-                return {"path": path, "rows": n}
-            if p == "/api/logs/client":
-                return {"ok": applog.client_error(payload)}
-            if p == "/api/close-column":
-                return close_column(db_path, str(payload.get("src") or ""))
-            if p == "/api/reopen-column":
-                return reopen_column(db_path, str(payload.get("src") or ""), _ids(payload))
-            if p == "/api/mail/channel":
-                ch = payload.get("channel")
-                if ch not in ("notify", "imap"):
-                    raise BadRequest(L("Канал почты — notify или imap", "Mail channel must be notify or imap"))
-
-                def upd(conn):
-                    # письма, пришедшие, пока почта шла уведомлениями, уже в базе — не дублируем
-                    if ch == "imap" and mail.channel(conn) != "imap":
-                        mail.forget(conn)
-                    rules.set_prefs(conn, {"mail_channel": ch})
-                write(db_path, upd)
-                return {"channel": ch}
-            if p == "/api/mail/account":
-                write(db_path, mail.save_account, payload)
-                return {"accounts": read(db_path, mail.public_accounts)}
-            if p == "/api/mail/delete":
-                write(db_path, mail.delete_account, str(payload.get("id") or ""))
-                return {"accounts": read(db_path, mail.public_accounts)}
-            if p == "/api/mail/test":
-                ok, err, n = mail.test(payload)
-                return {"ok": ok, "error": err, "count": n}
-            if p == "/api/mail/check":
-                return {"new": mail.check_now(db_path, str(payload.get("id") or "")),
-                        "accounts": read(db_path, mail.public_accounts)}
-            if p == "/api/rules":
-                r = rules.clean_rule(payload)
-
-                def save(conn):
-                    rules.save_rule(conn, r)
-                    if r["action"] == "move":          # значок своей колонки выбирают в самом правиле
-                        rules.set_my_icon(conn, r["param"], payload.get("ico"))
-                write(db_path, save)
-                return {"ok": True}
-            if p == "/api/rules/delete":
-                return {"ok": True, "deleted": write(db_path, rules.delete_rule, int(payload.get("id")))}
-            if p == "/api/source-mode":
-                src, mode = payload.get("src"), payload.get("mode")
-                if not isinstance(src, str) or not src or mode not in rules.VIS_ACTIONS:
-                    raise BadRequest(L("Нужны источник и режим show/hide", "A source and show/hide mode are needed"))
-                write(db_path, rules.set_mode, src, mode)
-                return {"ok": True}
-            if p == "/api/prefs":
-                write(db_path, rules.set_prefs, payload)
-                if "quiet" in payload:                # луна и раздел настроек — сразу, без ожидания фона
-                    write(db_path, quiet.step)
-                return read(db_path, _prefs_view)
-            if p == "/api/purge":
-                days = int(payload.get("days"))
-                if days < 1:
-                    raise BadRequest(L("Срок — от 1 дня", "The period must be at least 1 day"))
-                return {"deleted": write(db_path, purge, days)}
-            if p == "/api/export":
-                fmt = payload.get("format")
-                if fmt not in ("csv", "json"):
-                    raise BadRequest(L("Формат — csv или json", "Format must be csv or json"))
-                path, n = export(db_path, fmt, int(payload.get("days") or 0))
-                return {"path": path, "rows": n}
-            if p == "/api/config/export":
-                path, n = export_config(db_path)
-                return {"path": path, "rules": n}
-            if p == "/api/config/import":
-                return write(db_path, rules.import_config, payload.get("data"), bool(payload.get("replace")))
-            if p == "/api/backups/make":
-                return {"name": backup.make(db_path, "manual"), "backups": backup.list_backups()}
-            if p == "/api/backups/restore":
-                return {"before": backup.restore(db_path, str(payload.get("name") or ""))}
-            if p == "/api/report/send":
-                text = read(db_path, report.build)
-                ok, err = actions.send(text)
-                return {"ok": ok, "error": err, "text": text}
-            if p == "/api/forward":
-                actions.save_cfg(str(payload.get("token") or ""), str(payload.get("chat_id") or ""),
-                                 str(payload.get("thread_id") or ""))
-                return actions.public_cfg()
-            if p == "/api/forward/test":
-                ok, err = actions.send(L(f"✅ {version.APP_NAME}: проверка пересылки. Если вы это видите — всё настроено.",
-                                         f"✅ {version.APP_NAME}: forwarding test. If you see this, it works."))
-                return {"ok": ok, "error": err}
-            if p == "/api/rag/install":
-                rag.install(db_path, str(payload.get("model") or "bge-m3").strip(),
-                            str(payload.get("chat_model") or "").strip())
-                return {"ok": True}
-            if p == "/api/rag/retry":
-                return {"queued": rag.retry_skipped(db_path)}
-            if p == "/api/rag/disable":
-                write(db_path, rag.disable, bool(payload.get("drop")))
-                return {"ok": True}
-            if p == "/api/rag/remove-model":
-                rag.remove_model(str(payload.get("model") or ""))
-                return {"ok": True}
-            if p == "/api/rag/search":
-                q = str(payload.get("q") or "").strip()
-                if not q:
-                    raise BadRequest(L("Пустой запрос", "Empty query"))
-                return {"rows": rag_rows(db_path, read(db_path, rag.search, q, int(payload.get("k") or 30)))}
-            if p == "/api/rag/ask":
-                q = str(payload.get("q") or "").strip()
-                if not q:
-                    raise BadRequest(L("Пустой вопрос", "Empty question"))
-                rows = rag_rows(db_path, read(db_path, rag.search, q, 12))
-                answer, model = read(db_path, rag.ask, q, {r["id"]: r for r in rows})
-                return {"answer": answer, "model": model, "rows": rows}
-            if p == "/api/ingest/token":
-                return {"token": ingest.new_token()}
-            if p == "/api/autostart":
-                return diag.set_autostart(str(payload.get("which")), bool(payload.get("enabled")))
-            if p == "/api/restart":
-                diag.restart_later(str(payload.get("which")))
-                return {"ok": True}
-            raise LookupError(p)
 
     return Handler
 

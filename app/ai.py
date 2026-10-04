@@ -214,7 +214,7 @@ def _human(e):
         try:
             err = json.loads(e.read() or b"{}").get("error")
             msg = str((err or {}).get("message") if isinstance(err, dict) else err or "")
-        except Exception:                           # тела может не быть вовсе (разные версии Python)
+        except Exception:                           # noqa: BLE001 — тела может не быть вовсе (разные версии Python)
             msg = ""
         known = {401: L("ключ не подходит", "the key is not accepted"),
                  402: L("на счёте OpenRouter не хватает денег", "not enough credits on OpenRouter"),
@@ -892,7 +892,8 @@ def chat(db_path, sid, question, emit, lang="ru", images=None):
                 if retried and not answer:          # второй заход не удался — объясним в заметке
                     retry_err = _human(e)
                 elif not answer and not thought:
-                    raise ValueError(L(f"Модель не ответила: {_human(e)}", f"The model did not answer: {_human(e)}"))
+                    raise ValueError(L(f"Модель не ответила: {_human(e)}",
+                                         f"The model did not answer: {_human(e)}")) from e
                 else:
                     stopped = True
             for kind, piece in split.flush():

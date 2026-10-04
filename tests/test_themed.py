@@ -21,6 +21,7 @@ import rules
 import run
 import serve
 import services
+import session
 
 
 def prefs_on(db, **cols):
@@ -57,11 +58,15 @@ class ServerCase(unittest.TestCase):
         cls.httpd.shutdown()
         cls.httpd.server_close()
 
-    def req(self, path, body=None, headers=None):
+    def req(self, path, body=None, headers=None, token=True):
+        """Запрос к серверу. token=False - без cookie сеанса: так проверяют, что чужие
+        страницы и посторонние процессы до POST не доходят (см. app/session.py)."""
         data = json.dumps(body).encode() if body is not None else None
         h = dict(headers or {})
         if data is not None:
             h.setdefault("Content-Type", "application/json")
+        if token:
+            h.setdefault("Cookie", f"{session.COOKIE}={session.token()}")
         r = urllib.request.Request(self.base + path, data=data, headers=h)
         try:
             with urllib.request.urlopen(r, timeout=10) as resp:
@@ -81,27 +86,27 @@ class GuardTest(ServerCase):
     def test_rebinding_blocked(self):
         """Чужое имя в Host (DNS rebinding) — 403 и на страницы, и на API."""
         for path in ("/api/messages", "/widget", "/api/version"):
-            code, _ = self.req(path, headers={"Host": f"evil.example:{self.port}"})
+            code, _ = self.req(path, headers={"Host": f"evil.example:{self.port}"}, token=False)
             self.assertEqual(code, 403, path)
         code, _ = self.req("/api/version")
         self.assertEqual(code, 200)
 
     def test_foreign_origin_and_cross_site(self):
-        code, _ = self.req("/api/read", {"ids": []}, headers={"Origin": "http://evil.example"})
+        code, _ = self.req("/api/read", {"ids": []}, headers={"Origin": "http://evil.example"}, token=False)
         self.assertEqual(code, 403)
-        code, _ = self.req("/api/read", {"ids": []}, headers={"Origin": f"http://127.0.0.1:{self.port + 1}"})
+        code, _ = self.req("/api/read", {"ids": []}, headers={"Origin": f"http://127.0.0.1:{self.port + 1}"}, token=False)
         self.assertEqual(code, 403)
-        code, _ = self.req("/api/messages", headers={"Sec-Fetch-Site": "cross-site"})
+        code, _ = self.req("/api/messages", headers={"Sec-Fetch-Site": "cross-site"}, token=False)
         self.assertEqual(code, 403)
         # переход на саму страницу по ссылке с другого сайта — можно (ответ чужому сайту не достаётся)
         nav = {"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document"}
         code, _ = self.req("/settings", headers=nav)
         self.assertEqual(code, 200)
-        code, _ = self.req("/api/messages", headers=nav)
+        code, _ = self.req("/api/messages", headers=nav, token=False)
         self.assertEqual(code, 403)
-        code, _ = self.req("/widget", headers={"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "no-cors"})
+        code, _ = self.req("/widget", headers={"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "no-cors"}, token=False)
         self.assertEqual(code, 403)                   # страница картинкой/скриптом чужого сайта — нет
-        code, _ = self.req("/widget", headers=dict(nav, **{"Sec-Fetch-Dest": "iframe"}))
+        code, _ = self.req("/widget", headers=dict(nav, **{"Sec-Fetch-Dest": "iframe"}), token=False)
         self.assertEqual(code, 403)                   # и во фрейме чужого сайта — нет
         with urllib.request.urlopen(self.base + "/widget", timeout=10) as r:
             self.assertEqual(r.headers["X-Frame-Options"], "DENY")

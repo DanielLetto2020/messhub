@@ -38,6 +38,12 @@ CREATE INDEX IF NOT EXISTS idx_messages_event_ts    ON messages(event_ts);
 CREATE INDEX IF NOT EXISTS idx_messages_is_read     ON messages(is_read);
 CREATE INDEX IF NOT EXISTS idx_messages_received_at ON messages(received_at);
 CREATE INDEX IF NOT EXISTS idx_messages_event_key   ON messages(event_key);
+-- Составные под самые частые выборки: доска спрашивает непрочитанные (is_read = 0) по id,
+-- «закрыть колонку» и срок хранения — по времени записи, источник — по приложению и времени.
+CREATE INDEX IF NOT EXISTS idx_messages_read_id    ON messages(is_read, id);
+CREATE INDEX IF NOT EXISTS idx_messages_read_rtime  ON messages(is_read, received_at);
+CREATE INDEX IF NOT EXISTS idx_messages_app_rtime  ON messages(app, received_at);
+CREATE INDEX IF NOT EXISTS idx_messages_site       ON messages(site);
 
 -- Правила («фильтры как в почте»), логика — rules.py.
 -- '' в chat/sender/text = «любой»; src = '*' — во всех источниках.

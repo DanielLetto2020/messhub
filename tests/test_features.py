@@ -29,6 +29,7 @@ import rules
 import screen
 import scripts
 import serve
+import session
 import when
 
 
@@ -323,7 +324,10 @@ class AiTest(unittest.TestCase):
         cls.httpd.server_close()
 
     def post(self, path, body):
-        r = urllib.request.Request(self.base + path, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
+        """POST с cookie сеанса - как из браузера (сервер требует токен, см. app/session.py)."""
+        r = urllib.request.Request(self.base + path, data=json.dumps(body).encode(),
+                                   headers={"Content-Type": "application/json",
+                                            "Cookie": f"{session.COOKIE}={session.token()}"})
         with urllib.request.urlopen(r, timeout=20) as resp:
             return resp.read().decode()
 

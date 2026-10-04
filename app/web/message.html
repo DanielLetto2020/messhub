@@ -72,6 +72,7 @@
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 <script src="/i18n.js"></script>
+<script src="/common.js"></script>
 </head>
 <body>
 <header><span class="ico" id="ico"></span><div class="who" id="who"></div><span class="when" id="when"></span></header>
@@ -93,9 +94,7 @@ if (PYW) window.addEventListener('pywebviewready', () => { while (pywQueue.lengt
 // доска в соседнем окне узнаёт о «прочитано»/«закреплено» сразу, не дожидаясь сверки
 let bc = null; try { bc = new BroadcastChannel('messhub'); } catch (e) {}
 
-function esc(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
-const attr = s => esc(s).replace(/"/g,'&quot;');
-function escRe(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
+// esc(), attr(), escRe(), post(), copyText() - в /common.js
 let mentionRe=null;
 function buildMentionRe(list){
   const n=[...new Set((list||[]).map(s=>s.trim()).filter(Boolean))].sort((a,b)=>b.length-a.length);
@@ -124,16 +123,6 @@ let toastT=0;
 function toast(text, err){const el=$('toast');el.textContent=text;el.className='show'+(err?' err':'');
   clearTimeout(toastT);toastT=setTimeout(()=>el.className='',2200);}
 window.hostToast=(k,p,err)=>toast(t(k,p),err);
-async function post(path, body){
-  const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  if(!r.ok) throw new Error('HTTP '+r.status);
-  return r.json();
-}
-async function copyText(s){
-  try{await navigator.clipboard.writeText(s);return true;}
-  catch(e){const ta=document.createElement('textarea');ta.value=s;ta.style.cssText='position:fixed;opacity:0';
-    document.body.appendChild(ta);ta.select();let ok=false;try{ok=document.execCommand('copy');}catch(_){}ta.remove();return ok;}
-}
 function closeWin(){ if(host) host.postMessage('close'); else window.close(); }
 function when(iso){if(!iso)return'';const x=iso.replace('T',' ');return x.length>=16?x.slice(8,10)+'.'+x.slice(5,7)+'.'+x.slice(0,4)+' '+x.slice(11,16):x;}
 
@@ -186,12 +175,12 @@ function draw(){
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeWin();});
 (async()=>{
   try{
-    const p=await(await fetch('/api/prefs')).json();
+    const p=await api('/api/prefs');
     setLang(p._lang); translateDom();
     document.body.classList.toggle('light',p.theme==='light');
     mentionRe=buildMentionRe(p.mentions);
     try{if(localStorage.getItem('privacy')==='1')document.body.classList.add('blurred');}catch(e){}   // глаз на доске
-    const rows=ID?await(await fetch('/api/messages?limit=1&ids='+ID)).json():[];
+    const rows=ID?await api('/api/messages?limit=1&ids='+ID):[];
     if(!rows.length){
       $('main').innerHTML=`<div class="state">${esc(t('Сообщения нет: его удалили по сроку хранения или вручную.'))}</div>`;
       $('foot').innerHTML=`<span class="sp"></span><button class="btn ghost" type="button" id="bClose">${esc(t('Закрыть'))}</button>`;

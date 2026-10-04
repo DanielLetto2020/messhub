@@ -113,8 +113,16 @@ def run_pipe(argv, tail):
 def report(cmd, code, seconds, tail_text, port):
     body = json.dumps({"kind": "command", "cmd": cmd, "code": code, "seconds": round(seconds, 1),
                        "cwd": os.getcwd(), "tail": tail_text}).encode("utf-8")
-    req = urllib.request.Request(f"http://127.0.0.1:{port}/api/event", data=body,
-                                 headers={"Content-Type": "application/json"})
+    # Токен сеанса: сервер не принимает POST без него (app/session.py). «messhub run» - это
+    # часть самой программы, поэтому токен подставляем сами; файла сессии может не быть,
+    # если сервер ещё не запускался - тогда и писать нечего.
+    headers = {"Content-Type": "application/json"}
+    try:
+        import session
+        headers[session.HEADER] = session.token()
+    except (ImportError, OSError):
+        pass
+    req = urllib.request.Request(f"http://127.0.0.1:{port}/api/event", data=body, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=5) as r:
             res = json.load(r)

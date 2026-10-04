@@ -51,7 +51,7 @@ class HookTest(unittest.TestCase):
         open(log, "w").close()
         pid, fd = pty.fork()
         if pid == 0:
-            os.execvp("bash", ["bash", "--norc", "--noprofile", "-i"])
+            os.execvp("bash", ["bash", "--norc", "--noprofile", "-i"])  # noqa: S606 — проверяем сам хук bash
 
         def send(text, wait=0.3):
             os.write(fd, text.encode())

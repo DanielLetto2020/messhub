@@ -115,8 +115,8 @@ def clean_account(d, old=None):
     try:
         a["port"] = int(d.get("port") or (993 if a["security"] == "ssl" else 143))
         a["interval"] = min(60, max(1, int(d.get("interval") or 2)))
-    except (TypeError, ValueError):
-        raise ValueError(L("Порт и интервал — числа", "Port and interval must be numbers"))
+    except (TypeError, ValueError) as e:
+        raise ValueError(L("Порт и интервал — числа", "Port and interval must be numbers")) from e
     pw = d.get("password")
     a["password"] = pw if isinstance(pw, str) and pw else (old or {}).get("password", "")
     if not a["host"] or not a["user"]:
@@ -246,14 +246,14 @@ def test(d):
         finally:
             _logout(m)
         return True, "", n
-    except Exception as e:  # сеть, TLS, логин, папка
+    except Exception as e:  # noqa: BLE001 — сеть, TLS, логин, папка
         return False, _human(e), 0
 
 
 def _logout(m):
     try:
         m.logout()
-    except Exception:
+    except Exception:  # noqa: BLE001
         pass
 
 
@@ -265,7 +265,7 @@ def _text_of(msg):
             continue
         try:
             body = part.get_content()
-        except Exception:     # обрезанное (мы берём первые 64 КБ) или битое — пропускаем
+        except Exception:     # noqa: BLE001 — обрезанное (мы берём первые 64 КБ) или битое — пропускаем
             continue
         if not isinstance(body, str):
             continue
@@ -341,7 +341,7 @@ def _store(conn, a, uid, raw):
     rec["id"] = catcher.insert(conn, rec)
     try:
         rules.apply_on_insert(conn, rec)
-    except Exception as e:  # правило не должно ронять почту
+    except Exception as e:  # noqa: BLE001 — правило не должно ронять почту
         print(f"Почта: действия правил: {e!r}", flush=True)
 
 
@@ -360,9 +360,9 @@ def _run_one(db_path, a):
             if n:
                 print(f"Почта «{a['label']}»: новых писем {n}", flush=True)
             return n
-        except Exception as e:
+        except Exception as e:      # письмо не проверили: запоминаем ошибку в состоянии ящика
             state[a["id"]] = {"checked": catcher.msk_time(), "error": _human(e), "new": 0}
-            raise ValueError(state[a["id"]]["error"])
+            raise ValueError(state[a["id"]]["error"]) from e
 
 
 def start(db_path):

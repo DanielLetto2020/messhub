@@ -33,6 +33,7 @@ import threading
 import time
 import webbrowser
 
+import pagecmd
 import paths
 import screen
 import version
@@ -88,53 +89,54 @@ class Api:
 
     def _handle(self, msg):
         w = self._win
-        if msg.startswith("geom-start:"):
+        # Разбор команд - общий с окном на Linux (pagecmd.py), там он проверяется тестом.
+        verb, arg = pagecmd.parse(msg)
+        if verb == "geom-start":
             self._search_close()             # доску двигают — результаты поиска не висят в стороне
             if not self._state.get("locked"):
-                self._g0 = (msg.split(":", 1)[1], w.x, w.y, w.width, w.height)
-        elif msg.startswith("geom:") and self._g0:
-            dx, dy = (int(float(v)) for v in msg[5:].split(","))
+                self._g0 = (arg, w.x, w.y, w.width, w.height)
+        elif verb == "geom" and self._g0:
+            dx, dy = arg
             edge, x0, y0, w0, h0 = self._g0
             if edge == "move":
                 w.move(x0 + dx, y0 + dy)
             else:
                 from webview.window import FixPoint
-                nw = max(MIN_W, w0 + (dx if "e" in edge else -dx if "w" in edge else 0))
-                nh = max(MIN_H, h0 + (dy if "s" in edge else -dy if "n" in edge else 0))
-                fix = (FixPoint.EAST if "w" in edge else FixPoint.WEST) | \
-                      (FixPoint.SOUTH if "n" in edge else FixPoint.NORTH)
+                _, _, nw, nh = pagecmd.resize_geom(edge, (x0, y0, w0, h0), dx, dy, MIN_W, MIN_H)
+                west, north = pagecmd.fix_points(edge)
+                fix = (FixPoint.EAST if west else FixPoint.WEST) | \
+                      (FixPoint.SOUTH if north else FixPoint.NORTH)
                 w.resize(nw, nh, fix_point=fix)
-        elif msg == "geom-end":
+        elif verb == "geom-end":
             self._g0 = None
             self._remember()
-        elif msg in ("lock:1", "lock:0"):
-            self._state["locked"] = msg == "lock:1"
+        elif verb == "lock":
+            self._state["locked"] = arg == "1"
             self._remember()
             self._keep_below()
-        elif msg == "settings" or msg.startswith("settings:"):
-            self._open_settings(msg.split(":", 1)[1] if ":" in msg else "")
-        elif msg.startswith("share:"):
-            cfg = json.loads(msg[6:])
-            self._share = {"on": bool(cfg.get("on")), "patterns": [str(x) for x in cfg.get("patterns") or []]}
+        elif verb == "settings":
+            self._open_settings(arg)
+        elif verb == "share":
+            self._share = {"on": bool(arg.get("on")), "patterns": [str(x) for x in arg.get("patterns") or []]}
             if self._share["on"] and not self._share_thread and WINDOWS:   # заголовки окон — пока только Windows
                 self._share_thread = threading.Thread(target=self._share_loop, name="share", daemon=True)
                 self._share_thread.start()
-        elif msg.startswith("search:"):
-            self._search(json.loads(msg[7:]))
-        elif msg.startswith("search-nav:") and self._find:
-            self._find.evaluate_js(f"window.hostNav && hostNav({json.dumps(msg[11:])})")
-        elif msg == "search-close":
+        elif verb == "search":
+            self._search(arg)
+        elif verb == "search-nav" and self._find:
+            self._find.evaluate_js(f"window.hostNav && hostNav({json.dumps(arg)})")
+        elif verb == "search-close":
             self._search_close()
-        elif msg.startswith("message:") and msg[8:].isdigit():
-            self._open_page("message", f"/message?id={int(msg[8:])}&host=pywebview", 900, 640)
-        elif msg == "assistant":
+        elif verb == "message":
+            self._open_page("message", f"/message?id={arg}&host=pywebview", 900, 640)
+        elif verb == "assistant":
             self._open_page("assistant", "/assistant?host=pywebview", 1120, 760)
-        elif msg.startswith("open:"):
-            self._open(json.loads(msg[5:]))
-        elif msg.startswith("opacity:"):
-            self._set_alpha(float(msg[8:]))
-        elif msg.startswith("strip:"):
-            self._strip_set(bool(json.loads(msg[6:]).get("on")))
+        elif verb == "open":
+            self._open(arg)
+        elif verb == "opacity":
+            self._set_alpha(arg)
+        elif verb == "strip":
+            self._strip_set(bool(arg.get("on")))
 
     # ── окно ──
     def _remember(self, *_):
@@ -257,7 +259,7 @@ class Api:
         aumid = wincatcher.aumid_for(app)
         if aumid:
             try:
-                os.startfile("shell:AppsFolder\\" + aumid)
+                os.startfile("shell:AppsFolder\\" + aumid)  # noqa: S606 — свой ярлык приложения из diag.py
                 return
             except OSError as e:
                 self._toast("Не удалось запустить: {e}", {"e": str(e)})

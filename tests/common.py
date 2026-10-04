@@ -18,6 +18,38 @@ os.environ["MESSHUB_OPENROUTER_URL"] = "http://127.0.0.1:9"       # OpenRouter �
 import catcher  # noqa: E402
 
 
+class Api:
+    """Запрос к тестовому серверу, как из браузера: с cookie сеанса.
+
+    Раньше такую функцию копировали в каждом тестовом файле; cookie обязательна, потому что
+    сервер с 1.0.23 не принимает POST без токена (см. app/session.py). Тест, который хочет
+    проверить отказ, передаёт headers без неё (см. test_api.test_session_token)."""
+
+    def __init__(self, base):
+        self.base = base
+
+    def req(self, path, body=None, headers=None, ctype="application/json"):
+        import json
+        import urllib.error
+        import urllib.request
+        import session
+        data = json.dumps(body).encode() if body is not None else None
+        h = dict(headers or {})
+        if data is not None:
+            h["Content-Type"] = ctype
+        h.setdefault("Cookie", f"{session.COOKIE}={session.token()}")
+        r = urllib.request.Request(self.base + path, data=data, headers=h)
+        try:
+            with urllib.request.urlopen(r, timeout=10) as resp:
+                return resp.status, json.load(resp), resp.headers
+        except urllib.error.HTTPError as e:
+            raw = e.read()
+            try:
+                return e.code, json.loads(raw), e.headers
+            except ValueError:
+                return e.code, raw.decode(), e.headers
+
+
 def new_db(name="t.db"):
     path = os.path.join(TMP, name)
     for suffix in ("", "-wal", "-shm"):

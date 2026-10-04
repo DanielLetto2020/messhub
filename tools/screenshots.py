@@ -78,6 +78,9 @@ def plan(lang):
         ("settings-forward", "/settings#forward", S, [900]),
         ("settings-ingest", "/settings#ingest", S, [900]),
         ("settings-system", "/settings#system", (1150, 1000), ["wait-for:.check", 600]),
+        # раздел о токене для своих скриптов - внизу «Системы», поэтому отдельный кадр
+        ("settings-token", "/settings#system", (1150, 760),
+            ["wait-for:.check", 600, "document.getElementById('sessNew').scrollIntoView({block:'center'});'ok'", 500]),
         ("settings-themed", "/settings#themed", (1150, 1100), ["wait-for:.tcard", 700]),
         ("settings-themed-more", "/settings#themed", (1150, 1100), ["wait-for:.tcard",
             "document.querySelector('.tcard[data-col=resources]').scrollIntoView();'ok'", 500]),

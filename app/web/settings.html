@@ -345,6 +345,7 @@
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 <script src="/i18n.js"></script>
+<script src="/common.js"></script>
 </head>
 <body>
 <div class="app">
@@ -414,8 +415,8 @@ const HINTS = {
 const DOW=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 const DOW_LONG=['понедельник','вторник','среда','четверг','пятница','суббота','воскресенье'];
 
-function esc(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
-const attr = s => esc(s).replace(/"/g,'&quot;');
+// esc(), attr(), confirmBtn(), api() - в /common.js; свой toast: у него свой класс
+// ('toast show'), в ассистенте и окне сообщения класса 'toast' нет.
 const q = s => LANG==='en'?`<span class="q">“${esc(s)}”</span>`:`<span class="q">«${esc(s)}»</span>`;
 function when(s){
   if(!s)return'';
@@ -428,26 +429,11 @@ function when(s){
 let toastT=0;
 function toast(msg,err){const el=$('toast');el.textContent=msg;el.className='toast show'+(err?' err':'');
   clearTimeout(toastT);toastT=setTimeout(()=>el.className='toast',2400);}
-async function api(path,body){
-  const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});
-  let data=null;try{data=await r.json();}catch(e){}
-  if(!r.ok)throw new Error((data&&data.error)||t('Сервер ответил {c}',{c:r.status}));
-  return data;
-}
 function failed(retry){
   page.innerHTML=`<div class="state">${esc(t('Сервер виджета не отвечает, поэтому настройки не загрузились.'))}<br>
     ${esc(t('Проверь, что работает сбор:'))} <code>systemctl --user status messhub</code><br>
     <button class="btn" type="button" id="retry">${esc(t('Загрузить ещё раз'))}</button></div>`;
   $('retry').onclick=retry;
-}
-// кнопка с подтверждением вторым кликом (удалить, восстановить, заменить ключ)
-function confirmBtn(b,askText,run){
-  let armed=0; const orig=b.textContent;
-  b.onclick=async()=>{
-    if(!b.classList.contains('confirm')){b.classList.add('confirm');b.textContent=askText;
-      armed=setTimeout(()=>{b.classList.remove('confirm');b.textContent=orig;},4000);return;}
-    clearTimeout(armed);b.classList.remove('confirm');b.textContent=orig;await run();
-  };
 }
 const swatch=c=>`<span class="swatch" style="background:${COLORS[c]||'#888'}"></span>`;
 const isMode=r=>(r.action==='show'||r.action==='hide')&&r.src!=='*'&&!r.chat&&!r.sender&&!r.text;   // «перенести весь источник» — не режим
@@ -1663,10 +1649,26 @@ async function loadScripts(){
     toast(r.error?r.error:t('Карточек: {n}',{n:r.cards}),!!r.error);}catch(e){toast(e.message,true);}loadScripts();});
 }
 
+// Токен локального API: нужен своим скриптам, которые меняют состояние (POST).
+// Страница и виджет получают его cookie сами, это - для curl и чужих программ.
+let SESSION=null;
+function sessionBox(){
+  if(!SESSION) return '';
+  const s=SESSION;
+  return `<h3>${esc(t('Токен для своих скриптов'))}</h3>
+  <p class="hint">${esc(t('Локальный сервер принимает только те запросы, что меняют состояние, с этим токеном: чужая страница в браузере или другая программа на этом компьютере иначе удалила бы сообщения или выполнила скрипт. Страницы программы получают токен сами, его вводить не нужно.'))}</p>
+  <p class="muted">${esc(t('токен лежит в файле'))} <code>${esc(s.file)}</code> ${esc(t('(права 600)'))},<br>
+    ${esc(t('в запросе передаётся заголовком'))} <code>${esc(s.header)}</code>:</p>
+  <pre>${esc(t('curl -H "{h}: $(python3 -m json.tool {f} | grep -m1 token | cut -d\\" -f4)" http://127.0.0.1:8765/api/prefs',{h:s.header,f:s.file}))}</pre>
+  <div class="erow"><span class="muted">${esc(t('После смены токена открытые страницы надо перезагрузить.'))}</span>
+    <button class="btn ghost" type="button" id="sessNew">${esc(t('Сменить токен'))}</button></div>`;
+}
+
 // ── Система: проверки и автозапуск ──
 async function showSystem(){
   page.innerHTML=`<div class="state">${esc(t('Загружаю…'))}</div>`;
   let d;try{d=await api('/api/diag');}catch(e){failed(showSystem);return;}
+  try{SESSION=(await api('/api/ingest/config')).session;}catch(e){SESSION=null;}
   const mark={ok:'✓',warn:'!',bad:'✕',info:'·'};
   const sw=(key,label)=>{const s=d.autostart[key]; if(!s) return '';   // на Windows один процесс — один переключатель
     if(d.platform==='windows') label='Запускать вместе с Windows';
@@ -1686,7 +1688,8 @@ async function showSystem(){
       <span class="muted" id="updInfo"></span></div>
     <p class="hint">${esc(t('Раз в 12 часов программа спрашивает у GitHub номер последнего выпуска. Ничего о тебе и твоих сообщениях при этом не отправляется. Выключишь — запросов не будет.'))}</p>
     <h3>${esc(t('Папки'))}</h3>
-    <p class="muted">${[['код',d.paths.code],['данные',d.paths.data],['настройки',d.paths.config],['кэш',d.paths.cache],['база',d.paths.db]].map(([k,v])=>`${esc(t(k))}: <code>${esc(v)}</code>`).join('<br>')}</p>`;
+    <p class="muted">${[['код',d.paths.code],['данные',d.paths.data],['настройки',d.paths.config],['кэш',d.paths.cache],['база',d.paths.db]].map(([k,v])=>`${esc(t(k))}: <code>${esc(v)}</code>`).join('<br>')}</p>
+    ${sessionBox()}`;
   $('reDiag').onclick=showSystem;
   const upd=async(force)=>{try{const u=await api('/api/update'+(force?'?force=1':''));$('updOn').checked=u.enabled;
     $('updInfo').innerHTML=!u.enabled?'':u.newer?`<a class="link" href="${attr(u.url)}" target="_blank" rel="noopener noreferrer">${esc(t('есть новая версия {v}',{v:u.latest}))}</a>`
@@ -1698,6 +1701,10 @@ async function showSystem(){
     catch(e){cb.checked=!cb.checked;toast(e.message,true);}});
   page.querySelectorAll('[data-rs]').forEach(b=>b.onclick=async()=>{
     try{await api('/api/restart',{which:b.dataset.rs});toast(t(b.dataset.rs==='collect'?'Сбор перезапускается…':'Виджет перезапускается…'));}catch(e){toast(e.message,true);}});
+  const nb=$('sessNew'); if(nb) nb.onclick=async()=>{
+    if(!confirm(t('Сменить токен? Скрипты с прежним токеном перестанут работать, открытые страницы надо перезагрузить.'))) return;
+    try{await api('/api/session/token',{});toast(t('Токен сменён'));setTimeout(()=>location.reload(),600);}
+    catch(e){toast(e.message,true);}};
 }
 
 // ── Справка ──

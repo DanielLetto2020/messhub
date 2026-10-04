@@ -323,6 +323,7 @@
   @media (prefers-reduced-motion: reduce) { *, *::after { animation: none !important; transition: none !important; } }
 </style>
 <script src="/i18n.js"></script>
+<script src="/common.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -437,9 +438,7 @@ const skipped = new Set();  // пришли, но их колонка скрыт
 const openDet = new Set();  // карточки с раскрытым хвостом лога
 let focus = false; try { focus = localStorage.getItem('focus') === '1'; } catch (e) {}
 
-function esc(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
-const attr = s => esc(s).replace(/"/g,'&quot;');
-function escRe(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
+// esc(), attr(), escRe(), post() - в /common.js; свой toast: у него кнопка «Вернуть».
 function fmtTime(iso){if(!iso)return'';const x=iso.replace('T',' ');return x.length>=19?x.slice(11,16):x;}
 function gid(g){if(!gids.has(g)){const i=gids.size+1;gids.set(g,i);gkeys.set(i,g);}return gids.get(g);}
 const important = m => !!(m.pinned || m.highlight || m.mention);
@@ -461,11 +460,6 @@ function toast(text, opts){
 }
 $('toast').querySelector('.tb').addEventListener('click',()=>{const a=toastAct;$('toast').className='';toastAct=null;if(a)a.run();});
 function setOnline(ok){dot.style.background=ok?'var(--ok)':'var(--bad)';dot.classList.toggle('on',ok);}
-async function post(path, body){
-  const r = await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  if(!r.ok) throw new Error('HTTP '+r.status);
-  return r.json();
-}
 
 // ── текст: упоминания подсвечиваем, ссылки делаем кликабельными ──
 function buildMentionRe(list){

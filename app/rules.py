@@ -148,8 +148,10 @@ PREF_DEFAULTS = {
            "openrouter": False, "openrouter_consent": ""},   # ассистент (ai.py); OpenRouter — внешний, по согласию
     # служебное — не настройки, в выгрузку и в версию настроек не входит:
     "backup_last": "", "report_last": "", "services_win_last": "", "quiet_state": "", "agenda_last": "",
+    "report_try": "",           # когда последний раз пытались отправить недельный отчёт (report.py)
 }
-STATE_PREFS = ("backup_last", "report_last", "services_win_last", "quiet_state", "agenda_last")
+STATE_PREFS = ("backup_last", "report_last", "services_win_last", "quiet_state", "agenda_last",
+               "report_try")
 # от этих настроек зависит вид доски — по их хэшу (X-Prefs-Ver) виджет перечитывает её
 DISPLAY_PREFS = ("language", "opacity", "font_size", "compact", "theme", "group_by_chat",
                  "avatars", "col_order", "split_cols", "hidden_cols", "closed_cols", "mail_channel", "mentions",
@@ -268,6 +270,12 @@ class Rules:
                     self._re[r["id"]] = re.compile(r["text"], re.I)
                 except re.error:
                     self._re[r["id"]] = None      # битое выражение просто не срабатывает
+        # Номера строк по действию: matching() смотрит только нужные, а не перебирает все.
+        # Порядок строк сохранён (matching склеивает списки по возрастанию номера) - от него
+        # зависит, какое из двух равновесных правил выигрывает в max().
+        self._by_action = {}
+        for i, r in enumerate(self.rows):
+            self._by_action.setdefault(r["action"], []).append(i)
 
     def _hit(self, r, src, chat, sender, text):
         """text/sender = None — «неизвестно» (строка чата в настройках): правила с
@@ -293,8 +301,8 @@ class Rules:
                 + (2 if r["chat"] else 0) + (1 if r["src"] != "*" else 0))
 
     def matching(self, actions, src, chat, sender, text):
-        return [r for r in self.rows
-                if r["action"] in actions and self._hit(r, src, chat, sender, text)]
+        idx = sorted(i for a in actions for i in self._by_action.get(a, ()))
+        return [self.rows[i] for i in idx if self._hit(self.rows[i], src, chat, sender, text)]
 
     def vis_rule(self, src, chat, sender, text):
         rs = self.matching(VIS_ACTIONS, src, chat, sender, text)
@@ -388,7 +396,8 @@ def clean_rule(d):
         try:
             re.compile(r["text"])
         except re.error as e:
-            raise ValueError(L(f"В регулярном выражении ошибка: {e}", f"Regular expression error: {e}"))
+            raise ValueError(L(f"В регулярном выражении ошибка: {e}",
+                                 f"Regular expression error: {e}")) from e
     return r
 
 
@@ -585,7 +594,7 @@ def clean_watch(w):
     try:
         re.compile(pattern)
     except re.error as e:
-        raise ValueError(L(f"Выражение не разбирается: {e}", f"The pattern is invalid: {e}"))
+        raise ValueError(L(f"Выражение не разбирается: {e}", f"The pattern is invalid: {e}")) from e
     return {"id": wid if _RE_ID.match(wid) else secrets_id(), "name": str(w.get("name") or "").strip()[:60] or target[-60:],
             "kind": kind, "target": target, "scope": "user" if w.get("scope") == "user" else "system",
             "pattern": pattern, "icase": bool(w.get("icase", True))}
@@ -715,8 +724,9 @@ def set_prefs(conn, patch, cloud_ok=False):
                 val = _clean_pref(k, merged)
             else:
                 val = _clean_pref(k, v)
-        except (TypeError, AttributeError, KeyError):
-            raise ValueError(L(f"Неверное значение настройки «{k}»", f"Invalid value for setting “{k}”"))
+        except (TypeError, AttributeError, KeyError) as e:
+            raise ValueError(L(f"Неверное значение настройки «{k}»",
+                               f"Invalid value for setting “{k}”")) from e
         conn.execute("INSERT INTO prefs (key, value) VALUES (?, ?) "
                      "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                      (k, json.dumps(val, ensure_ascii=False)))

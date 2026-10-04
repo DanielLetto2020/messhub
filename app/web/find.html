@@ -48,6 +48,7 @@
   ::-webkit-scrollbar-thumb { background: rgba(128,128,128,.3); border-radius: 6px; }
 </style>
 <script src="/i18n.js"></script>
+<script src="/common.js"></script>
 </head>
 <body>
 <div class="box" id="box">
@@ -61,8 +62,7 @@ const PYW = QS.get('host') === 'pywebview', pywQueue = [];
 const host = (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.widget) ||
   (PYW ? {postMessage: m => { if (window.pywebview && window.pywebview.api) window.pywebview.api.post(m); else pywQueue.push(m); }} : null);
 if (PYW) { document.documentElement.classList.add('pyw'); window.addEventListener('pywebviewready', () => { while (pywQueue.length) window.pywebview.api.post(pywQueue.shift()); }); }
-function esc(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
-function escRe(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
+// esc(), escRe(), api() - в /common.js
 let rows=[], sel=-1, query='', seq=0;
 // кусок текста вокруг первого совпадения, совпадения подсвечены
 function snippet(text, q){
@@ -94,7 +94,7 @@ async function search(q){
   const my=++seq;
   if(!query){rows=[];draw(0);return;}
   try{
-    const d=await(await fetch('/api/search?limit=40&q='+encodeURIComponent(query))).json();
+    const d=await api('/api/search?limit=40&q='+encodeURIComponent(query));
     if(my!==seq) return;               // пока ждали ответ, ввели другое
     rows=d.rows||[]; draw(d.total||0);
   }catch(e){$('list').innerHTML=`<div class="empty">${esc(t('Сервер виджета не отвечает'))}</div>`;}
@@ -114,7 +114,7 @@ $('more').onclick=()=>{try{localStorage.setItem('messhub.searchq',query);}catch(
   if(host){host.postMessage('settings:search');host.postMessage('search-close');}else window.open('/settings#search','_blank');};
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(host)host.postMessage('search-close');else window.close();}});
 (async()=>{
-  try{const p=await(await fetch('/api/prefs')).json();setLang(p._lang);translateDom();document.body.classList.toggle('light',p.theme==='light');}catch(e){}
+  try{const p=await api('/api/prefs');setLang(p._lang);translateDom();document.body.classList.toggle('light',p.theme==='light');}catch(e){}
   try{if(localStorage.getItem('privacy')==='1')document.body.classList.add('wrap-privacy');}catch(e){}
   search(QS.get('q')||'');
 })();

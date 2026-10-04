@@ -291,6 +291,7 @@
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 <script src="/i18n.js"></script>
+<script src="/common.js"></script>
 </head>
 <body>
 <div class="app">
@@ -331,25 +332,10 @@ const host = (window.webkit && window.webkit.messageHandlers && window.webkit.me
   (PYW ? {postMessage: m => { if (window.pywebview && window.pywebview.api) window.pywebview.api.post(m); else pywQueue.push(m); }} : null);
 if (PYW) window.addEventListener('pywebviewready', () => { while (pywQueue.length) window.pywebview.api.post(pywQueue.shift()); });
 
-function esc(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
-const attr = s => esc(s).replace(/"/g,'&quot;');
+// esc(), attr(), copyText(), confirmBtn(), api() - в /common.js; свой toast: здесь
+// он живёт 2600 мс, у доски - с кнопкой действия, в настройках - со своим классом.
 let toastT=0;
 function toast(msg,err){const el=$('toast');el.textContent=msg;el.className='show'+(err?' err':'');clearTimeout(toastT);toastT=setTimeout(()=>el.className='',2600);}
-async function api(path,body){
-  const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});
-  let d=null;try{d=await r.json();}catch(e){}
-  if(!r.ok)throw new Error((d&&d.error)||t('Сервер ответил {c}',{c:r.status}));
-  return d;
-}
-async function copyText(s){
-  try{await navigator.clipboard.writeText(s);return true;}
-  catch(e){const ta=document.createElement('textarea');ta.value=s;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();
-    let ok=false;try{ok=document.execCommand('copy');}catch(_){}ta.remove();return ok;}
-}
-function confirmBtn(b,ask,run){let armed=0;const orig=b.innerHTML;
-  b.onclick=async e=>{e.stopPropagation();if(!b.classList.contains('confirm')){b.classList.add('confirm');b.textContent=ask;
-    armed=setTimeout(()=>{b.classList.remove('confirm');b.innerHTML=orig;},4000);return;}
-    clearTimeout(armed);b.classList.remove('confirm');b.innerHTML=orig;await run();};}
 function openMessage(id){ if(host) host.postMessage('message:'+id); else window.open('/message?id='+id,'messhub-message','width=900,height=640'); }
 const gb=x=>(Math.round(x*10)/10).toLocaleString(LANG==='en'?'en':'ru')+' '+t('ГБ');
 const PERIOD_NAMES={'1d':'за сутки','2d':'за 2 дня','7d':'за неделю','30d':'за месяц','all':'за всё время'};

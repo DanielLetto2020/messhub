@@ -72,6 +72,7 @@ WIDGET_STATE = os.path.join(CONFIG_DIR, "widget-state.json")
 FORWARD_CFG = os.path.join(CONFIG_DIR, "telegram-forward.json")
 INGEST_CFG = os.path.join(CONFIG_DIR, "ingest.json")
 OPENROUTER_CFG = os.path.join(CONFIG_DIR, "openrouter.json")   # ключ OpenRouter (ассистент, по желанию; права 600)
+SESSION_CFG = os.path.join(CONFIG_DIR, "session.json")        # токен локального API (session.py; права 600)
 AI_IMAGES_DIR = os.path.join(DATA_DIR, "ai-images")            # картинки, приложенные к вопросам ассистенту
 AVATAR_DIR = os.path.join(CACHE_DIR, "avatars")
 

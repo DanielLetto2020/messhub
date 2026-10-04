@@ -4,7 +4,7 @@ import struct
 import zlib
 import unittest
 
-import common  # noqa: F401  — первым: временные пути
+import common  # первым: временные пути
 import avatars
 import catcher
 

@@ -1,5 +1,6 @@
 """HTTP API целиком: настоящий сервер на свободном порту, временная база."""
 import json
+import os
 import sqlite3
 import threading
 import unittest
@@ -12,7 +13,9 @@ from unittest import mock
 import common
 import catcher
 import ingest
+import paths
 import serve
+import session
 
 
 class ApiTest(unittest.TestCase):
@@ -34,10 +37,13 @@ class ApiTest(unittest.TestCase):
         cls.httpd.server_close()
 
     def req(self, path, body=None, ctype="application/json", headers=None):
+        """Запрос как из браузера: cookie сеанса, которую сервер даёт вместе со страницей
+        (см. session.py). Без неё любой POST будет 401 - это проверяет test_session_token."""
         data = json.dumps(body).encode() if body is not None else None
         h = dict(headers or {})
         if data is not None:
             h["Content-Type"] = ctype
+        h.setdefault("Cookie", f"{session.COOKIE}={session.token()}")
         r = urllib.request.Request(self.base + path, data=data, headers=h)
         try:
             with urllib.request.urlopen(r, timeout=10) as resp:
@@ -95,6 +101,45 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(self.req("/api/pin", {"ids": [mid], "pinned": True})[1]["updated"], 1)
         self.assertEqual(self.req("/api/why?id=%d" % mid)[1]["id"], mid)
 
+    def test_visible_not_stale(self):
+        """Ответ /api/visible кэшируется (его спрашивают раз в 15 с) - но он обязан
+        меняться вслед за базой: прочитали, закрепили, пришло новое, починилось."""
+        _, base, _ = self.req("/api/visible")
+        conn = sqlite3.connect(self.db)
+        mid = common.put(conn, "eXpress", "Кэш", "Свежее сообщение про кэш")["id"]
+        conn.commit()
+        conn.close()
+        _, vis, _ = self.req("/api/visible")
+        self.assertIn(mid, vis["ids"])                 # новое сообщение - доска обновилась
+        self.assertEqual(vis["max_id"], base["max_id"] + 1)
+        self.req("/api/read", {"ids": [mid]})
+        self.assertNotIn(mid, self.req("/api/visible")[1]["ids"])
+        self.req("/api/restore", {"ids": [mid]})
+        self.assertIn(mid, self.req("/api/visible")[1]["ids"])
+        self.req("/api/pin", {"ids": [mid], "pinned": True})
+        self.assertIn(mid, self.req("/api/visible")[1]["pinned"])
+        self.req("/api/pin", {"ids": [mid], "pinned": False})
+        self.assertNotIn(mid, self.req("/api/visible")[1]["pinned"])
+
+    def test_search_paging_and_src(self):
+        """Поиск отдаёт страницу и верный счётчик; источник фильтруется так же, как раньше."""
+        for kw in ({}, {"src": "express"}, {"status": "unread"}, {"src": "express", "status": "unread"}):
+            _, res, _ = self.req("/api/search?limit=1&offset=0" + "".join(
+                f"&{k}={v}" for k, v in kw.items()))
+            self.assertEqual(len(res["rows"]), 1, kw)
+            self.assertGreaterEqual(res["total"], 1, kw)
+            if "src" in kw:
+                self.assertTrue(all(r["src"] == kw["src"] for r in res["rows"]), kw)
+            if kw.get("status") == "unread":
+                self.assertTrue(all(not r["is_read"] for r in res["rows"]), kw)
+        # страницы не пересекаются и вместе дают весь результат
+        _, first, _ = self.req("/api/search?limit=1&offset=0")
+        _, second, _ = self.req("/api/search?limit=1&offset=1")
+        self.assertNotEqual(first["rows"][0]["id"], second["rows"][0]["id"])
+        # фильтр по источнику, в который ничего не переносили, - пусто (без перебора базы)
+        _, empty, _ = self.req("/api/search?src=my%3A%D0%BD%D0%B5%D1%82")
+        self.assertEqual(empty["total"], 0)
+
     def test_ingest(self):
         self.assertEqual(self.req("/api/ingest", {"source": "CI", "text": "x"})[0], 401)
         token = ingest.new_token()
@@ -114,6 +159,78 @@ class ApiTest(unittest.TestCase):
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
         self.assertEqual(self.req("/api/config/import", {"data": data, "replace": False})[1]["errors"], [])
+
+    def test_session_token_required(self):
+        """POST без токена сеанса - 401; с токеном (cookie или заголовком) - как раньше.
+        Без этого любой местный процесс и любая страница в этом браузере могли удалить базу,
+        сменить настройки и выполнить свой скрипт (см. app/session.py)."""
+        for path in ("/api/read", "/api/prefs", "/api/purge", "/api/scripts/run",
+                     "/api/backups/restore", "/api/config/import", "/api/restart"):
+            code, r, _ = self.req(path, {"ids": [], "days": 30},
+                                 headers={"Cookie": ""}, ctype="application/json")
+            self.assertEqual(code, 401, path)
+            self.assertIn("токен", r["error"], path)
+            self.assertEqual(r["token_header"], session.HEADER, path)
+        # заголовок вместо cookie - тоже принимается (так делают скрипты)
+        code, _, _ = self.req("/api/read", {"ids": []},
+                              headers={"Cookie": "", session.HEADER: session.token()})
+        self.assertEqual(code, 200)
+        # неверный токен - 401
+        self.assertEqual(self.req("/api/read", {"ids": []},
+                                  headers={"Cookie": "", session.HEADER: "wrong"})[0], 401)
+        # ключ приёма событий (/api/ingest/config) тоже под токеном
+        self.assertEqual(self.req("/api/ingest/config", headers={"Cookie": ""})[0], 401)
+        self.assertIn("token", self.req("/api/ingest/config")[1])
+        # чтение остаётся открытым: доска и страницы работают без токена
+        self.assertEqual(self.req("/api/messages", headers={"Cookie": ""})[0], 200)
+        # и приём событий по своему ключу - тоже (у него своя проверка)
+        self.assertEqual(self.req("/api/ingest", {"source": "X", "text": "y"},
+                                  headers={"Cookie": ""})[0], 401)     # без ключа ingest
+
+    def test_session_token_survives_and_rotates(self):
+        """Токен переживает перезапуск (лежит в файле) и меняется по требованию."""
+        first = session.token()
+        self.assertTrue(first)
+        self.assertEqual(session.token(), first)            # из файла, не новый
+        self.assertTrue(session.ok({"X-Messhub-Token": first}))
+        self.assertTrue(session.ok({"Cookie": f"other=1; {session.COOKIE}={first}"}))
+        self.assertFalse(session.ok({"Cookie": f"{session.COOKIE}=nope"}))
+        second = session.rotate()
+        self.assertNotEqual(second, first)
+        self.assertFalse(session.ok({"X-Messhub-Token": first}))
+        self.assertTrue(session.ok({"X-Messhub-Token": second}))
+        # файл токена - с правами 600 (он секрет)
+        self.assertEqual(os.stat(paths.SESSION_CFG).st_mode & 0o777, 0o600, paths.SESSION_CFG)
+        # вернуть как было, чтобы следующие тесты не зависели от порядка
+        paths.write_private(paths.SESSION_CFG, json.dumps({"token": first}))
+
+    def test_pages_set_session_cookie(self):
+        """Страница приходит с cookie сеанса: браузер подставит токен сам, человеку ничего
+        делать не надо. Cookie - SameSite=Strict, чтобы не ушла по ссылке с чужого сайта."""
+        with urllib.request.urlopen(self.base + "/widget", timeout=10) as r:
+            raw = r.headers.get("Set-Cookie", "")
+        self.assertIn(f"{session.COOKIE}=", raw)
+        self.assertIn("SameSite=Strict", raw)
+        self.assertIn("Path=/", raw)
+
+    def test_routes_are_in_the_table_and_documented(self):
+        """Все пути API живут в GET_ROUTES/POST_ROUTES, и каждый упомянут в докстринге
+        serve.py. Раньше они были цепочкой if/elif, и такой проверки не было: путь можно
+        было потерять незаметно. Неизвестный путь - 404, а не 500."""
+        # в докстринге пути сгруппированы («/api/backups(/make|/restore)»), поэтому ищем
+        # и полный путь, и его хвост после последнего «/» - иначе проверка ругалась бы на
+        # каждый сгруппированный путь и её бы отключили
+        def documented(path):
+            return path in serve.__doc__ or path.rsplit("/", 1)[-1] in serve.__doc__
+        for path in sorted(set(serve.GET_ROUTES) | set(serve.POST_ROUTES)):
+            self.assertTrue(path.startswith("/api/"), path)
+            self.assertTrue(documented(path), f"{path} не описан в докстринге serve.py")
+        self.assertEqual(self.req("/api/no-such-route")[0], 404)
+        self.assertEqual(self.req("/api/no-such-route", {"x": 1})[0], 404)
+        # каждый обработчик - функция
+        for table in (serve.GET_ROUTES, serve.POST_ROUTES):
+            for path, fn in table.items():
+                self.assertTrue(callable(fn), path)
 
     def test_forward_is_not_configured(self):
         with mock.patch("actions.send", side_effect=AssertionError("в Telegram из тестов не ходим")):

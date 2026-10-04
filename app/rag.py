@@ -119,7 +119,7 @@ def install(db_path, model, chat_model=""):
             finally:
                 conn.close()
             state["progress"] = L("готово — считаю векторы сообщений", "done — indexing messages")
-        except Exception as e:  # сеть, Ollama не запущена, нет такой модели
+        except Exception as e:  # noqa: BLE001 — сеть, Ollama не запущена, нет такой модели
             state["error"] = str(e)
         finally:
             state["installing"] = False
@@ -184,7 +184,7 @@ def human_error(e):
     if isinstance(e, urllib.error.HTTPError):
         try:
             body = json.loads(e.read() or b"{}").get("error", "")
-        except Exception:             # тела может не быть вовсе (разные версии Python)
+        except Exception:             # noqa: BLE001 — тела может не быть вовсе (разные версии Python)
             body = ""
         if e.code == 404 or "not found" in str(body):
             return L("модели векторов нет в Ollama — нажми «Установить и включить»",

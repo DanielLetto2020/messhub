@@ -39,6 +39,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Проверки кода (ruff; программа при этом остаётся на голой стандартной библиотеке)
+        run: |
+          python -m pip install --quiet "ruff==0.9.10"
+          python -m ruff check .
       - name: Переводы - у всех строк интерфейса есть английский
         run: python tools/i18n_check.py
       - name: Можно ли публиковать - нет баз, секретов, личных путей

@@ -269,6 +269,17 @@ const EN = {
   'Автозапуск выключен': 'Autostart disabled', 'Перезапустить': 'Restart', 'Версия': 'Version', 'Папки': 'Folders',
   'код': 'code', 'данные': 'data', 'настройки': 'settings', 'кэш': 'cache', 'база': 'database',
 
+  'Токен для своих скриптов': 'Token for your own scripts',
+  'Локальный сервер принимает только те запросы, что меняют состояние, с этим токеном: чужая страница в браузере или другая программа на этом компьютере иначе удалила бы сообщения или выполнила скрипт. Страницы программы получают токен сами, его вводить не нужно.':
+    'The local server only accepts state-changing requests with this token: otherwise a foreign page in the browser or another program on this computer could delete messages or run a script. The program’s own pages get the token by themselves — there is nothing to enter.',
+  'токен лежит в файле': 'the token is in the file', '(права 600)': '(mode 600)',
+  'в запросе передаётся заголовком': 'it is sent as a header',
+  'После смены токена открытые страницы надо перезагрузить.': 'After changing the token, open pages must be reloaded.',
+  'Сменить токен': 'Change token',
+  'Сменить токен? Скрипты с прежним токеном перестанут работать, открытые страницы надо перезагрузить.':
+    'Change the token? Scripts with the old token will stop working, and open pages must be reloaded.',
+  'Токен сменён': 'Token changed',
+
   'Виджет перезапускается…': 'Widget is restarting…',
   'messhub на GitHub': 'messhub on GitHub', 'автор': 'author', 'Проверять новые версии': 'Check for new versions',
   'Раз в 12 часов программа спрашивает у GitHub номер последнего выпуска. Ничего о тебе и твоих сообщениях при этом не отправляется. Выключишь — запросов не будет.':

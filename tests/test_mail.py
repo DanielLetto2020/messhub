@@ -150,7 +150,8 @@ class MailTest(unittest.TestCase):
         a = mail.save_account(self.conn, self.acc)
         mail.check(self.db, a)
         self.conn.commit()
-        n = lambda: self.conn.execute("SELECT COUNT(*) FROM mail_state").fetchone()[0]
+        def n():
+            return self.conn.execute("SELECT COUNT(*) FROM mail_state").fetchone()[0]
         self.assertEqual(n(), 1)
         mail.save_account(self.conn, dict(self.acc, id=a["id"], label="Другое имя"))
         self.assertEqual(n(), 1)                                  # имя — не повод

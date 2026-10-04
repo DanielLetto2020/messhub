@@ -65,11 +65,12 @@ gi.require_version("GdkX11", "3.0")
 from gi.repository import Gtk, Gdk, GdkX11, Gio, WebKit2, GLib  # noqa: E402
 try:
     gi.require_version("Wnck", "3.0")
-    from gi.repository import Wnck  # noqa: E402  — окна других приложений (X11)
+    from gi.repository import Wnck  # окна других приложений (X11)
 except (ValueError, ImportError):
     Wnck = None
 
 import applog  # noqa: E402
+import pagecmd  # noqa: E402
 import paths  # noqa: E402
 import screen  # noqa: E402
 import version  # noqa: E402
@@ -312,7 +313,7 @@ class Strip:
     def _on_msg(self, _ucm, res):
         try:
             cmd = res.get_js_value().to_string()
-        except Exception:
+        except Exception:  # noqa: BLE001
             return
         b = self.board
         if cmd.startswith("strip-shape:"):
@@ -413,7 +414,7 @@ class Widget(Gtk.Window):
             mon = disp.get_monitor_at_point(x, y)
             if mon is not None:
                 return mon
-        except Exception:
+        except Exception:  # noqa: BLE001
             pass
         return disp.get_primary_monitor() or disp.get_monitor(0)
 
@@ -461,64 +462,54 @@ class Widget(Gtk.Window):
     def _on_page_msg(self, _ucm, res):
         try:
             cmd = res.get_js_value().to_string()
-        except Exception:
+        except Exception:  # noqa: BLE001
             return
-        if cmd in ("lock:1", "lock:0"):
-            self._set_locked(cmd == "lock:1")
+        # Разбор команд - общий с окном на Windows и Mac (pagecmd.py); там же он проверяется
+        # тестом, здесь - только то, что умеет GTK.
+        verb, arg = pagecmd.parse(cmd)
+        if verb == "lock":
+            self._set_locked(arg == "1")
             return
-        if cmd == "settings" or cmd.startswith("settings:"):
-            self._open_settings(cmd.partition(":")[2])
+        if verb == "settings":
+            self._open_settings(arg)
             return
-        if cmd.startswith("strip:"):         # страница: включена ли лента важного (prefs.strip)
-            try:
-                on = bool(json.loads(cmd[6:]).get("on"))
-            except (ValueError, AttributeError):
-                return
+        if verb == "strip":                 # страница: включена ли лента важного (prefs.strip)
+            on = bool(arg.get("on"))
             if on and self.strip is None:
                 self.strip = Strip(self)
             elif not on and self.strip is not None:
                 self.strip.destroy()
                 self.strip = None
             return
-        if cmd.startswith("share:"):         # страница: следить ли за показом экрана и по каким признакам
-            try:
-                cfg = json.loads(cmd[6:])
-            except ValueError:
-                return
-            self.share.update(on=bool(cfg.get("on")), patterns=[str(x) for x in cfg.get("patterns") or []])
+        if verb == "share":                 # страница: следить ли за показом экрана и по каким признакам
+            self.share.update(on=bool(arg.get("on")), patterns=[str(x) for x in arg.get("patterns") or []])
             if self.share["on"] and not self.share["id"]:
                 self.share["id"] = GLib.timeout_add_seconds(3, self._check_share)
             return
-        if cmd.startswith("search:"):
-            try:
-                self._search(json.loads(cmd[7:]))
-            except ValueError:
-                pass
+        if verb == "search":
+            self._search(arg)
             return
-        if cmd.startswith("search-nav:") and self.find_win is not None:
+        if verb == "search-nav" and self.find_win is not None:
             self.find_win.get_child().evaluate_javascript(
-                f"window.hostNav && hostNav({json.dumps(cmd[11:])})", -1, None, None, None, None)
+                f"window.hostNav && hostNav({json.dumps(arg)})", -1, None, None, None, None)
             return
-        if cmd == "search-close":
+        if verb == "search-close":
             self._search_close()
             return
         if self._page_cmd(cmd):
             return
-        if cmd.startswith("open:"):
-            try:
-                req = json.loads(cmd[5:])
-                self._open_source(str(req.get("app") or ""), str(req.get("site") or ""))
-            except ValueError:
-                pass
+        if verb == "open":
+            self._open_source(str(arg.get("app") or ""), str(arg.get("site") or ""))
             return
         if self.locked:
             return        # закреплено — ни двигать, ни тянуть
         # кнопка ещё зажата — отдаём перетаскивание оконному менеджеру с места курсора
-        _scr, x, y = Gdk.Display.get_default().get_default_seat().get_pointer().get_position()
-        if cmd == "move":
-            self.begin_move_drag(1, x, y, Gdk.CURRENT_TIME)
-        elif cmd.startswith("resize:") and cmd[7:] in EDGES:
-            self.begin_resize_drag(EDGES[cmd[7:]], 1, x, y, Gdk.CURRENT_TIME)
+        if verb in ("move", "resize"):
+            _scr, x, y = Gdk.Display.get_default().get_default_seat().get_pointer().get_position()
+            if verb == "move":
+                self.begin_move_drag(1, x, y, Gdk.CURRENT_TIME)
+            else:
+                self.begin_resize_drag(EDGES[arg], 1, x, y, Gdk.CURRENT_TIME)
 
     def _on_configure(self, *_):
         if not self.placed:
@@ -706,7 +697,7 @@ class Widget(Gtk.Window):
             def on_msg(_ucm, res):
                 try:
                     c = res.get_js_value().to_string()
-                except Exception:
+                except Exception:  # noqa: BLE001
                     return
                 self._page_cmd(c, web=web, win=win)
             ucm.connect("script-message-received::widget", on_msg)
@@ -792,7 +783,7 @@ class Widget(Gtk.Window):
         def on_msg(_ucm, res):
             try:
                 cmd = res.get_js_value().to_string()
-            except Exception:
+            except Exception:  # noqa: BLE001
                 return
             self._page_cmd(cmd, web=web, win=win)
         ucm.connect("script-message-received::widget", on_msg)

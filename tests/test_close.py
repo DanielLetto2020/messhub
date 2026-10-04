@@ -1,11 +1,8 @@
 """Закрыть колонку: сообщения прочитаны, колонка возвращается с новым сообщением;
 с закреплённым или отложенным — закрыть нельзя (409)."""
-import json
 import sqlite3
 import threading
 import unittest
-import urllib.error
-import urllib.request
 from http.server import ThreadingHTTPServer
 
 import common
@@ -23,6 +20,7 @@ class CloseColumnTest(unittest.TestCase):
         self.conn.commit()
         self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), serve.make_handler(self.db))
         self.base = f"http://127.0.0.1:{self.httpd.server_address[1]}"
+        self.api = common.Api(self.base)
         threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
 
     def tearDown(self):
@@ -30,14 +28,9 @@ class CloseColumnTest(unittest.TestCase):
         self.httpd.server_close()
         self.conn.close()
 
-    def req(self, path, body=None):
-        data = json.dumps(body).encode() if body is not None else None
-        r = urllib.request.Request(self.base + path, data=data, headers={"Content-Type": "application/json"})
-        try:
-            with urllib.request.urlopen(r, timeout=10) as resp:
-                return resp.status, json.load(resp)
-        except urllib.error.HTTPError as e:
-            return e.code, json.loads(e.read())
+    def req(self, path, body=None, headers=None):
+        code, data, _ = self.api.req(path, body, headers)
+        return code, data
 
     def closed(self):
         return {s["key"] for s in self.req("/api/sources?rules=1")[1] if s["closed"]}

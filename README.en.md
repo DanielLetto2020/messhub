@@ -265,9 +265,15 @@ over the network, with a key.
 
 ![Event intake](docs/screens/en/settings-ingest.png)
 
-**System** - the app checks itself and tells you what to fix. Autostart at login is here too.
+**System** - the app checks itself and tells you what to fix. Autostart at login is here too, as
+well as the token for your own scripts: the server only accepts state-changing requests that
+carry this token - otherwise any page in your browser could delete messages or run a script.
+Your own scripts and `curl` have to send it as an `X-Messhub-Token` header; the value lives in
+`~/.config/messhub/session.json`.
 
 ![System](docs/screens/en/settings-system.png)
+
+![Token for your own scripts](docs/screens/en/settings-token.png)
 
 **Logs** - the app's own log: start-up, errors, background jobs. Filter by level, search, clear and
 export to a file; the export replaces your home folder with "~", so you can attach it to a bug
