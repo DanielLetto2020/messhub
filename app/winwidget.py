@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Окно доски на Windows 10/11 и macOS — то же, что widget.py на Linux, но на pywebview (движок WebView2
-на Windows, WKWebView на Mac).
+Окно доски на Windows 10/11 — то же, что widget.py на Linux, но на pywebview (движок WebView2).
 
 Страница та же (/widget?host=pywebview) и говорит с окном теми же сообщениями через
 window.pywebview.api.post(…):
@@ -11,24 +10,19 @@ window.pywebview.api.post(…):
   lock:1 / lock:0 — замок: не двигать, не менять размер, держать под остальными окнами;
   settings / settings:<раздел> — окно настроек;  message:<id> — окно одного сообщения (/message?id=N);
   assistant — окно ассистента (/assistant);
-  open:{"app","site"} — сайт открыть в браузере, приложение — по его AUMID (shell:AppsFolder), на Mac —
-      по bundle id (open -b);
+  open:{"app","site"} — сайт открыть в браузере, приложение — по его AUMID (shell:AppsFolder);
   strip:{"on"} — лента важного (prefs.strip): закреплённое и подсвеченное строкой над доской, в своём окне
-      (/widget?strip=1). Прозрачного по пикселям окна тут нет, поэтому окно ленты — по высоте содержимого:
+      (/widget?strip=1). Прозрачного по пикселям окна тут нет, поэтому окно ленты — по высоте содержимому:
       страница шлёт strip-shape:{"rects", "need"}, окно встаёт вплотную над доской (или под ней), пустое — прячется.
 
 Прозрачность (настройка «Непрозрачность»): по-настоящему прозрачное окно с WebView2 на Windows рисуется
-серым, а на Mac не показывается вовсе (проверено в CI), поэтому подложка сплошная (класс pyw на странице),
-а полупрозрачным становится окно целиком: на Windows — слой с альфой (WS_EX_LAYERED), на Mac —
-NSWindow.alphaValue. Страница шлёт opacity:<0.3…1>. Место, размер и замок хранятся в том же
+серым, поэтому подложка сплошная (класс pyw на странице), а полупрозрачным становится окно целиком:
+слой с альфой (WS_EX_LAYERED). Страница шлёт opacity:<0.3…1>. Место, размер и замок хранятся в том же
 widget-state.json, что и на Linux (%APPDATA%\\\\messhub).
 """
 
 import json
 import os
-import re
-import subprocess
-import sys
 import threading
 import time
 import webbrowser
@@ -39,7 +33,6 @@ import screen
 import version
 
 WINDOWS = os.name == "nt"
-MAC = sys.platform == "darwin"
 
 MIN_W, MIN_H = 360, 160
 STRIP_GAP, STRIP_MAX = 6, 620              # лента важного: зазор до доски и предельная высота окна
@@ -164,10 +157,6 @@ class Api:
         Linux: 0.3 → 55 %, 0.72 → 82 %, 1 → непрозрачное. win — другое окно (лента важного)."""
         alpha = 0.35 + 0.65 * max(0.3, min(1.0, opacity))
         win = win or self._win
-        if MAC and win and win.native is not None:
-            from PyObjCTools import AppHelper           # AppKit — только из главного потока
-            AppHelper.callAfter(win.native.setAlphaValue_, alpha)
-            return
         if not WINDOWS:
             return
         h = self._hwnd(win)
@@ -181,7 +170,7 @@ class Api:
         u.SetLayeredWindowAttributes(h, 0, int(round(255 * alpha)), LWA_ALPHA)
 
     def _keep_below(self):
-        if WINDOWS and self._state.get("locked"):       # на Mac замок только не даёт двигать и тянуть
+        if WINDOWS and self._state.get("locked"):
             import ctypes
             for win in (self._win, self._strip):         # и лента важного — под окнами вместе с доской
                 h = self._hwnd(win) if win else None
@@ -247,13 +236,6 @@ class Api:
         site, app = d.get("site") or "", d.get("app") or ""
         if site:
             webbrowser.open("https://" + site)
-            return
-        if MAC:                                       # app у уведомлений Mac — bundle id (ru.keepcoder.Telegram)
-            if re.match(r"^[\w.-]+$", app) and "." in app:
-                r = subprocess.run(["open", "-b", app], capture_output=True, text=True, timeout=10)
-                if r.returncode == 0:
-                    return
-            self._toast("Не нашёл окно «{app}» — приложение закрыто?", {"app": app})
             return
         import wincatcher
         aumid = wincatcher.aumid_for(app)
@@ -499,8 +481,5 @@ def run(base_url, state_path=paths.WIDGET_STATE, only="", open_settings=False):
         api._open_settings("")
     storage = os.path.join(paths.CACHE_DIR, "webview")         # localStorage страницы (фокус, размытие)
     os.makedirs(storage, exist_ok=True)
-    if MAC:                                            # WKWebView; значок — у самого messhub.app
-        webview.start(private_mode=False, storage_path=storage)
-    else:
-        webview.start(gui="edgechromium", private_mode=False, storage_path=storage,
-                      icon=os.path.join(paths.HERE, "icons", "messhub.ico"))
+    webview.start(gui="edgechromium", private_mode=False, storage_path=storage,
+                  icon=os.path.join(paths.HERE, "icons", "messhub.ico"))

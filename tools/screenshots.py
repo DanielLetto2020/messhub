@@ -55,6 +55,7 @@ def plan(lang):
         ("widget-focus", "/widget", W, [DARK_DESK, "document.getElementById('focusBtn').click();'ok'", 500]),
         ("widget-privacy", "/widget", W, [DARK_DESK, "document.getElementById('eye').click();'ok'", 500]),
         ("settings-sources", "/settings#sources", S, [900]),
+        ("settings-setup", "/settings#setup", S, [900]),
         ("settings-source", "/settings#source=express", (1150, 1080), [900]),
         ("settings-rule-editor", "/settings#source=express", S, [900,
             "document.getElementById('addRule').click();'ok'", 400,

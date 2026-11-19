@@ -19,7 +19,13 @@ for a in "$@"; do
   esac
 done
 PY=/usr/bin/python3; [ -x "$PY" ] || PY="$(command -v python3)"
-read -r APP_ID LEGACY DATA CONFIG CACHE < <("$PY" -c "import sys; sys.path.insert(0, '$APP'); import version, paths; print(version.APP_ID, ','.join(version.LEGACY_IDS), paths.DATA_DIR, paths.CONFIG_DIR, paths.CACHE_DIR)")
+{
+  IFS= read -r APP_ID
+  IFS= read -r LEGACY
+  IFS= read -r DATA
+  IFS= read -r CONFIG
+  IFS= read -r CACHE
+} < <("$PY" -c 'import sys; sys.path.insert(0, sys.argv[1]); import version, paths; print(version.APP_ID); print(",".join(version.LEGACY_IDS)); print(paths.DATA_DIR); print(paths.CONFIG_DIR); print(paths.CACHE_DIR)' "$APP")
 IDS="$APP_ID ${LEGACY//,/ }"     # и прежние имена — вдруг остались их сервисы
 
 UNIT_DIR="$HOME/.config/systemd/user"

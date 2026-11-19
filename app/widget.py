@@ -204,6 +204,7 @@ class XShape:
         self.x11.XOpenDisplay.restype = ctypes.c_void_p
         self.x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
         self.x11.XFlush.argtypes = [ctypes.c_void_p]
+        self.x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
         self.ext.XShapeCombineRectangles.argtypes = [
             ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_int, ctypes.c_int,
             ctypes.POINTER(_XRect), ctypes.c_int, ctypes.c_int, ctypes.c_int]
@@ -213,12 +214,19 @@ class XShape:
 
     def set_input(self, xid, rects):
         """rects — [(x, y, w, h)] в пикселях окна; пусто — окно целиком пропускает клики."""
+        if not self.dpy:
+            return
         arr = (_XRect * max(1, len(rects)))(*[_XRect(max(-32768, min(32767, x)), max(-32768, min(32767, y)),
                                                      max(0, min(65535, w)), max(0, min(65535, h)))
                                               for x, y, w, h in rects])
         self.ext.XShapeCombineRectangles(self.dpy, xid, self.SHAPE_INPUT, 0, 0, arr, len(rects),
                                          self.SHAPE_SET, self.UNSORTED)
         self.x11.XFlush(self.dpy)
+
+    def close(self):
+        if self.dpy:
+            self.x11.XCloseDisplay(self.dpy)
+            self.dpy = None
 
 
 class Strip:
@@ -271,6 +279,9 @@ class Strip:
         log("лента важного: открыта")
 
     def destroy(self):
+        if self.shape:
+            self.shape.close()
+            self.shape = None
         self.win.destroy()
         log("лента важного: закрыта")
 
@@ -464,7 +475,7 @@ class Widget(Gtk.Window):
             cmd = res.get_js_value().to_string()
         except Exception:  # noqa: BLE001
             return
-        # Разбор команд - общий с окном на Windows и Mac (pagecmd.py); там же он проверяется
+        # Разбор команд - общий с окном на Windows (pagecmd.py); там же он проверяется
         # тестом, здесь - только то, что умеет GTK.
         verb, arg = pagecmd.parse(cmd)
         if verb == "lock":
@@ -489,9 +500,11 @@ class Widget(Gtk.Window):
         if verb == "search":
             self._search(arg)
             return
-        if verb == "search-nav" and self.find_win is not None:
-            self.find_win.get_child().evaluate_javascript(
-                f"window.hostNav && hostNav({json.dumps(arg)})", -1, None, None, None, None)
+        if verb == "search-nav":
+            fw = self.find_win or self.page_wins.get("find")
+            if fw is not None:
+                fw.get_child().evaluate_javascript(
+                    f"window.hostNav && hostNav({json.dumps(arg)})", -1, None, None, None, None)
             return
         if verb == "search-close":
             self._search_close()
@@ -666,6 +679,12 @@ class Widget(Gtk.Window):
             self._search_close()
             return
         if not self.x11:                       # Wayland: окно не поставить у панели — обычное окно
+            existing = self.page_wins.get("find")
+            if existing is not None:
+                existing.get_child().evaluate_javascript(
+                    f"window.hostSearch && hostSearch({json.dumps(q)})", -1, None, None, None, None)
+                existing.present()
+                return
             self._open_page("find", "/find?q=" + urllib.parse.quote(q), 640, 480)
             return
         wx, wy = self.get_position()
@@ -718,6 +737,9 @@ class Widget(Gtk.Window):
         if self.find_win is not None:
             self.find_win.destroy()
             self.find_win = None
+        fw = self.page_wins.pop("find", None)
+        if fw is not None:
+            fw.destroy()
 
     # ── показ экрана на созвоне → доска размывается сама ──
     def _check_share(self):

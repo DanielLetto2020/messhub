@@ -80,9 +80,10 @@ def fire_due(conn):
     for rid, event_at, app, site, chat, sender, message in due:
         conn.execute("UPDATE reminders SET fired = 1 WHERE id = ?", (rid,))
         src = rules.source_of(app, site, prefs["source_names"])
+        chat, sender = chat or "", sender or ""
         head = (L(f"в {event_at[11:16]}", f"at {event_at[11:16]}") + " · ") if event_at else ""
         text = head + (message or "")[:1500]
-        who = chat + (f" · {sender}" if sender and sender != chat else "")
+        who = (chat + (f" · {sender}" if sender and sender != chat else "")) or src["name"]
         events.emit(conn, "reminders", who[:200], text, sender=src["name"], urgency=2)
         if not (quiet.active(prefs) and not prefs["quiet"]["sound"]):
             actions.play_sound()

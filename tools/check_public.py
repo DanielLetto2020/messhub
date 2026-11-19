@@ -25,8 +25,8 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-BAD_NAMES = re.compile(r"(^|/)(telegram-forward\.json|ingest\.json|mail\.json|widget-state\.json|"
-                       r"widget-[\w-]+\.json|\.public-deny|\.env(\..*)?)$"
+BAD_NAMES = re.compile(r"(^|/)(telegram-forward\.json|ingest\.json|mail\.json|session\.json|openrouter\.json|"
+                       r"widget-state\.json|widget-[\w-]+\.json|\.public-deny|\.env(\..*)?)$"
                        r"|\.(db|db-wal|db-shm|sqlite3?|log|pem|key|p12)$")
 HOME_PATH = re.compile(r"(/home/|/Users/)(?!<|\.\.\.|…|user\b|username\b|runner\b)[A-Za-z_][\w.-]*/")
 BOT_TOKEN = re.compile(r"\b\d{8,10}:[A-Za-z0-9_-]{35}\b")

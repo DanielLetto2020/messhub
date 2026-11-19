@@ -9,7 +9,6 @@
     python3 tools/build.py rpm             # messhub-<v>-1.noarch.rpm — Fedora, openSUSE (нужен rpmbuild)
     python3 tools/build.py linux           # всё три
     python3 tools/build.py windows         # на Windows: messhub.exe (PyInstaller) → zip, msi, bat
-    python3 tools/build.py mac             # на Mac: messhub.app (PyInstaller, подпись ad-hoc) → dmg, zip
     python3 tools/build.py stage --out DIR # только разложить файлы программы в DIR (для своих сборок)
 
 Пакеты .deb/.rpm ставят программу в /usr/lib/messhub, команду /usr/bin/messhub, ярлык в меню
@@ -36,7 +35,6 @@ DIST = os.path.join(ROOT, "dist")
 TAR_EXTRA = ("install.sh", "uninstall.sh", "packaging/systemd/", "LICENSE", "NOTICE", "README.md",
              "README.en.md", "CHANGELOG.md")
 WINDOWS_ONLY = ("winwidget.py", "wincatcher.py", "messhub_win.py")
-MAC_ONLY = ("maccatcher.py", "messhub_mac.py", "icons/messhub.icns")   # winwidget.py (окно pywebview) — общее с Windows
 DEB_DEPENDS = ("python3 (>= 3.9), python3-gi, gir1.2-gtk-3.0, gir1.2-webkit2-4.1, "
                "dbus-bin | dbus")
 DEB_RECOMMENDS = "gir1.2-wnck-3.0, libnotify-bin, gnome-session-canberra | pipewire-bin"
@@ -55,14 +53,12 @@ def tracked():
     return [f for f in out.split("\0") if f and os.path.isfile(os.path.join(ROOT, f))]
 
 
-def app_files(windows=False, mac=False):
-    """Файлы программы (пути внутри app/). Для Linux — без модулей Windows и macOS."""
+def app_files(windows=False):
+    """Файлы программы (пути внутри app/). Для Linux — без модулей Windows."""
     files = [f[4:] for f in tracked() if f.startswith("app/")]
     if windows:
-        return [f for f in files if f not in MAC_ONLY]
-    if mac:
-        return [f for f in files if f not in ("wincatcher.py", "messhub_win.py", "icons/messhub.ico")]
-    return [f for f in files if f not in WINDOWS_ONLY + MAC_ONLY]
+        return files
+    return [f for f in files if f not in WINDOWS_ONLY]
 
 
 def ver():
@@ -186,6 +182,10 @@ Description: {SUMMARY}
     return out
 
 
+_WDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+_MONTHS = ("", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
 def build_rpm(v):
     if not shutil.which("rpmbuild"):
         raise SystemExit("Нужен rpmbuild (пакет rpm / rpm-build)")
@@ -200,7 +200,8 @@ def build_rpm(v):
         spec = os.path.join(tmp, "messhub.spec")
         req = "\n".join(f"Requires: {r}" for r in RPM_REQUIRES)
         rec = "\n".join(f"Recommends: {r}" for r in RPM_RECOMMENDS)
-        date = time.strftime("%a %b %d %Y")
+        lt = time.localtime()
+        date = f"{_WDAYS[lt.tm_wday]} {_MONTHS[lt.tm_mon]} {lt.tm_mday:02d} {lt.tm_year}"
         write(spec, f"""Name: messhub
 Version: {v}
 Release: 1
@@ -241,23 +242,18 @@ exit 0
 
 def main():
     ap = argparse.ArgumentParser(description="Сборка пакетов messhub")
-    ap.add_argument("what", choices=("tar", "deb", "rpm", "linux", "windows", "mac", "stage"))
+    ap.add_argument("what", choices=("tar", "deb", "rpm", "linux", "windows", "stage"))
     ap.add_argument("--out", help="для stage: куда разложить")
     a = ap.parse_args()
     v = ver()
     os.makedirs(DIST, exist_ok=True)
     if a.what == "stage":
-        stage(a.out, app_files(windows=sys.platform == "win32", mac=sys.platform == "darwin"), v)
+        stage(a.out, app_files(windows=sys.platform == "win32"), v)
         print(a.out)
         return
     if a.what == "windows":
         import build_windows          # tools/build_windows.py — только на Windows
         for p in build_windows.build(v, app_files(windows=True), stage):
-            print(p)
-        return
-    if a.what == "mac":
-        import build_mac              # tools/build_mac.py — только на Mac
-        for p in build_mac.build(v, app_files(mac=True), stage):
             print(p)
         return
     todo = {"tar": [build_tar], "deb": [build_deb], "rpm": [build_rpm],

@@ -71,7 +71,7 @@ def _slot_end(slot, now):
 
 def evaluate(q, now=None, dnd=None):
     """(тихо ли, почему: manual|schedule|dnd|'', до скольки 'ЧЧ:ММ' или '')."""
-    now = now or datetime.now(catcher.MSK).replace(tzinfo=None)
+    now = now or datetime.now()
     mu = q.get("manual_until") or ""
     ts = now.strftime("%Y-%m-%d %H:%M:%S")
     if mu == DND_OFF:                               # выключили, пока включено «Не беспокоить»: его не слушаем,
@@ -173,7 +173,7 @@ def step(conn):
 def set_manual(conn, action):
     """Кнопка на доске: hour — тихо на час, morning — до 08:00, off — выключить до конца интервала
     (при «Не беспокоить» GNOME — пока оно не выключится)."""
-    now = datetime.now(catcher.MSK).replace(tzinfo=None)
+    now = datetime.now()
     q = rules.get_prefs(conn)["quiet"]
     if action == "hour":
         until = (now + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")

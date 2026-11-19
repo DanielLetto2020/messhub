@@ -33,7 +33,12 @@ say() { printf '%s\n' "$*"; }
 PY=/usr/bin/python3
 [ -x "$PY" ] || PY="$(command -v python3 || true)"
 [ -n "$PY" ] || { say "Нужен python3 (3.9+)."; exit 1; }
-read -r APP_ID APP_NAME VER LEGACY < <("$PY" -c "import sys; sys.path.insert(0, '$APP'); import version as v; print(v.APP_ID, v.APP_NAME, v.__version__, ','.join(v.LEGACY_IDS))")
+{
+  IFS= read -r APP_ID
+  IFS= read -r APP_NAME
+  IFS= read -r VER
+  IFS= read -r LEGACY
+} < <("$PY" -c 'import sys; sys.path.insert(0, sys.argv[1]); import version as v; print(v.APP_ID); print(v.APP_NAME); print(v.__version__); print(",".join(v.LEGACY_IDS))' "$APP")
 say "== $APP_NAME $VER — установка из $DIR"
 
 # ── зависимости ──
@@ -92,12 +97,16 @@ for old in ${LEGACY//,/ }; do
   done
 done
 if [ "$DRY" = 1 ]; then say "  [dry-run] перенести папки данных прежних имён ($LEGACY) в ~/.local/share/$APP_ID, ~/.config/$APP_ID"
-else "$PY" -c "import sys; sys.path.insert(0, '$APP'); import paths; paths.migrate_old_app_dirs()"; fi
+else "$PY" -c 'import sys; sys.path.insert(0, sys.argv[1]); import paths; paths.migrate_old_app_dirs()' "$APP"; fi
 
 # ── юниты systemd --user ──
 run mkdir -p "$UNIT_DIR"
 render() {   # шаблон → юнит с путями этой установки
-  sed -e "s|@DIR@|$APP|g" -e "s|@PYTHON@|$PY|g" -e "s|@APP_ID@|$APP_ID|g" -e "s|@APP_NAME@|$APP_NAME|g" "$1"
+  "$PY" -c 'import sys
+s = open(sys.argv[1], encoding="utf-8").read()
+for k, v in (("@DIR@", sys.argv[2]), ("@PYTHON@", sys.argv[3]), ("@APP_ID@", sys.argv[4]), ("@APP_NAME@", sys.argv[5])):
+    s = s.replace(k, v)
+sys.stdout.write(s)' "$1" "$APP" "$PY" "$APP_ID" "$APP_NAME"
 }
 units=("$APP_ID.service")
 [ "$WIDGET" = 1 ] && units+=("$APP_ID-widget.service")

@@ -8,7 +8,6 @@ from datetime import datetime, timedelta
 from unittest import mock
 
 import common  # первым: пути программы вычисляются при импорте paths
-import catcher
 import report
 import rules
 
@@ -80,7 +79,7 @@ class MaybeSendTest(unittest.TestCase):
 
     def _when(self, offset_minutes=0):
         """Понедельник 09:30 этой недели - отчёт включён именно на понедельник и на 09:00."""
-        base = datetime.now(catcher.MSK).replace(tzinfo=None)
+        base = datetime.now().replace(tzinfo=None)
         midnight = base.replace(hour=0, minute=0, second=0, microsecond=0)
         monday = midnight - timedelta(days=base.weekday()) + timedelta(hours=9, minutes=30)
         return monday + timedelta(minutes=offset_minutes)
@@ -91,7 +90,7 @@ class MaybeSendTest(unittest.TestCase):
         side = result if isinstance(result, BaseException) else None
         ret = None if side else result
         fake_dt = mock.Mock(wraps=datetime)
-        fake_dt.now.return_value = when.replace(tzinfo=catcher.MSK)
+        fake_dt.now.return_value = when
         fake_dt.strptime = datetime.strptime
         with mock.patch.object(report, "build", return_value="отчёт"), \
              mock.patch("actions.send", side_effect=side, return_value=ret), \

@@ -28,8 +28,11 @@ widget-state.json
 widget-*.json
 ingest.json
 mail.json
+session.json
+openrouter.json
 messages-backup*.db
 # номер версии, который вписывает сборка пакетов (tools/build.py); в git не храним — он из числа коммитов
 /VERSION
-# собранные пакеты (tools/build.py)
+# собранные пакеты и кэш проверок
 dist/
+.ruff_cache/

@@ -195,8 +195,8 @@ def parse_message_block(header, body_lines):
 
 # ── разбор по типу приложения: браузер (сайт в теле), почта (От/Тема), остальное ──
 BROWSER_MARKS = ("yandex", "chrome", "chromium", "firefox", "brave", "opera", "vivaldi", "edge")
-MAIL_MARKS = ("thunderbird", "geary", "evolution", "outlook", "com.apple.mail")
-CALENDAR_MARKS = ("alarm-notify", "reminder", "calendar", "com.apple.ical")   # evolution-alarm-notify — календарь
+MAIL_MARKS = ("thunderbird", "geary", "evolution", "outlook")
+CALENDAR_MARKS = ("alarm-notify", "reminder", "calendar")   # evolution-alarm-notify — календарь
 # домен — и кириллический (сайт.москва, пример.рф) и в punycode (xn--p1ai)
 _RE_DOMAIN = re.compile(r"^(?:https?://)?((?:[^\W_][\w-]*\.)+(?:[^\W\d_]{2,}|xn--[a-z0-9-]+))(?::\d+)?/?$", re.I)
 _RE_MAIL_FROM = re.compile(r"^(?:From|От|Отправитель)\s*:\s*(.+)$", re.I | re.M)
@@ -600,6 +600,13 @@ def run(db_path, verbose, from_file, on_insert=None, skip=None):
                 proc.wait(timeout=3)
             except Exception:  # noqa: BLE001
                 proc.kill()
+                try:
+                    proc.wait(timeout=3)
+                except Exception:  # noqa: BLE001
+                    pass
+            finally:
+                if proc.stdout:
+                    proc.stdout.close()
             if not stopping["v"]:
                 if time.time() - started > 60:
                     pause = 5                        # проработал долго — снова быстро; падает сразу — всё реже

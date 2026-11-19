@@ -4,8 +4,7 @@
 Ассистент: беседа с моделью на этом компьютере по базе сообщений (окно /assistant).
 
 Модель — локальная: Ollama (http://127.0.0.1:11434) или LM Studio (OpenAI-совместимый сервер,
-http://127.0.0.1:1234); адрес в домашней сети — если это явно разрешить; другие адреса не
-принимаются (rules.ai_url_ok). Единственное исключение — OpenRouter (облако, сотни моделей):
+http://127.0.0.1:1234); другие адреса не принимаются (rules.ai_url_ok). Единственное исключение — OpenRouter (облако, сотни моделей):
 только если пользователь сам включил его, дал свой ключ и согласился, что выборка сообщений и
 вопрос уйдут на серверы OpenRouter и провайдера модели; такие беседы помечены жёлтым.
 
@@ -38,7 +37,6 @@ import re
 import shutil
 import sqlite3
 import subprocess
-import sys
 import threading
 import time
 import urllib.error
@@ -94,21 +92,21 @@ _pull_lock = threading.Lock()
 
 # ── HTTP к модели ───────────────────────────────────────────────────────────
 
-def _check(url, allow_lan=False):
-    if not rules.ai_url_ok(url, allow_lan):
+def _check(url):
+    if not rules.ai_url_ok(url):
         raise ValueError(L("Адрес модели — только на этом компьютере", "The model address must be on this computer"))
 
 
-def _req(base, path, body=None, timeout=10, method=None, allow_lan=False):
-    _check(base, allow_lan)
+def _req(base, path, body=None, timeout=10, method=None):
+    _check(base)
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(base.rstrip("/") + path, data=data, method=method or ("POST" if data else "GET"),
                                  headers={"Content-Type": "application/json"})
     return urllib.request.urlopen(req, timeout=timeout)
 
 
-def _json(base, path, body=None, timeout=10, method=None, allow_lan=False):
-    with _req(base, path, body, timeout, method, allow_lan) as r:
+def _json(base, path, body=None, timeout=10, method=None):
+    with _req(base, path, body, timeout, method) as r:
         raw = r.read()
     return json.loads(raw) if raw else {}
 
@@ -129,10 +127,6 @@ def hardware():
         if WINDOWS:
             import resources
             ram = resources.memory()[2] / 1024 ** 3
-        elif sys.platform == "darwin":
-            ram = int(subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True,
-                                     timeout=5).stdout.strip()) / 1024 ** 3
-            vram = vram or ram * 0.66          # Apple Silicon: общая память, видеоядро берёт до ~2/3
         else:
             with open("/proc/meminfo", encoding="utf-8") as f:
                 ram = int(f.readline().split()[1]) / 1024 ** 2
@@ -395,7 +389,7 @@ def model_info(conn, provider, model):
         return {"ctx": 40960, "params": "8.2B", "thinking": True}
     try:
         if provider == "ollama":
-            d = _json(ai["ollama_url"], "/api/show", {"model": model}, timeout=10, allow_lan=ai["allow_lan"])
+            d = _json(ai["ollama_url"], "/api/show", {"model": model}, timeout=10)
             mi = d.get("model_info") or {}
             ctx = next((v for k, v in mi.items() if k.endswith(".context_length")), 0)
             caps = d.get("capabilities") or []
@@ -430,7 +424,7 @@ def thinks(ai_prefs, provider, model):
     if key not in _caps:
         if provider == "ollama":
             try:
-                d = _json(ai_prefs["ollama_url"], "/api/show", {"model": model}, timeout=10, allow_lan=ai_prefs["allow_lan"])
+                d = _json(ai_prefs["ollama_url"], "/api/show", {"model": model}, timeout=10)
                 _caps[key] = "thinking" in (d.get("capabilities") or [])
             except (OSError, ValueError, urllib.error.URLError):
                 return _guess_thinking(model)
@@ -446,7 +440,7 @@ def start_pull(conn, model):
     if not re.match(r"^[\w.\-/:@]{2,200}$", model):
         raise ValueError(L("Имя модели — как в каталоге Ollama, например qwen3:8b", "Model name as in the Ollama library, e.g. qwen3:8b"))
     ai = rules.get_prefs(conn)["ai"]
-    _check(ai["ollama_url"], ai["allow_lan"])
+    _check(ai["ollama_url"])
     with _pull_lock:
         if not pull["done"]:
             raise ValueError(L(f"Уже скачивается {pull['model']}", f"{pull['model']} is already downloading"))
@@ -456,8 +450,7 @@ def start_pull(conn, model):
     def work():
         i18n.set_lang(lang)
         try:
-            with _req(ai["ollama_url"], "/api/pull", {"model": model, "stream": True}, timeout=600,
-                      allow_lan=ai["allow_lan"]) as r:
+            with _req(ai["ollama_url"], "/api/pull", {"model": model, "stream": True}, timeout=600) as r:
                 for line in r:
                     if pull["cancel"]:
                         pull.update(status=L("отменено", "cancelled"))
@@ -489,7 +482,7 @@ def cancel_pull():
 
 def delete_model(conn, model):
     ai = rules.get_prefs(conn)["ai"]
-    with _req(ai["ollama_url"], "/api/delete", {"model": model}, timeout=30, method="DELETE", allow_lan=ai["allow_lan"]):
+    with _req(ai["ollama_url"], "/api/delete", {"model": model}, timeout=30, method="DELETE"):
         pass
     return {"ok": True}
 
@@ -665,6 +658,7 @@ def build_context(conn, st, question, thinking=False, budget=None):
     сообщениям достаётся меньше)."""
     prefs = rules.get_prefs(conn)
     names = prefs["source_names"]
+    rs = rules.load(conn, prefs)
     frm, to = question_period(question, st["period"])
     where, params = [], []
     if frm:
@@ -680,7 +674,8 @@ def build_context(conn, st, question, thinking=False, budget=None):
     ql = question.casefold()
     items = []
     for mid, app, site, chat, sender, message, iso, details, resolved in rows:
-        s = rules.source_of(app, site, names)
+        orig = rules.source_of(app, site, names)
+        s = rules.place(rs, orig, chat or "", sender or "", message or "", names)
         if srcs and s["key"] not in srcs:
             continue
         items.append({"id": mid, "src": s["key"], "src_name": s["name"], "chat": chat or "", "sender": sender or "",
@@ -1034,7 +1029,7 @@ def _stream(ai, st, messages):
                     "Размышлять дальше некогда — отвечаю сразу по сообщениям.",
                     "No more time to think — answering right away from the messages.")}]
                 yield {"t": head}
-        with _req(ai["ollama_url"], "/api/chat", body, timeout=900, allow_lan=ai["allow_lan"]) as r:
+        with _req(ai["ollama_url"], "/api/chat", body, timeout=900) as r:
             for line in r:
                 try:
                     ev = json.loads(line)
@@ -1082,7 +1077,7 @@ def _stream(ai, st, messages):
             messages = [dict(messages[0], content=messages[0]["content"] + "\n/no_think"), *messages[1:]]
         body = {"model": st["model"], "messages": messages, "stream": True, "temperature": st["temperature"],
                 "max_tokens": budget, "usage": {"include": True}}
-        with _req(ai["lmstudio_url"], "/v1/chat/completions", body, timeout=900, allow_lan=ai["allow_lan"]) as r:
+        with _req(ai["lmstudio_url"], "/v1/chat/completions", body, timeout=900) as r:
             for raw in r:
                 line = raw.decode("utf-8", "replace").strip()
                 if not line.startswith("data:"):

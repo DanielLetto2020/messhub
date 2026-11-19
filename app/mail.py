@@ -25,9 +25,11 @@
 по «паролю приложения» — его создают в настройках безопасности почты.
 """
 
+import base64
 import email
 import email.policy
 import email.utils
+import html
 import imaplib
 import json
 import os
@@ -204,8 +206,31 @@ def _examine(m, folder):
     return uidvalidity
 
 
+def _imap_utf7(s):
+    """Кодирование имени папки в Modified UTF-7 (RFC 3501 §5.1.3) для не-ASCII имён."""
+    out, buf = [], []
+
+    def flush():
+        if not buf:
+            return
+        b = base64.b64encode("".join(buf).encode("utf-16-be")).decode("ascii").rstrip("=").replace("/", ",")
+        out.append("&" + b + "-")
+        buf.clear()
+
+    for ch in s:
+        o = ord(ch)
+        if 0x20 <= o <= 0x7E:
+            flush()
+            out.append("&-" if ch == "&" else ch)
+        else:
+            buf.append(ch)
+    flush()
+    return "".join(out)
+
+
 def _quote(folder):
-    return '"' + folder.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    encoded = _imap_utf7(folder)
+    return '"' + encoded.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
 def _status_num(m, key):
@@ -258,8 +283,8 @@ def _logout(m):
 
 
 def _text_of(msg):
-    """Начало текста письма: первая text/plain, иначе text/html без тегов."""
-    html = None
+    """Текст письма: первая text/plain, иначе text/html без тегов."""
+    html_text = None
     for part in msg.walk():
         if part.get_content_maintype() == "multipart" or part.get_content_disposition() == "attachment":
             continue
@@ -271,17 +296,19 @@ def _text_of(msg):
             continue
         if part.get_content_type() == "text/plain":
             return body
-        if part.get_content_type() == "text/html" and html is None:
-            html = re.sub(r"(?is)<(script|style).*?</\1>|<[^>]+>", " ", body)
-    return html or ""
+        if part.get_content_type() == "text/html" and html_text is None:
+            stripped = re.sub(r"(?is)<(script|style).*?</\1>|<[^>]+>", " ", body)
+            html_text = html.unescape(stripped)
+    return html_text or ""
 
 
 def parse(raw):
-    """Письмо (байты) → (от кого, тема, начало текста, есть вложения, время)."""
+    """Письмо (байты) → (от кого, тема, текст письма, есть вложения, время)."""
     msg = email.message_from_bytes(raw, policy=email.policy.default)
     name, addr = email.utils.parseaddr(str(msg.get("From", "") or ""))
     subject = " ".join(str(msg.get("Subject", "") or "").split())
-    snippet = " ".join(_text_of(msg).split())[:240]
+    lines = [" ".join(ln.split()) for ln in _text_of(msg).splitlines()]
+    snippet = "\n".join(ln for ln in lines if ln)[:4000]
     attach = any(p.get_content_disposition() == "attachment" for p in msg.walk())
     try:
         ts = email.utils.parsedate_to_datetime(str(msg.get("Date"))).timestamp()
@@ -300,7 +327,8 @@ def check(db_path, a, conn=None):
             uidvalidity = _examine(m, a["folder"])
             row = conn.execute("SELECT uidvalidity, last_uid FROM mail_state WHERE account = ?",
                                (a["id"],)).fetchone()
-            typ, data = m.uid("SEARCH", None, "ALL")
+            criteria = f"UID {row[1] + 1}:*" if (row and row[0] == uidvalidity and row[1] > 0) else "ALL"
+            typ, data = m.uid("SEARCH", None, criteria)
             uids = [int(x) for x in (data[0].split() if typ == "OK" and data and data[0] else [])]
             top = max(uids, default=0)
             if not row or row[0] != uidvalidity:

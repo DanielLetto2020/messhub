@@ -12,7 +12,7 @@
     {"source": "Бэкапы", "key": "backup:nas", "status": "resolved"}
     {"source": "Бэкапы", "text": "…", "details": "длинный лог — в виджете свёрнут"}
 
-Linux и macOS: исполняемые файлы (chmod +x) и *.py (через python3). Windows: *.bat, *.cmd,
+Linux: исполняемые файлы (chmod +x) и *.py (через python3). Windows: *.bat, *.cmd,
 *.ps1 (PowerShell) и *.py (через py/python, если установлен). Скрипт работает не дольше минуты;
 ошибки и вывод в stderr — в журнал программы. Переменная MESSHUB_SCRIPT_STATE — папка, где
 скрипт может хранить своё состояние между запусками.
@@ -125,6 +125,35 @@ def run_one(db_path, name, path):
     return cards, err
 
 
+def _spawn_worker(worker, name, path):
+    threading.Thread(target=worker, args=(name, path), name=f"script-{name}", daemon=True).start()
+
+
+def _tick(db_path, running, last, worker, now=None, spawn=_spawn_worker):
+    """Один проход планировщика: проверить расписание и запустить созревшие скрипты."""
+    conn = events.connect(db_path)
+    try:
+        cfg = rules.get_prefs(conn)["scripts"]
+    finally:
+        conn.close()
+    if not cfg["enabled"]:
+        return
+    now = time.time() if now is None else now
+    for name, path, file_interval in discover():
+        item = cfg["items"].get(name, {})
+        if not item.get("enabled", True):
+            continue
+        interval = item.get("interval") or file_interval or DEFAULT_INTERVAL
+        with _lock:
+            status.setdefault(name, {})["next"] = time.strftime(
+                "%H:%M:%S", time.localtime(last.get(name, now) + interval))
+            if name in running or now - last.get(name, 0) < interval:
+                continue
+            running.add(name)
+        last[name] = now
+        spawn(worker, name, path)
+
+
 def start(db_path):
     """Раз в 10 с: какие скрипты пора запустить (каждый — в своём потоке, без наложения)."""
     running = set()
@@ -143,28 +172,7 @@ def start(db_path):
         last = {}
         while True:
             try:
-                conn = events.connect(db_path)
-                try:
-                    cfg = rules.get_prefs(conn)["scripts"]
-                finally:
-                    conn.close()
-                if cfg["enabled"]:
-                    now = time.time()
-                    for name, path, file_interval in discover():
-                        item = cfg["items"].get(name, {})
-                        if not item.get("enabled", True):
-                            continue
-                        interval = item.get("interval") or file_interval or DEFAULT_INTERVAL
-                        with _lock:
-                            status.setdefault(name, {})["next"] = time.strftime(
-                                "%H:%M:%S", time.localtime(last.get(name, now) + interval))
-                        if name in running or now - last.get(name, 0) < interval:
-                            continue
-                        last[name] = now
-                        with _lock:
-                            running.add(name)
-                        threading.Thread(target=worker, args=(db_path, name, path), name=f"script-{name}",
-                                         daemon=True).start()
+                _tick(db_path, running, last, worker)
             except Exception as e:  # noqa: BLE001
                 print(f"Свои источники: ошибка: {e!r}", flush=True)
             time.sleep(10)

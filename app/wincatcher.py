@@ -71,7 +71,11 @@ def _static(cls, name):
 
 
 def _enum(e, name):
-    return getattr(e, name.upper(), None) or getattr(e, name.capitalize(), None) or getattr(e, name)
+    for attr in (name.upper(), name.capitalize(), name):
+        v = getattr(e, attr, None)
+        if v is not None:
+            return v
+    raise AttributeError(name)
 
 
 def listener():

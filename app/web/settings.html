@@ -246,6 +246,28 @@
   .switch input:checked { background: var(--accent); }
   .switch input:checked::after { left: 17px; }
 
+  /* подключение приложений */
+  .setup-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 14px; }
+  .setup-card .setup-hd { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  .setup-card .setup-ico { font-size: 19px; line-height: 1; }
+  .setup-card .setup-nm { font-size: 14.5px; font-weight: 650; }
+  .setup-pill { font-size: 11px; font-weight: 600; border-radius: 999px; padding: 1px 9px; }
+  .setup-pill.ok { color: var(--on); background: var(--on-bg); }
+  .setup-pill.warn { color: var(--warn); background: var(--warn-bg); }
+  .setup-pill.bad { color: var(--off); background: var(--off-bg); }
+  .setup-pill.info { color: var(--muted); background: var(--surface2); }
+  .setup-prof { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 6px 0; font-size: 12.5px; }
+  .setup-sites { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 6px; }
+  .spill { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; border-radius: 999px;
+    padding: 2px 9px; border: 1px solid var(--line2); background: var(--surface2); }
+  .spill.ok { color: var(--on); border-color: rgba(67,214,154,.4); background: var(--on-bg); }
+  .spill.bad { color: var(--off); border-color: rgba(255,138,122,.4); background: var(--off-bg); }
+  .setup-url { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; }
+  .setup-hints { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; }
+  .setup-hints li { margin: 3px 0; }
+  .setup-callout { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
+    margin: 0 0 14px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+
   /* справка */
   details.help { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); margin: 0 0 8px; }
   details.help summary { cursor: pointer; padding: 11px 14px; font-weight: 600; list-style: none; display: flex; gap: 8px; align-items: center; }
@@ -354,6 +376,7 @@
     <div class="appver" id="appVer"></div>
     <nav class="nav" data-t-aria="Разделы настроек">
       <button type="button" data-nav="sources"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg><span data-t="Источники">Источники</span><span class="n" id="navN"></span></button>
+      <button type="button" data-nav="setup"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span data-t="Подключение приложений">Подключение приложений</span><span class="n" id="navSetup"></span></button>
       <button type="button" data-nav="rules"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg><span data-t="Правила для всех">Правила для всех</span></button>
       <button type="button" data-nav="profiles"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span data-t="Профили">Профили</span></button>
       <button type="button" data-nav="quiet"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg><span data-t="Тихие часы">Тихие часы</span></button>
@@ -383,7 +406,7 @@
 <script>
 // ошибки страницы — в журнал программы (раздел «Логи»), не чаще 10 в минуту
 (()=>{let n=0,t0=Date.now();const send=(msg,where)=>{if(Date.now()-t0>6e4){n=0;t0=Date.now();}if(++n>10)return;
-  try{fetch('/api/logs/client',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({page:'settings',msg:String(msg).slice(0,1000),where})}).catch(()=>{});}catch(e){}};
+  try{fetch('/api/logs/client',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({page:'settings',msg:String(msg).slice(0,1000),where})}).catch(()=>{});}catch(e){}};
   window.addEventListener('error',e=>send(e.message,(e.filename||'').split('/').pop()+':'+e.lineno));
   window.addEventListener('unhandledrejection',e=>send('Promise: '+((e.reason&&e.reason.message)||e.reason),''));})();
 const $ = id => document.getElementById(id);
@@ -564,7 +587,7 @@ const newEd=(src,action)=>({src,conds:null,cond:0,chat:'',sender:'',text:'',text
   action:action||'hide',param:action==='highlight'?'orange':'',profile:'',err:''});
 
 // ── маршрут ──
-const ROUTES={sources:showSources,rules:showGlobalRules,profiles:showProfiles,quiet:showQuiet,mentions:showMentions,search:showSearch,
+const ROUTES={sources:showSources,setup:showNotifySetup,rules:showGlobalRules,profiles:showProfiles,quiet:showQuiet,mentions:showMentions,search:showSearch,
   look:showLook,stats:showStats,data:showData,mail:showMail,themed:showThemed,forward:showForward,ingest:showIngest,
   system:showSystem,logs:showLogs,help:showHelp};
 let pageTimer=0;           // автообновление раздела (журнал, состояние колонок) — гасится при уходе
@@ -589,11 +612,16 @@ async function showSources(){
   try{list=await api('/api/settings/sources');}catch(e){failed(showSources);return;}
   $('navN').textContent=list.length||'';
   if(!list.length){
-    page.innerHTML=`<h1>${esc(t('Источники'))}</h1><p class="lead">${esc(t('Источников пока нет. Они появятся здесь сами, как только придёт первое уведомление от приложения.'))}</p>`;
+    page.innerHTML=`<h1>${esc(t('Источники'))}</h1><p class="lead">${esc(t('Источников пока нет. Они появятся здесь сами, как только придёт первое уведомление от приложения.'))}</p>
+      <div class="setup-callout"><span>${esc(t('Не приходят уведомления от мессенджера или браузера?'))}</span>
+        <button class="btn primary" type="button" id="goSetup">${esc(t('Подключение приложений'))} →</button></div>`;
+    $('goSetup').onclick=()=>{location.hash='#setup';};
     return;
   }
   page.innerHTML=`<h1>${esc(t('Источники'))}</h1>
     <p class="lead">${esc(t('Приложения и сайты, от которых приходят уведомления. Открой источник, чтобы решить, чьи сообщения показывать в виджете, переименовать его или задать правила.'))}</p>
+    <div class="setup-callout"><span>${esc(t('Не приходят уведомления от мессенджера или браузера?'))}</span>
+      <button class="btn" type="button" id="goSetup">${esc(t('Диагностика и настройка приложений'))} →</button></div>
     <div class="list">${list.map((s,i)=>`
       <button class="src" type="button" data-i="${i}">
         <span class="ico">${esc(s.ico)}</span>
@@ -603,6 +631,132 @@ async function showSources(){
         <span class="chev">${I.chev}</span>
       </button>`).join('')}</div>`;
   page.querySelectorAll('.src').forEach(b=>b.onclick=()=>{location.hash='#source='+encodeURIComponent(list[+b.dataset.i].key);});
+  $('goSetup').onclick=()=>{location.hash='#setup';};
+}
+
+// ── Подключение приложений: проверка уведомлений системы, браузеров и мессенджеров ──
+function setupBadge(d){
+  const el=$('navSetup'); if(!el||!d) return;
+  const items=[...(d.browsers||[]),...(d.apps||[])];
+  const bad=items.filter(x=>x.state==='bad').length+(d.gnome_disabled||[]).length;
+  const warn=items.filter(x=>x.state==='warn').length;
+  const total=bad+warn;
+  el.textContent=total?String(total):'';
+  el.classList.toggle('bad',bad>0);
+}
+async function showNotifySetup(){
+  page.innerHTML=`<div class="state">${esc(t('Загружаю…'))}</div>`;
+  let d;try{d=await api('/api/notify-setup');}catch(e){failed(showNotifySetup);return;}
+  setupBadge(d);
+  const sys=d.system||{}, win=sys.platform==='windows';
+  const stWord={ok:'Всё в порядке',warn:'Есть запреты',bad:'Выключено',info:'Нет недавних'};
+  const defWord={blocked:'сайтам запрещено показывать уведомления',ask:'сайты спрашивают разрешение',allowed:'разрешено по умолчанию',unknown:'по умолчанию'};
+  const winAccWord={allowed:'разрешён',denied:'запрещён',unspecified:'не выдан',not_supported:'не поддерживается',unknown:'неизвестно'};
+
+  const sysRows=[];
+  sysRows.push(['ok',sys.collector?'ok':'bad',t('Сбор уведомлений'),t(sys.collector?'работает':'не запущен')]);
+  if(win){
+    sysRows.push(['win_access',sys.win_access==='allowed'?'ok':'bad',t('Доступ Windows к уведомлениям'),t(winAccWord[sys.win_access]||sys.win_access||'unknown')]);
+    sysRows.push(['win_toast',sys.win_toast===false?'bad':'ok',t('Уведомления Windows'),t(sys.win_toast===false?'выключены':'включены')]);
+  }else{
+    sysRows.push(['dbus',sys.dbus_ok?'ok':'bad',t('Служба уведомлений D-Bus'),sys.dbus_ok?(sys.dbus_server||'ok'):t('Не отвечает')]);
+    if(sys.dnd!==null&&sys.dnd!==undefined){
+      sysRows.push(['dnd',sys.dnd?'warn':'ok',t('Не беспокоить'),t(sys.dnd?'включён — баннеры скрыты, но виджет всё собирает':'выключен')]);
+    }
+    sysRows.push(['ns',sys.notify_send?'ok':'warn',t('Утилита notify-send'),t(sys.notify_send?'установлена':'не найдена (нужен пакет libnotify-bin)')]);
+  }
+  const mark={ok:'✓',warn:'!',bad:'✕',info:'·'};
+  const gnomeSwitch=g=>g?`<label class="switch" style="margin-left:auto"><input type="checkbox" data-gnome-slug="${attr(g.slug)}"${g.enable?' checked':''}> <span>${esc(t('Уведомления в GNOME'))}</span></label>`:'';
+
+  const browserCard=b=>{
+    const profs=(b.profiles||[]).map(p=>{
+      const dcls=p.default==='blocked'?'bad':p.default==='allowed'?'ok':'info';
+      const pname=(b.profiles.length>1||p.dir!=='Default')?`<b>${esc(t('Профиль «{p}»',{p:p.name}))}</b> `:'';
+      const sites=(p.sites||[]).map(s=>`<span class="spill ${s.status==='blocked'?'bad':'ok'}">${s.status==='blocked'?'✕':'✓'} ${esc(s.domain)} · ${esc(t(s.status==='blocked'?'заблокирован':'разрешён'))}</span>`).join('');
+      return `<div class="setup-prof">${pname}<span class="setup-pill ${dcls}">${esc(t(defWord[p.default]||defWord.unknown))}</span></div>${sites?`<div class="setup-sites">${sites}</div>`:''}`;
+    }).join('');
+    return `<div class="card setup-card">
+      <div class="setup-hd"><span class="setup-ico">🌐</span><span class="setup-nm">${esc(b.name)}</span>
+        <span class="setup-pill ${attr(b.state)}">${esc(t(stWord[b.state]||b.state))}</span>
+        ${b.recent_count?`<span class="muted">${esc(t('{n} за 7 дн.',{n:b.recent_count}))}</span>`:''}
+        ${gnomeSwitch(b.gnome)}</div>
+      ${profs}
+      <div class="setup-url"><span class="muted">${esc(t('Адрес настроек:'))}</span><code>${esc(b.settings_url)}</code>
+        <button class="btn" type="button" data-copy-url="${attr(b.settings_url)}">${esc(t('Скопировать адрес'))}</button>
+        ${b.can_open?`<button class="btn" type="button" data-open-br="${attr(b.id)}">${esc(t('Открыть настройки'))}</button>`:''}</div>
+      ${(b.hints&&b.hints.length)?`<ul class="setup-hints">${b.hints.map(h=>`<li>${esc(h)}</li>`).join('')}</ul>`:''}
+    </div>`;
+  };
+
+  const appCard=a=>`<div class="card setup-card">
+    <div class="setup-hd"><span class="setup-ico">${esc(a.ico||'💬')}</span><span class="setup-nm">${esc(a.name)}</span>
+      <span class="setup-pill ${attr(a.state)}">${esc(t(stWord[a.state]||a.state))}</span>
+      ${a.recent_count?`<span class="muted">${esc(t('{n} за 7 дн.',{n:a.recent_count}))}</span>`:''}
+      ${gnomeSwitch(a.gnome)}</div>
+    ${(a.hints&&a.hints.length)?`<ul class="setup-hints">${a.hints.map(h=>`<li>${esc(h)}</li>`).join('')}</ul>`:''}
+  </div>`;
+
+  const disabledBox=(d.gnome_disabled||[]).length?`<h3>${esc(t('Отключены в системе (GNOME)'))}</h3>
+    <p class="hint">${esc(t('Если здесь отключено приложение (например, мессенджер), система не отдаёт его уведомления ни на экран, ни в messhub.'))}</p>
+    <div class="list">${d.gnome_disabled.map(g=>`<div class="acc"><span class="st bad">✕</span>
+      <span><span class="nm">${esc(g.app_id||g.slug)}</span><br><span class="sub">${esc(g.slug)}</span></span>
+      <span class="btns"><button class="btn primary" type="button" data-gnome-on="${attr(g.slug)}">${esc(t('Включить'))}</button></span></div>`).join('')}</div>`:'';
+
+  page.innerHTML=`<h1>${esc(t('Подключение приложений'))}</h1>
+    <p class="lead">${esc(t('Проверка разрешений на уведомления в системе, браузерах и мессенджерах. Если перехват где-то отключён, здесь видно причину и как её включить.'))}</p>
+    <div class="setup-bar">
+      <button class="btn primary" type="button" id="setupTest">${esc(t('Проверить перехват'))}</button>
+      ${sys.can_open_os?`<button class="btn" type="button" id="setupOs">${esc(t('Настройки уведомлений системы'))}</button>`:''}
+      ${(win&&sys.win_access!=='allowed')?`<button class="btn" type="button" id="setupWinPriv">${esc(t('Доступ к уведомлениям Windows'))}</button>`:''}
+      <button class="btn ghost" type="button" id="setupReload">${esc(t('Проверить ещё раз'))}</button>
+    </div>
+    <div id="setupTestRes"></div>
+    <h3>${esc(t('Система'))}</h3>
+    <div class="card">${sysRows.map(([,st,title,val])=>`<div class="check"><span class="st ${st}">${mark[st]}</span><b>${esc(title)}</b><span class="hv">${esc(val)}</span></div>`).join('')}</div>
+    <h3>${esc(t('Браузеры'))}</h3>
+    ${(d.browsers||[]).length?d.browsers.map(browserCard).join(''):`<div class="empty-note">${esc(t('Поддерживаемые браузеры (Chrome, Яндекс, Firefox, Edge, Brave, Vivaldi, Opera) на этом компьютере не найдены.'))}</div>`}
+    <h3>${esc(t('Мессенджеры и почта'))}</h3>
+    ${(d.apps||[]).length?d.apps.map(appCard).join(''):`<div class="empty-note">${esc(t('Пока нет данных по отдельным мессенджерам — они появятся сами, когда запустятся или пришлют уведомление.'))}</div>`}
+    ${disabledBox}
+    <h3>${esc(t('Если уведомления всё равно не доходят'))}</h3>
+    <ul class="setup-hints">
+      <li>${esc(t('В Linux уведомление должно идти через системный D-Bus (org.freedesktop.Notifications), а не только встроенным всплывающим окном самой программы (как в Telegram Desktop по умолчанию).'))}</li>
+      <li>${esc(t('Веб-приложения (Telegram Web, MAX, WhatsApp, почта) присылают уведомления только когда вкладка открыта или закреплена, а сайту выдано разрешение в браузере.'))}</li>
+      <li>${esc(t('В самом мессенджере должен быть включён показ уведомлений (и текста сообщения), а нужный чат не должен быть выключен (без звука / mute).'))}</li>
+    </ul>`;
+
+  $('setupReload').onclick=showNotifySetup;
+  $('setupTest').onclick=async()=>{
+    const b=$('setupTest'), res=$('setupTestRes');
+    b.disabled=true; b.textContent=t('Отправляю…'); res.innerHTML='';
+    try{const r=await api('/api/notify-setup/test',{});
+      res.innerHTML=r.ok?`<div class="result" style="margin-bottom:10px">${esc(t('✓ Перехват работает ({ms} мс)',{ms:r.ms}))}</div>`
+        :`<div class="result err" style="margin-bottom:10px">${esc(r.error||t('Не получилось'))}</div>`;
+    }catch(e){res.innerHTML=`<div class="result err" style="margin-bottom:10px">${esc(e.message)}</div>`;}
+    b.disabled=false; b.textContent=t('Проверить перехват');
+  };
+  if($('setupOs'))$('setupOs').onclick=async()=>{try{await api('/api/notify-setup/open-os',{kind:'notifications'});toast(t('Раздел настроек открывается'));}catch(e){toast(e.message,true);}};
+  if($('setupWinPriv'))$('setupWinPriv').onclick=async()=>{try{await api('/api/notify-setup/open-os',{kind:'privacy'});toast(t('Раздел настроек открывается'));}catch(e){toast(e.message,true);}};
+
+  page.querySelectorAll('[data-gnome-slug]').forEach(cb=>cb.onchange=async()=>{
+    try{await api('/api/notify-setup/gnome',{slug:cb.dataset.gnomeSlug,enable:cb.checked});
+      toast(t(cb.checked?'Уведомления приложения включены в GNOME':'Уведомления приложения выключены в GNOME'));showNotifySetup();}
+    catch(e){cb.checked=!cb.checked;toast(e.message,true);}
+  });
+  page.querySelectorAll('[data-gnome-on]').forEach(b=>b.onclick=async()=>{
+    try{await api('/api/notify-setup/gnome',{slug:b.dataset.gnomeOn,enable:true});
+      toast(t('Уведомления приложения включены в GNOME'));showNotifySetup();}
+    catch(e){toast(e.message,true);}
+  });
+  page.querySelectorAll('[data-copy-url]').forEach(b=>b.onclick=async()=>{
+    const ok=await copyText(b.dataset.copyUrl);
+    toast(t(ok?'Скопировано в буфер':'Не скопировалось'),!ok);
+  });
+  page.querySelectorAll('[data-open-br]').forEach(b=>b.onclick=async()=>{
+    try{const r=await api('/api/notify-setup/open-browser',{browser_id:b.dataset.openBr});
+      toast(r.ok?t('Открываю страницу настроек в браузере…'):(r.hint||t('Скопируй адрес и вставь в браузер')),!r.ok);}
+    catch(e){toast(e.message,true);}
+  });
 }
 
 // ── Источник: название, режим, правила, «кто писал» ──
@@ -915,7 +1069,11 @@ async function showSearch(){
     <h3>${esc(t('Умный поиск (RAG)'))}</h3>
     <p class="hint">${esc(t('Ищет по смыслу, а не по буквам, и отвечает на вопросы по переписке. Работает целиком на компьютере через Ollama: скачивает модель векторов и считает их для всех сообщений. Без него работает обычный поиск.'))}</p>
     <div id="ragBox"></div>`;
-  try{if(!sr.srcs)sr.srcs=await api('/api/settings/sources');}catch(e){sr.srcs=[];}
+  try{if(!sr.srcs){
+    const [ss, all]=await Promise.all([api('/api/settings/sources'), api('/api/sources').catch(()=>[])]);
+    const seen=new Set(ss.map(s=>s.key));
+    sr.srcs=[...ss, ...all.filter(s=>s.key.startsWith('my:')&&!seen.has(s.key))];
+  }}catch(e){sr.srcs=[];}
   $('sSrc').innerHTML=`<option value="">${esc(t('Все источники'))}</option>`+sr.srcs.map(s=>`<option value="${attr(s.key)}"${s.key===sr.src?' selected':''}>${esc(s.ico+' '+s.name)}</option>`).join('');
   $('sSt').value=sr.status;
   for(const id of ['sFrom','sTo']){const el=$(id),upd=()=>el.classList.toggle('empty',!el.value);upd();el.oninput=upd;el.onchange=upd;}
@@ -960,7 +1118,7 @@ async function renderRag(){
     :`<p class="muted">${esc(t('Для поиска по смыслу включи умный поиск ниже.'))}</p>`;
   if(s.enabled)$('aGo').onclick=doAsk;
   let html='';
-  if(!s.ollama)html+=`<div class="warnbox">${esc(t('Ollama не отвечает на {h}. Установи её (см. «Справка → Умный поиск») и запусти.',{h:'127.0.0.1:11434'}))}</div>`;
+  if(!s.ollama)html+=`<div class="warnbox">${esc(t('Ollama не отвечает на {h}. Установи её (см. «Справка → Умный поиск») и запусти.',{h:s.ollama_url||'127.0.0.1:11434'}))}</div>`;
   if(s.installing)html+=`<p>${esc(t('Установка: {p}',{p:s.progress}))}</p>`;
   if(s.error)html+=`<p class="result err">${esc(t('Ошибка: {e}',{e:s.error}))}${s.enabled&&s.retry_in?' · '+esc(t('повторю сам через {n} с',{n:s.retry_in})):''}</p>`;
   html+=`<p class="${s.enabled?'':'muted'}">${esc(s.enabled?t('Включён: модель {m}, посчитано {a} из {b} сообщений.',{m:s.model,a:s.indexed,b:s.total}):t('Выключен.'))}</p>
@@ -1012,11 +1170,13 @@ async function showLook(){
       <label for="lFs">${esc(t('Размер текста'))}</label><div class="ctl"><input type="range" id="lFs" min="11" max="18" step="1" value="${p.font_size}"><span id="lFsV">${p.font_size} px</span></div>
       <label>${esc(t('Тема'))}</label><div class="ctl">${seg('theme',[['dark','Тёмная'],['light','Светлая']],p.theme)}</div>
       <label>${esc(t('Плотность'))}</label><div class="ctl">${seg('compact',[['0','Обычная'],['1','Компактная']],p.compact?1:0)}</div>
+      <label>${esc(t('Длинные сообщения'))}</label><div class="ctl">${seg('full_text',[['0','Сворачивать по 10 строк'],['1','Показывать целиком']],p.full_text?1:0)}</div>
       <label>${esc(t('Сообщения одного чата'))}</label><div class="ctl">${seg('group_by_chat',[['1','Сворачивать в одну плашку'],['0','Показывать по отдельности']],p.group_by_chat?1:0)}</div>
       <label>${esc(t('Аватары'))}</label><div class="ctl">${seg('avatars',[['1','Показывать'],['0','Не показывать']],p.avatars?1:0)}</div>
       <label>${esc(t('Время в тексте'))}</label><div class="ctl">${seg('time_hints',[['1','Предлагать напомнить ⏰'],['0','Не показывать']],p.time_hints?1:0)}</div>
       <label>${esc(t('Показ экрана'))}</label><div class="ctl">${seg('share_blur',[['1','Размывать доску сама'],['0','Не трогать']],p.share_blur?1:0)}</div>
     </div>
+    <p class="hint">${esc(t('«Длинные сообщения»: при выборе «Показывать целиком» длинный текст в карточках не обрезается. Даже в свёрнутом виде любую карточку можно развернуть кнопкой «Развернуть целиком» или в окне ⤢ — чтение в messhub не отмечает сообщение прочитанным в Telegram и других мессенджерах.'))}</p>
     <p class="hint">${esc(t('«Время в тексте»: если в сообщении есть «в 15:00», «завтра в 10» или «к пятнице», на плашке появится ⏰ — по клику можно завести напоминание.'))}</p>
     <p class="hint">${esc(t('«Показ экрана»: пока идёт демонстрация (Zoom, Meet и другие сайты в Chrome, Firefox, портал PipeWire), доска размывается, а потом возвращается. Свои признаки — части заголовков окон через запятую:'))}</p>
     <div class="erow"><input class="inp" id="lShare" value="${attr((p.share_patterns||[]).join(', '))}" placeholder="${attr(t('например: Screen sharing, Демонстрация'))}" style="width:420px">
@@ -1031,9 +1191,11 @@ async function showLook(){
     <p class="hint">${esc(t('Порядок колонок меняется перетаскиванием прямо в виджете. Скрытые колонки:'))}</p>
     <div class="tags" id="hidCols">${p.hidden_cols.length?p.hidden_cols.map(k=>`<span class="tagx">${esc(nameOf(k))}<button type="button" data-show="${attr(k)}" aria-label="${attr(t('Показать'))}">↩</button></span>`).join(''):`<span class="muted">${esc(t('скрытых нет'))}</span>`}</div>
     ${p.col_order.length?`<button class="btn" type="button" id="resetOrder">${esc(t('Сбросить порядок'))}</button>`:''}`;
-  let tm=0;
-  const save=(patch,reload)=>{clearTimeout(tm);tm=setTimeout(async()=>{try{PREFS=await api('/api/prefs',patch);toast(t('Сохранено'));
-    if(reload){setLang(PREFS._lang);translateDom();showLook();}}catch(e){toast(e.message,true);}},250);};
+  let tm=0, pending={}, needReload=false;
+  const save=(patch,reload)=>{Object.assign(pending,patch);needReload=needReload||!!reload;clearTimeout(tm);tm=setTimeout(async()=>{
+    const body=pending, rel=needReload; pending={}; needReload=false;
+    try{PREFS=await api('/api/prefs',body);toast(t('Сохранено'));
+      if(rel){setLang(PREFS._lang);translateDom();showLook();}}catch(e){toast(e.message,true);}},250);};
   $('lOp').oninput=e=>{$('lOpV').textContent=e.target.value+'%';save({opacity:e.target.value/100});};
   $('lFs').oninput=e=>{$('lFsV').textContent=e.target.value+' px';save({font_size:+e.target.value});};
   page.querySelectorAll('.seg[data-key]').forEach(s=>s.querySelectorAll('button').forEach(b=>b.onclick=()=>{
@@ -1595,7 +1757,8 @@ async function showLogs(){
     const kb=n=>n<1024?t('{n} Б',{n}):n<1048576?t('{n} КБ',{n:(n/1024).toFixed(0)}):t('{n} МБ',{n:dec((n/1048576).toFixed(1))});
     $('lgInfo').innerHTML=`${esc(t('Записей: {n}',{n:r.total}))}${r.total>r.rows.length?' · '+esc(t('показаны последние {n}',{n:r.rows.length})):''} · ${esc(t('ошибок за сутки: {n}',{n:r.errors_day}))}
       · ${esc(t('папка'))} <code>${esc(r.dir)}</code> · ${esc(kb(r.bytes))} ${esc(t('из {m} — старые записи удаляются сами',{m:kb(r.max_bytes)}))}`;
-    const today=new Date().toISOString().slice(0,10);
+    const now=new Date(), pad=n=>String(n).padStart(2,'0');
+    const today=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
     $('lgList').innerHTML=r.rows.length?`<div class="loglist">${r.rows.map(x=>`<div class="lg ${x.lvl}"><span class="lt">${esc(x.t.slice(0,10)===today?x.t.slice(11):x.t.slice(5))}</span>
       <span class="ll">${esc(t(LOG_LVL[x.lvl]||x.lvl))}</span><span class="ls">${esc(t(LOG_SRC[x.src]||x.src))}</span><span class="lm">${esc(x.msg)}</span></div>`).join('')}</div>`
       :`<div class="empty-note">${esc(t(logView.level==='all'&&!logView.q?'Журнал пуст.':'Ничего не нашлось.'))}</div>`;
@@ -1672,12 +1835,11 @@ async function showSystem(){
   const mark={ok:'✓',warn:'!',bad:'✕',info:'·'};
   const sw=(key,label)=>{const s=d.autostart[key]; if(!s) return '';   // на Windows один процесс — один переключатель
     if(d.platform==='windows') label='Запускать вместе с Windows';
-    if(d.platform==='mac') label='Запускать при входе в macOS';
     return `<div class="erow"><label class="switch"><input type="checkbox" data-as="${key}"${s.enabled?' checked':''}${s.installed?'':' disabled'}> <b>${esc(t(label))}</b></label>
       <span class="muted">${esc(s.installed?t('запускать при входе в систему')+' · '+t(s.active?'работает':'остановлен'):t('не установлен — запусти ./install.sh'))}</span>
       ${s.installed?`<button class="btn ghost" type="button" data-rs="${key}">${esc(t('Перезапустить'))}</button>`:''}</div>`;};
   page.innerHTML=`<h1>${esc(t('Система'))}</h1>
-    <p class="lead">${esc(t('Проверка системы и автозапуск.'))} <button class="link" type="button" id="reDiag">${esc(t('Проверить ещё раз'))}</button></p>
+    <p class="lead">${esc(t('Проверка системы и автозапуск.'))} <button class="link" type="button" id="reDiag">${esc(t('Проверить ещё раз'))}</button> · <button class="link" type="button" id="sysSetup">${esc(t('Подключение приложений'))}</button></p>
     <div class="card">${d.checks.map(c=>`<div class="check"><span class="st ${c.state}">${mark[c.state]}</span><b>${esc(c.title)}</b>
       <span class="hv">${esc(c.text)}${c.hint?`<br><span class="hn">${esc(c.hint)}</span>`:''}</span></div>`).join('')}</div>
     <h3>${esc(t('Автозапуск'))}</h3>
@@ -1691,6 +1853,7 @@ async function showSystem(){
     <p class="muted">${[['код',d.paths.code],['данные',d.paths.data],['настройки',d.paths.config],['кэш',d.paths.cache],['база',d.paths.db]].map(([k,v])=>`${esc(t(k))}: <code>${esc(v)}</code>`).join('<br>')}</p>
     ${sessionBox()}`;
   $('reDiag').onclick=showSystem;
+  $('sysSetup').onclick=()=>{location.hash='#setup';};
   const upd=async(force)=>{try{const u=await api('/api/update'+(force?'?force=1':''));$('updOn').checked=u.enabled;
     $('updInfo').innerHTML=!u.enabled?'':u.newer?`<a class="link" href="${attr(u.url)}" target="_blank" rel="noopener noreferrer">${esc(t('есть новая версия {v}',{v:u.latest}))}</a>`
       :u.latest?esc(t('установлена последняя версия')):esc(u.error?t('GitHub не ответил'):t('проверяю…'));}catch(e){}};
@@ -1715,7 +1878,8 @@ ru: [
 <ol><li>Telegram → <b>Настройки → Уведомления и звуки</b>.</li>
 <li>Внизу, в разделе <b>«Взаимодействие с системой»</b>, включи <b>«Использовать системные уведомления»</b>. Перезапуск не нужен.</li>
 <li>Там же оставь включёнными показ имени отправителя и текста сообщения — иначе в виджет придёт только «Новое сообщение».</li></ol>
-<p>Экспериментальную опцию «GNotification» не включай: с ней уведомления пойдут по каналу, который программа не слушает. Сообщения из открытого на экране чата уведомлений не дают — это нормально.</p>`],
+<p>Экспериментальную опцию «GNotification» не включай: с ней уведомления пойдут по каналу, который программа не слушает. Сообщения из открытого на экране чата уведомлений не дают — это нормально.</p>
+<p>Чтение в messhub не отмечает сообщения прочитанными в Telegram и других мессенджерах: длинный текст можно раскрыть прямо на карточке («Развернуть целиком») или в окне ⤢. При этом messhub получает ровно столько текста, сколько сам Telegram Desktop передаёт в системное уведомление (очень длинные посты сам Telegram обрезает при отправке уведомления).</p>`],
 ['Свои события: скрипты, сборки, бэкапы', `
 <p>Любая команда может положить событие в виджет — это обычное уведомление:</p>
 <pre>notify-send -a "Сборки" "CI: main" "Сборка #413 прошла"</pre>
@@ -1730,7 +1894,7 @@ ru: [
 <li><b>Свои источники</b> — скрипты в папке sources.d (раздел «Приём событий»): каждая напечатанная JSON-строка становится карточкой.</li></ul>
 <p>Когда проблема ушла (контейнер снова работает, служба поднялась, команда прошла), карточка бледнеет и получает «✓ починилось». Хвост лога свёрнут под карточкой, двойной клик по нему копирует лог. Свои скрипты могут делать так же через «Приём событий»: поле <code>key</code> и <code>status: "resolved"</code>.</p>`],
 ['Ассистент: вопросы по сообщениям локальной модели', `
-<p>Кнопка ✨ в шапке доски открывает ассистента. Он собирает подходящие сообщения из базы и отвечает моделью на этом компьютере — через <b>Ollama</b> или <b>LM Studio</b>. Сообщения никуда не уходят; адреса моделей — только на этом компьютере (домашняя сеть — если явно разрешить).</p>
+<p>Кнопка ✨ в шапке доски открывает ассистента. Он собирает подходящие сообщения из базы и отвечает моделью на этом компьютере — через <b>Ollama</b> или <b>LM Studio</b>. Сообщения никуда не уходят; адреса моделей — только на этом компьютере.</p>
 <ul><li>При первом запуске мастер найдёт Ollama и LM Studio, покажет установленные модели и предложит скачать новую (для Ollama — прямо в окне, с подсказкой, поместится ли модель в видеокарту).</li>
 <li>У каждой беседы свои настройки: модель, температура, размер контекста, длина ответа, какие сообщения брать (период, источники, прочитанные, логи) и свой системный промпт.</li>
 <li>Номера вида #123 в ответе открывают само сообщение; «опирался на …» показывает всю выборку.</li>
@@ -1768,7 +1932,7 @@ ru: [
 ['Клавиши и приёмы в виджете', `
 <ul><li><b>B</b> — размыть содержимое (для показа экрана), <b>F</b> — фокус: только важное, <b>Esc</b> — закрыть всплывающее меню.</li>
 <li>Двойной клик по тексту — скопировать сообщение, клик по имени — перейти в приложение.</li>
-<li>⤢ на плашке или «Показать целиком» под длинным текстом — сообщение и весь лог в отдельном окне (Esc закрывает).</li>
+<li>«Развернуть целиком» под длинным текстом раскрывает сообщение прямо на карточке, а «В окне ⤢» или ⤢ на плашке — в отдельном окне вместе с логом (Esc закрывает). Чтение здесь не ставит отметку «прочитано» в Telegram и других мессенджерах.</li>
 <li>Колонки перетаскиваются за шапку. Крестик в шапке закрывает колонку: её сообщения станут прочитанными, а сама она вернётся с новым сообщением. Там же — «Скрыть насовсем» (вернуть — в «Внешний вид»). Колонку с закреплёнными или отложенными сообщениями закрыть нельзя.</li>
 <li>После «прочитать» внизу 5 секунд есть кнопка «Вернуть».</li></ul>`],
 ['Где данные и как удалить программу', `
@@ -1789,7 +1953,8 @@ en: [
 <ol><li>Telegram → <b>Settings → Notifications and Sounds</b>.</li>
 <li>At the bottom, under <b>System integration</b>, turn on <b>Use native notifications</b>. No restart needed.</li>
 <li>Keep sender name and message preview on, otherwise only “New message” arrives.</li></ol>
-<p>Don't enable the experimental “GNotification” option: notifications would go through a channel this app doesn't listen to.</p>`],
+<p>Don't enable the experimental “GNotification” option: notifications would go through a channel this app doesn't listen to.</p>
+<p>Reading in messhub never sends read receipts in Telegram or other messengers: expand long text inline (“Expand in full”) or open the ⤢ window. Note that messhub can display only as much text as Telegram Desktop sends in its system notification (very long posts are trimmed by Telegram itself).</p>`],
 ['Your own events: scripts, builds, backups', `
 <p>Any command can post an event to the widget — it is a normal notification:</p>
 <pre>notify-send -a "Builds" "CI: main" "Build #413 passed"</pre>
@@ -1804,7 +1969,7 @@ en: [
 <p>“Logs” is the app's own log: start-up, errors, background jobs. Message texts are never written there. The number next to the menu item is errors in the last day.</p>
 <p>“Export” saves the log to Downloads with your home folder replaced by “~”. You can attach it to a bug report on GitHub, but look through it first.</p>`],
 ['Assistant: ask a local model about your messages', `
-<p>The ✨ button in the board header opens the assistant. It gathers matching messages from the database and answers with a model on this computer — via <b>Ollama</b> or <b>LM Studio</b>. Messages go nowhere; model addresses must be on this computer (your home network only if you allow it).</p>
+<p>The ✨ button in the board header opens the assistant. It gathers matching messages from the database and answers with a model on this computer — via <b>Ollama</b> or <b>LM Studio</b>. Messages go nowhere; model addresses are restricted to this computer.</p>
 <ul><li>On first start a wizard finds Ollama and LM Studio, shows installed models and offers to download one (for Ollama right in the window, with a hint whether it fits your GPU).</li>
 <li>Each conversation has its own settings: model, temperature, context size, answer length, which messages to use (period, sources, read ones, logs) and its own system prompt.</li>
 <li>Numbers like #123 in an answer open the message; “based on …” shows the whole selection.</li>
@@ -1837,7 +2002,7 @@ en: [
 ['Keys and tricks in the widget', `
 <ul><li><b>B</b> — blur contents, <b>F</b> — focus mode, <b>Esc</b> — close a pop-up menu.</li>
 <li>Double-click text to copy it, click a name to go to the app.</li>
-<li>⤢ on a card or “Show in full” under long text opens the message and its whole log in a separate window (Esc closes it).</li>
+<li>“Expand in full” under long text unfolds the message inline on the card; “In window ⤢” or ⤢ opens the message and its whole log in a separate window (Esc closes it). Reading here never marks messages read in Telegram or other messengers.</li>
 <li>Drag columns by their header. The cross in a header closes the column: its messages are marked read and the column comes back with the next message. “Hide for good” is there too (undo in Appearance). A column with pinned or snoozed messages can't be closed.</li>
 <li>After marking read, an “Undo” button stays for 5 seconds.</li></ul>`],
 ['Where data lives and how to uninstall', `
@@ -1867,6 +2032,7 @@ function showHelp(){
   try{fwdReady=(await api('/api/forward')).configured;}catch(e){}
   try{navBadge((await api('/api/logs?limit=1')).errors_day);}catch(e){}
   route();
+  api('/api/notify-setup').then(setupBadge).catch(()=>{});
 })();
 </script>
 </body>

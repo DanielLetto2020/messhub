@@ -1,4 +1,5 @@
 """HTTP API целиком: настоящий сервер на свободном порту, временная база."""
+import http.client
 import json
 import os
 import sqlite3
@@ -143,9 +144,13 @@ class ApiTest(unittest.TestCase):
     def test_ingest(self):
         self.assertEqual(self.req("/api/ingest", {"source": "CI", "text": "x"})[0], 401)
         token = ingest.new_token()
+        # Работает только по Bearer-ключу, без cookie сеанса
         code, r, _ = self.req("/api/ingest", {"source": "CI", "chat": "main", "text": "Сборка прошла"},
-                              headers={"Authorization": "Bearer " + token})
+                              headers={"Cookie": "", "Authorization": "Bearer " + token})
         self.assertEqual(code, 200)
+        # При неверном/пустом Bearer cookie сеанса не спасает
+        self.assertEqual(self.req("/api/ingest", {"source": "CI", "text": "x"},
+                                  headers={"Authorization": "Bearer wrong"})[0], 401)
         _, rows, _ = self.req("/api/messages?ids=%d" % r["id"])
         self.assertEqual((rows[0]["app"], rows[0]["chat"]), ("CI", "main"))
         self.assertEqual(self.req("/api/ingest", {"source": "CI"}, headers={"Authorization": "Bearer " + token})[0], 400)
@@ -201,6 +206,10 @@ class ApiTest(unittest.TestCase):
         self.assertTrue(session.ok({"X-Messhub-Token": second}))
         # файл токена - с правами 600 (он секрет)
         self.assertEqual(os.stat(paths.SESSION_CFG).st_mode & 0o777, 0o600, paths.SESSION_CFG)
+        # пустой {"token": ""} перегенерирует валидный токен
+        paths.write_private(paths.SESSION_CFG, json.dumps({"token": ""}))
+        regen = session.token()
+        self.assertTrue(regen and regen != "")
         # вернуть как было, чтобы следующие тесты не зависели от порядка
         paths.write_private(paths.SESSION_CFG, json.dumps({"token": first}))
 
@@ -210,7 +219,9 @@ class ApiTest(unittest.TestCase):
         with urllib.request.urlopen(self.base + "/widget", timeout=10) as r:
             raw = r.headers.get("Set-Cookie", "")
         self.assertIn(f"{session.COOKIE}=", raw)
+        self.assertIn("HttpOnly", raw)
         self.assertIn("SameSite=Strict", raw)
+        self.assertIn("Max-Age=31536000", raw)
         self.assertIn("Path=/", raw)
 
     def test_routes_are_in_the_table_and_documented(self):
@@ -284,6 +295,71 @@ class ApiTest(unittest.TestCase):
     def test_english(self):
         code, err, _ = self.req("/api/rules", {"src": "*", "action": "hide"}, headers={"Accept-Language": "en-US"})
         self.assertIn("condition", err["error"])
+
+    def test_visible_cache_snooze_and_pin_swap(self):
+        """Кеш /api/visible обновляется при истечении snooze и при одновременной перестановке pin."""
+        conn = sqlite3.connect(self.db)
+        try:
+            a = common.put(conn, "eXpress", "ТестA", "первое")["id"]
+            b = common.put(conn, "eXpress", "ТестB", "второе")["id"]
+        finally:
+            conn.close()
+        self.req("/api/pin", {"ids": [a], "pinned": True})
+        v1 = self.req("/api/visible")[1]
+        self.assertIn(a, v1["pinned"])
+        self.assertNotIn(b, v1["pinned"])
+        # Одновременная перестановка закрепления A -> B с той же суммой флагов
+        self.req("/api/pin", {"ids": [a], "pinned": False})
+        self.req("/api/pin", {"ids": [b], "pinned": True})
+        v2 = self.req("/api/visible")[1]
+        self.assertNotIn(a, v2["pinned"])
+        self.assertIn(b, v2["pinned"])
+        # Snooze скрывает, а при наступлении будущего времени сразу возвращает
+        self.req("/api/snooze", {"ids": [a], "preset": "1h"})
+        self.assertNotIn(a, self.req("/api/visible")[1]["ids"])
+        orig = catcher.msk_time
+        with mock.patch("catcher.msk_time", side_effect=lambda h=0: orig(h - 2)):
+            self.assertIn(a, self.req("/api/visible")[1]["ids"])
+        # Убираем временные записи за собой
+        self.req("/api/pin", {"ids": [b], "pinned": False})
+        self.req("/api/read", {"ids": [a, b]})
+
+    def test_messages_after_zero_and_bad_inputs(self):
+        """after=0 отдаёт записи в порядке возрастания; плохой Content-Length и huge days → 400."""
+        code, rows, _ = self.req("/api/messages?after=0&limit=10")
+        self.assertEqual(code, 200)
+        ids = [r["id"] for r in rows]
+        self.assertEqual(ids, sorted(ids))
+        self.assertGreaterEqual(len(ids), 2)
+        # huge days → 400
+        self.assertEqual(self.req("/api/purge", {"days": 999999999})[0], 400)
+        self.assertEqual(self.req("/api/export", {"format": "json", "days": 999999999})[0], 400)
+        # negative Content-Length → 400
+        hc = http.client.HTTPConnection("127.0.0.1", self.httpd.server_address[1], timeout=5)
+        try:
+            hc.putrequest("POST", "/api/read")
+            hc.putheader("Content-Type", "application/json")
+            hc.putheader("Content-Length", "-5")
+            hc.putheader("Cookie", f"{session.COOKIE}={session.token()}")
+            hc.endheaders()
+            resp = hc.getresponse()
+            self.assertEqual(resp.status, 400)
+            resp.read()
+        finally:
+            hc.close()
+
+    def test_full_text_pref_and_notify_setup(self):
+        p = self.req("/api/prefs", {"full_text": True})[1]
+        self.assertIs(p["full_text"], True)
+        p2 = self.req("/api/prefs", {"full_text": False})[1]
+        self.assertIs(p2["full_text"], False)
+        with mock.patch.dict(os.environ, {"MESSHUB_THEMED_DEMO": "1"}):
+            code, d, _ = self.req("/api/notify-setup")
+        self.assertEqual(code, 200)
+        self.assertIn("system", d)
+        self.assertIn("browsers", d)
+        self.assertIn("apps", d)
+        self.assertEqual(self.req("/api/notify-setup/gnome", {"slug": "../bad/slug", "enable": True})[0], 400)
 
 
 if __name__ == "__main__":
@@ -359,3 +435,13 @@ class MoveColumnTest(unittest.TestCase):
         finally:
             conn.close()
         self.assertEqual(self.board()[rec["id"]]["src"], "my:личное")
+        # Поиск по исходному источнику исключает перенесённые в my:личное; поиск по my:личное их находит
+        _, res_tg, _ = self.req("/api/search?src=telegram")
+        tg_ids = {r["id"] for r in res_tg["rows"]}
+        self.assertIn(self.work, tg_ids)
+        self.assertNotIn(self.mama, tg_ids)
+        _, res_my, _ = self.req("/api/search?src=" + urllib.parse.quote("my:личное"))
+        my_ids = {r["id"] for r in res_my["rows"]}
+        self.assertIn(self.mama, my_ids)
+        self.assertIn(self.wa, my_ids)
+        self.assertNotIn(self.work, my_ids)

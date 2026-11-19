@@ -1,6 +1,6 @@
 # messhub
 
-**One window for all the notifications on your computer: Linux, plus Windows and macOS (beta).**
+**One window for all the notifications on your computer: Linux and Windows (beta).**
 
 Messages from your work messenger, Telegram, MAX, WhatsApp, mail and your own scripts land on one
 tidy board on your desktop. The pop-up is gone - the message stays. And nothing leaves your computer.
@@ -58,9 +58,11 @@ place and keep it below other windows. On every card: ✓ - read, ⏰ - snooze, 
 ⓘ - "why is this here?", ⤢ - open in full. Click a name to open the app, double-click the text to
 copy it, links open in the browser.
 
-**A long message or a big log** - a card shows up to 10 lines and a "Show in full" link. It (or ⤢ on
-the card) opens the message in its own window, like settings: the full text and the whole log; copy
-them, pin the message or mark it read from there. Esc closes it.
+**A long message or a big log** - a card shows up to 10 lines (or everything right away when "Show in full"
+is enabled under Appearance). Unfold a long card inline with "Expand in full" or open it in its own
+window ("In window ⤢" or ⤢ on the card): full text and the whole log; copy them, pin the message or
+mark it read. Reading in messhub never marks messages read in Telegram or other messengers (Esc closes
+the window).
 
 **Snooze** - the message disappears and comes back in an hour, in the evening or tomorrow morning.
 
@@ -87,7 +89,7 @@ from the right. The cards are the same as in the columns, with the same buttons 
 they do not fit, arrows appear at the edges. Several important messages from one chat gather into one card
 that opens upwards. The strip follows the board and moves below it when there is no room above. Turn it on
 in settings, "Appearance" - "Important strip". On Linux the empty parts of the row are transparent and let
-clicks through to the windows below; on Windows and Mac the strip is a band as tall as its content.
+clicks through to the windows below; on Windows the strip is a band as tall as its content.
 
 ![Important strip above the board](docs/screens/en/widget-strip.png)
 
@@ -109,9 +111,7 @@ Turned on in settings, each one separately; all are off by default. They stay ou
 everyday users and save a trip to the terminal for people who work with code and servers.
 
 - **Containers** - Docker and Podman: a container crashed, ran out of memory, turned unhealthy or
-  keeps restarting. The app only listens to engine events; it never starts or stops anything. On a Mac
-  it finds Docker Desktop, OrbStack, Colima, Rancher Desktop and Podman even when they are not in the
-  app's PATH.
+  keeps restarting. The app only listens to engine events; it never starts or stops anything.
 - **Services** - failed systemd services (a backup timer did not run, a service did not start); on
   Windows, services from the event log.
 - **Commands** - `messhub run -- make build`: the command runs as usual, and its result with the exit
@@ -156,8 +156,8 @@ open the message itself.
   answers again right away, without thinking. Such models do better with a context of 16,384 or more.
   Cloud models use their own context, and "Messages in the selection" decides how many to send; the
   selection summary shows how many did not fit.
-- **Everything stays with you** - the model address must be on this computer (your home network only
-  if you allow it); cloud addresses are refused.
+- **Everything stays with you** - the model address is restricted to this computer; cloud addresses
+  are refused.
 - **Answers with code, tables and charts** - code and JSON highlighting with a Copy button, tables,
   task lists, quotes. Ask for a chart and the answer draws bars, lines or a ring with hover tips; it
   switches to a table and copies as SVG.
@@ -186,6 +186,14 @@ Open them with the gear in the corner of the board.
 **Sources** - every app that has sent notifications. Rename any of them and give it your own icon.
 
 ![Sources](docs/screens/en/settings-sources.png)
+
+**App setup** - built-in notification diagnostics for your OS, browsers (Chrome, Yandex, Chromium,
+Firefox, Edge, Brave, Vivaldi, Opera) and messengers (Telegram Desktop, eXpress, mail apps). Shows
+where notifications are turned off in GNOME/Windows or blocked in browser profiles for web.telegram.org,
+max.ru and webmail, toggles GNOME app permissions in one click, opens OS/browser notification settings
+and verifies end-to-end capture with a test notification.
+
+![App setup](docs/screens/en/settings-setup.png)
 
 **A source** - who wrote and what to show. For every chat and sender you see whether it reaches the
 board, and one click creates a rule for it.
@@ -235,7 +243,7 @@ call moved?") through an AI model that runs on your own computer.
 
 ![Search](docs/screens/en/settings-search.png)
 
-**Appearance** - language, opacity, text size, theme, density, avatars, the important strip.
+**Appearance** - language, opacity, text size, theme, density, full-text cards, avatars, the important strip.
 
 ![Appearance](docs/screens/en/settings-look.png)
 
@@ -298,8 +306,6 @@ system. Admin rights are needed only for the Linux packages (the package manager
 | Windows 10 / 11 (beta) | `messhub-<version>-windows-x64.msi` | double-click - regular install |
 | Windows 10 / 11 (beta) | `messhub-<version>-windows-setup.bat` | install without an installer |
 | Windows 10 / 11 (beta) | `messhub-<version>-windows-portable.zip` | portable, no install |
-| macOS 14+ on Apple Silicon (beta) | `messhub-<version>-macos-arm64.dmg` | open and drag into Applications |
-| macOS 14+ on Apple Silicon (beta) | `messhub-<version>-macos-arm64.zip` | the same app as an archive |
 | to verify | `SHA256SUMS.txt` | checksums of all files |
 
 ### Linux
@@ -363,52 +369,11 @@ updated Windows 10. The app isn't code-signed yet, so Windows may warn about an 
 More info → Run anyway. Windows 7 is not supported: it has no system notification center. The Windows
 version is new - if something is off, open an [issue](https://github.com/DanielLetto2020/messhub/issues/new/choose).
 
-### macOS (beta, Apple Silicon)
-
-You need a Mac with Apple Silicon (M1 or newer) and macOS 14 Sonoma or newer (up to macOS 27 Golden Gate).
-
-**Why macOS warns you.** messhub is a free open-source app without a paid Apple signature (Apple
-Developer ID, 99 dollars a year). GitHub Actions builds it right from this repository and signs it with
-the usual free signature (ad-hoc). So macOS can't verify the developer and asks you once - like
-"Unknown publisher" on Windows.
-
-1. Download `messhub-<version>-macos-arm64.dmg`, open it and drag **messhub** into Applications.
-2. Open messhub from Applications. macOS says it could not verify messhub is free of malware - press
-   **Done** (not "Move to Trash").
-3. Open **System Settings → Privacy & Security** and scroll down to "Security": there is a line saying
-   messhub was blocked - press **Open Anyway**, enter your password and press **Open** once more. The
-   button stays for about an hour after the blocked launch; if it's gone, open messhub again and come back.
-
-   The same with one Terminal command, no settings:
-
-   ```bash
-   xattr -dr com.apple.quarantine /Applications/messhub.app
-   ```
-
-4. Allow **Full Disk Access** - messhub opens that pane itself ("System Settings → Privacy & Security →
-   Full Disk Access"). Turn messhub on there (if it's not listed - "+" and pick messhub in Applications),
-   then quit and reopen messhub. Why: macOS keeps the notifications it has shown in its own protected
-   database, and messhub only reads it. It never looks into the apps' own data.
-5. Start at login - in messhub settings, "System".
-
-**Update** - drag the new version into Applications, replacing the old one, and go through steps 2-4
-again. Without a paid signature macOS treats every version as a new app, so "Open Anyway" and "Full Disk
-Access" have to be confirmed again (remove the old messhub from the access list with "-" first).
-**Uninstall** - drag messhub from Applications to the Trash. History lives in
-`~/Library/Application Support/messhub`, the login item in `~/Library/LaunchAgents/messhub.plist`.
-
-What's different on a Mac for now: it gets the notifications macOS puts into Notification Center (if an
-app's notifications are off or one was swiped away within a couple of seconds, it won't be there); the
-Services column and the terminal hook are Linux and Windows only; "go to the app" opens the app itself.
-The Mac version is new - if something is off, open an
-[issue](https://github.com/DanielLetto2020/messhub/issues/new/choose); the log from "Logs" helps find the cause.
-
 ### Verify the download
 
 ```bash
 sha256sum -c SHA256SUMS.txt --ignore-missing      # Linux: next to the downloaded files
 certutil -hashfile messhub-…-windows-x64.msi SHA256   # Windows: compare with SHA256SUMS.txt
-shasum -a 256 messhub-…-macos-arm64.dmg                 # macOS: compare with SHA256SUMS.txt
 ```
 
 ### If Telegram messages don't show up
@@ -421,10 +386,8 @@ keep the sender name and message preview on.
 
 - messhub sees **only the notifications** your computer has already shown you. It doesn't look into
   the apps, their databases or conversations.
-- The history is kept **only on your computer** (`~/.local/share/messhub`, on a Mac -
-  `~/Library/Application Support/messhub`). No servers, accounts or analytics.
-- On a Mac notifications come from the Notification Center database that macOS itself keeps - hence
-  "Full Disk Access". messhub only reads that database and never changes it.
+- The history is kept **only on your computer** (`~/.local/share/messhub`, or in your user /
+  `data/` folder on Windows). No servers, accounts or analytics.
 - Only what you turn on leaves the computer: forwarding to Telegram, the weekly report and checking
   your own mailboxes (read-only). Smart search uses an AI model on your own computer.
 - Passwords and keys are stored in files only you can read and are never sent anywhere.
@@ -453,11 +416,13 @@ Switch to another window and new messages from that chat arrive as notifications
 
 **Sometimes only the beginning of a long message arrives.** That's how the app itself showed it:
 notifications often carry just the start of the text and "photo" or "file" instead of attachments.
+Everything received in the notification can be unfolded inline ("Expand in full") or in window ⤢,
+leaving the message unread inside the messenger.
 
-**Does it work on Windows or macOS?** Linux - yes, Windows 10 and 11 - yes (beta), macOS 14 or newer on
-Apple Silicon - yes (beta). Not Windows 7: it has no system notification center an app could read.
+**Does it work on Windows?** Linux - yes, Windows 10 and 11 - yes (beta). Not Windows 7: it has no
+system notification center an app could read.
 
-**Why is everything from the browser in one column?** On Linux and Mac the browser puts the site into
+**Why is everything from the browser in one column?** On Linux the browser puts the site into
 the notification, and messages go to their own columns (MAX, WhatsApp, Mail and so on). On Windows the
 site is only drawn on the pop-up itself and isn't given to other apps (checked), so everything from
 Chrome lands in one column there. When a column gets messages from several sites or apps, the button in

@@ -62,7 +62,9 @@ def token():
         # второй раз проверяем: пока писали, токен мог создать другое подключение
         try:
             with open(paths.SESSION_CFG, encoding="utf-8") as f:
-                return str(json.load(f).get("token") or "")
+                t = str(json.load(f).get("token") or "")
+            if t:
+                return t
         except (OSError, ValueError):
             pass
         t = secrets.token_urlsafe(32)
@@ -104,11 +106,12 @@ def ok(headers):
 
 
 def cookie_header():
-    """Set-Cookie для ответа со страницей: Strict, без HttpOnly (странице он не мешает,
-    но и читать его из JS не нужно - он и так подставляется браузером)."""
+    """Set-Cookie для ответа со страницей: HttpOnly + SameSite=Strict (JS читать не должен —
+    браузер подставляет её сам, а токен переживает долгие сеансы работы виджета)."""
     # SameSite=Strict - cookie не уходит, даже если пользователь пришёл по ссылке с
-    # чужого сайта; Path=/ - на все страницы; Max-Age до перезапуска программы.
-    return f"{COOKIE}={token()}; Path=/; SameSite=Strict; Max-Age=86400"
+    # чужого сайта; Path=/ - на все страницы; HttpOnly - недоступна скриптам на странице;
+    # Max-Age=31536000 (1 год) - долгоживущий виджет не отваливается через сутки.
+    return f"{COOKIE}={token()}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000"
 
 
 def script_help():

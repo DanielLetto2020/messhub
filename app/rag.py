@@ -41,29 +41,60 @@ from operator import mul
 import rules
 from i18n import L
 
-OLLAMA = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
-if not OLLAMA.startswith("http"):
-    OLLAMA = "http://" + OLLAMA
+from contextlib import contextmanager
+
+DEFAULT_OLLAMA = "http://127.0.0.1:11434"
+_env_ollama = os.environ.get("OLLAMA_HOST", "").strip().rstrip("/")
+if _env_ollama and not _env_ollama.startswith("http"):
+    _env_ollama = "http://" + _env_ollama
+OLLAMA = _env_ollama or DEFAULT_OLLAMA
 EMBED_HINTS = ("embed", "bge", "e5", "minilm", "gte", "nomic", "mxbai", "arctic")
 
 state = {"installing": False, "progress": "", "error": "", "retry_at": 0}   # для страницы настроек
 _lock = threading.Lock()
+_install_lock = threading.Lock()
+_tls = threading.local()
+
+
+def ollama_url(conn=None):
+    """Адрес Ollama: OLLAMA_HOST (если явно задан) или настройка prefs.ai.ollama_url (только локальный)."""
+    if os.environ.get("OLLAMA_HOST") or OLLAMA != DEFAULT_OLLAMA:
+        return OLLAMA if rules.ai_url_ok(OLLAMA) else DEFAULT_OLLAMA
+    if conn is not None:
+        url = (rules.get_prefs(conn)["ai"].get("ollama_url") or DEFAULT_OLLAMA).strip().rstrip("/")
+        if rules.ai_url_ok(url):
+            return url
+    return DEFAULT_OLLAMA
+
+
+@contextmanager
+def _with_base(conn=None):
+    prev = getattr(_tls, "base", None)
+    _tls.base = ollama_url(conn)
+    try:
+        yield _tls.base
+    finally:
+        _tls.base = prev
 
 
 def _call(path, body=None, timeout=30, method=None):
+    base = getattr(_tls, "base", None) or OLLAMA
+    if not rules.ai_url_ok(base):
+        raise ValueError(L("Адрес Ollama — только на этом компьютере", "The Ollama address must be on this computer"))
     data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(OLLAMA + path, data=data, method=method or ("POST" if data else "GET"),
+    req = urllib.request.Request(base.rstrip("/") + path, data=data, method=method or ("POST" if data else "GET"),
                                  headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.load(r)
 
 
-def models():
+def models(conn=None):
     """Модели в Ollama → (список имён, ошибка)."""
-    try:
-        return [m["name"] for m in _call("/api/tags", timeout=4).get("models", [])], ""
-    except (OSError, ValueError, urllib.error.URLError) as e:
-        return [], str(e)
+    with _with_base(conn):
+        try:
+            return [m["name"] for m in _call("/api/tags", timeout=4).get("models", [])], ""
+        except (OSError, ValueError, urllib.error.URLError) as e:
+            return [], str(e)
 
 
 def _is_embed(name):
@@ -76,12 +107,14 @@ def _has(names, model):
 
 def status(conn):
     prefs = rules.get_prefs(conn)["rag"]
-    names, err = models()
+    base = ollama_url(conn)
+    names, err = models(conn)
     total = conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
     done, skipped = conn.execute("SELECT COALESCE(SUM(length(vec) > 0), 0), COALESCE(SUM(length(vec) = 0), 0) "
                                  "FROM embeddings WHERE model = ?", (prefs["model"],)).fetchone()
     return {"enabled": prefs["enabled"], "model": prefs["model"], "chat_model": prefs["chat_model"],
-            "ollama": not err, "ollama_error": err, "model_installed": _has(names, prefs["model"]),
+            "ollama": not err, "ollama_url": base.replace("http://", ""), "ollama_error": err,
+            "model_installed": _has(names, prefs["model"]),
             "chat_models": [n for n in names if not _is_embed(n)],
             "embed_models": [n for n in names if _is_embed(n)],
             "indexed": done, "skipped": skipped, "total": total, **state,
@@ -90,13 +123,27 @@ def status(conn):
 
 def install(db_path, model, chat_model=""):
     """Скачать модель векторов (в фоне, с прогрессом) и включить умный поиск."""
-    if state["installing"]:
-        return
+    with _install_lock:
+        if state["installing"]:
+            return
+        state.update(installing=True, progress=L("начинаю…", "starting…"), error="")
+    try:
+        conn = sqlite3.connect(db_path, timeout=5)
+        try:
+            base = ollama_url(conn)
+        finally:
+            conn.close()
+        if not rules.ai_url_ok(base):
+            raise ValueError(L("Адрес Ollama — только на этом компьютере", "The Ollama address must be on this computer"))
+    except Exception as e:
+        with _install_lock:
+            state["installing"] = False
+            state["error"] = str(e)
+        raise
 
     def work():
-        state.update(installing=True, progress=L("начинаю…", "starting…"), error="")
         try:
-            req = urllib.request.Request(OLLAMA + "/api/pull", method="POST",
+            req = urllib.request.Request(base.rstrip("/") + "/api/pull", method="POST",
                                          data=json.dumps({"model": model, "stream": True}).encode(),
                                          headers={"Content-Type": "application/json"})
             with urllib.request.urlopen(req, timeout=3600) as r:
@@ -122,7 +169,8 @@ def install(db_path, model, chat_model=""):
         except Exception as e:  # noqa: BLE001 — сеть, Ollama не запущена, нет такой модели
             state["error"] = str(e)
         finally:
-            state["installing"] = False
+            with _install_lock:
+                state["installing"] = False
     threading.Thread(target=work, name="rag-install", daemon=True).start()
 
 
@@ -133,8 +181,9 @@ def disable(conn, drop):
         conn.execute("DELETE FROM embeddings")
 
 
-def remove_model(model):
-    _call("/api/delete", {"model": model}, method="DELETE")
+def remove_model(model, conn=None):
+    with _with_base(conn):
+        _call("/api/delete", {"model": model}, method="DELETE")
 
 
 def _text(chat, sender, message):
@@ -215,8 +264,10 @@ def index_step(db_path, batch=32):
     with _lock:
         conn = sqlite3.connect(db_path, timeout=5)
         try:
+            with _install_lock:
+                installing = state["installing"]
             p = rules.get_prefs(conn)["rag"]
-            if not p["enabled"] or state["installing"]:
+            if not p["enabled"] or installing:
                 return 0
             rows = conn.execute("""SELECT m.id, m.chat, m.sender, m.message FROM messages m
                                    LEFT JOIN embeddings e ON e.message_id = m.id AND e.model = ?
@@ -225,12 +276,13 @@ def index_step(db_path, batch=32):
             if not rows:
                 return 0
             texts = [_text(c, s, m) for _, c, s, m in rows]
-            try:
-                vecs = _embed(p["model"], texts)
-            except urllib.error.HTTPError as e:
-                if not _bad_input(e):
-                    raise
-                vecs = [_embed_one(p["model"], x) for x in texts]     # одно сбойное не держит всю порцию
+            with _with_base(conn):
+                try:
+                    vecs = _embed(p["model"], texts)
+                except urllib.error.HTTPError as e:
+                    if not _bad_input(e):
+                        raise
+                    vecs = [_embed_one(p["model"], x) for x in texts]     # одно сбойное не держит всю порцию
             conn.executemany("INSERT OR REPLACE INTO embeddings (message_id, model, vec) VALUES (?,?,?)",
                              [(r[0], p["model"], v.tobytes() if v else b"") for r, v in zip(rows, vecs)])
             conn.commit()
@@ -246,13 +298,16 @@ def search(conn, q, k=20):
     if not p["enabled"]:
         raise ValueError(L("Умный поиск выключен — включи его в «Поиск»",
                            "Smart search is off — enable it in “Search”"))
-    qv = _embed(p["model"], [q])[0]
+    with _with_base(conn):
+        qv = _embed(p["model"], [q])[0]
     best = []
     for mid, blob in conn.execute("SELECT message_id, vec FROM embeddings WHERE model = ?", (p["model"],)):
         if not blob:                  # пропущенное — вектора нет
             continue
         v = array("f")
         v.frombytes(blob)
+        if len(v) != len(qv):
+            continue
         score = sum(map(mul, qv, v))
         if len(best) < k:
             heapq.heappush(best, (score, mid))
@@ -264,7 +319,7 @@ def search(conn, q, k=20):
 def ask(conn, question, rows_by_id):
     """Ответ на вопрос по найденным сообщениям. rows_by_id — {id: строка сообщения}."""
     p = rules.get_prefs(conn)["rag"]
-    names, err = models()
+    names, err = models(conn)
     chat_model = p["chat_model"] or next((n for n in names if not _is_embed(n)), "")
     if not chat_model:
         raise ValueError(L("В Ollama нет чат-модели для ответов — поставь любую (ollama pull …)",
@@ -278,7 +333,8 @@ def ask(conn, question, rows_by_id):
                "given; if the answer is not there, say so. Cite messages by number in square brackets, "
                "e.g. [12].")
     user = L(f"Сообщения:\n{ctx}\n\nВопрос: {question}", f"Messages:\n{ctx}\n\nQuestion: {question}")
-    r = _call("/api/chat", {"model": chat_model, "stream": False, "options": {"temperature": 0.2},
-                            "messages": [{"role": "system", "content": system},
-                                         {"role": "user", "content": user}]}, timeout=240)
+    with _with_base(conn):
+        r = _call("/api/chat", {"model": chat_model, "stream": False, "options": {"temperature": 0.2},
+                                "messages": [{"role": "system", "content": system},
+                                             {"role": "user", "content": user}]}, timeout=240)
     return r.get("message", {}).get("content", ""), chat_model

@@ -53,6 +53,7 @@
   .blurred .text, .blurred pre.log, .blurred header .who { filter: blur(9px); }
   .veil { display: none; margin: 0 0 12px; color: var(--muted); }
   .blurred .veil { display: block; }
+  .priv-note { font-size: 11.5px; color: var(--muted); margin: 14px 0 0; }
 
   footer { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 18px; border-top: 1px solid var(--line);
     background: var(--bar); flex: 0 0 auto; }
@@ -82,7 +83,7 @@
 <script>
 // ошибки страницы — в журнал программы (настройки → «Логи»)
 (()=>{let n=0;window.addEventListener('error',e=>{if(++n>10)return;
-  fetch('/api/logs/client',{method:'POST',headers:{'Content-Type':'application/json'},
+  fetch('/api/logs/client',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({page:'message',msg:String(e.message).slice(0,1000),where:(e.filename||'').split('/').pop()+':'+e.lineno})}).catch(()=>{});});})();
 const $ = id => document.getElementById(id);
 const QS = new URLSearchParams(location.search), ID = +QS.get('id') || 0;
@@ -133,7 +134,7 @@ function draw(){
   $('ico').textContent=m.src_ico||'🔔';
   const pills=(m.pinned?`<span class="pill pin">${esc(t('Закреплено'))}</span>`:'')+
     (m.urgency>=2?`<span class="pill urg">${esc(t('Важное'))}</span>`:'')+
-    (m.resolved_at?`<span class="pill fixed">${esc(t('✓ Починилось в {hm}',{hm:m.resolved_at.slice(11,16)}))}</span>`:'')+
+    (m.resolved_at?`<span class="pill fixed">${esc(t('✓ Починилось в {hm}',{hm:mskHm(m.resolved_at)}))}</span>`:'')+
     (m.is_read?`<span class="pill read">${esc(t('Прочитано'))}</span>`:'');
   $('who').innerHTML=`<div><span class="chat">${esc(m.chat||m.src_name)}</span>${m.sender&&m.sender!==m.chat?` · <span class="sender">${esc(m.sender)}</span>`:''}</div>
     <div class="src">${esc(m.src_name)}${m.site?' · '+esc(m.site):''}</div>${pills?`<div class="pills">${pills}</div>`:''}`;
@@ -141,7 +142,8 @@ function draw(){
   const n=m.details?m.details.split('\n').length:0;
   $('main').innerHTML=`<p class="veil">${esc(t('Содержимое скрыто для показа экрана.'))} <button class="btn ghost" type="button" id="unveil">${esc(t('Показать'))}</button></p>
     <div class="text">${m.fmt?richFmt(m.fmt):rich(m.message||'')}</div>
-    ${m.details?`<h2>${esc(t('Лог'))} · ${esc(tp(n,...W.line))}</h2><pre class="log">${esc(m.details)}</pre>`:''}`;
+    ${m.details?`<h2>${esc(t('Лог'))} · ${esc(tp(n,...W.line))}</h2><pre class="log">${esc(m.details)}</pre>`:''}
+    <p class="priv-note">${esc(t('Просмотр здесь не отмечает сообщение прочитанным в мессенджере.'))}</p>`;
   const unveil=$('unveil'); if(unveil) unveil.onclick=()=>document.body.classList.remove('blurred');
   // перейти можно только в приложение с окном: не у писем из ящиков и не у тематических колонок
   const go=m.app==='mail-imap'||/^messhub-/.test(m.app||'')?'':m.site?t('Открыть {site}',{site:m.site}):host?t('Перейти в {app}',{app:m.src_name}):'';

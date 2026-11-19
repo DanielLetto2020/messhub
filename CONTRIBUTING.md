@@ -21,7 +21,7 @@ docs/screens/   картинки для README (только вымышленн�
 | `rules.py` | источники, правила «как в почте», профили, настройки, действия при записи |
 | `serve.py` | локальный HTTP-сервер: страницы и API (маршруты - словари `GET_ROUTES` / `POST_ROUTES`); фоновые задачи |
 | `session.py` | токен локального API: без него не принимаются POST (страница получает его cookie, скрипт - заголовком `X-Messhub-Token`) |
-| `pagecmd.py` | команды, которые страница шлёт своему окну (`move`, `search:`, `lock:1`…), разбор и арифметика перетаскивания - общие для Linux, Windows и Mac |
+| `pagecmd.py` | команды, которые страница шлёт своему окну (`move`, `search:`, `lock:1`…), разбор и арифметика перетаскивания - общие для Linux и Windows |
 | `collect.py` | сбор + сервер одним процессом (так работает сервис) |
 | `widget.py` | окно доски (GTK + WebKit), окно настроек и лента важного над доской (прозрачное окно, клики сквозь пустые места - X11 Shape) |
 | `i18n.py` | язык сообщений сервера (страницы переводит `web/i18n.js`) |
@@ -35,14 +35,13 @@ docs/screens/   картинки для README (только вымышленн�
 | `ai.py` | ассистент: Ollama и LM Studio, OpenRouter (только по согласию, ключ в файле 600), каталог и скачивание моделей, беседы, выборка сообщений, картинки к вопросу, ответ потоком |
 | `resources.py`, `logwatch.py`, `calendar_src.py`, `scripts.py` | колонки «Ресурсы», «Журналы», «Календарь», свои источники из `sources.d` |
 | `quiet.py`, `reminders.py`, `when.py`, `screen.py` | тихие часы, напоминания, время в тексте, «идёт ли показ экрана» |
-| `backup.py`, `report.py`, `stats.py`, `ingest.py`, `diag.py`, `avatars.py` | копии, недельный отчёт, статистика, приём событий, самодиагностика, аватары |
+| `backup.py`, `report.py`, `stats.py`, `ingest.py`, `diag.py`, `appsetup.py`, `avatars.py` | копии, недельный отчёт, статистика, приём событий, самодиагностика, настройка уведомлений приложений и браузеров, аватары |
 | `paths.py`, `version.py` | где лежат данные, имя, автор и номер версии |
 | `wincatcher.py`, `winwidget.py`, `messhub_win.py` | Windows 10/11: чтение уведомлений (UserNotificationListener), окно на WebView2, всё одним процессом `messhub.exe` |
-| `maccatcher.py`, `messhub_mac.py` | macOS (бета, Apple Silicon): чтение базы Центра уведомлений (нужен «Полный доступ к диску»), окно - то же `winwidget.py` на WKWebView, всё одним процессом `messhub.app`; сборка - `tools/build_mac.py` (подпись ad-hoc) |
 
 | в `tools/` | |
 |---|---|
-| `build.py`, `build_windows.py`, `build_mac.py` | пакеты: `.deb`, `.rpm`, `.tar.gz`; на Windows - exe, zip, `.bat`, `.msi`; на Mac - `.app` в `.dmg` и `.zip` (CI: `.github/workflows/packages.yml`) |
+| `build.py`, `build_windows.py` | пакеты: `.deb`, `.rpm`, `.tar.gz`; на Windows - exe, zip, `.bat`, `.msi` (CI: `.github/workflows/packages.yml`) |
 | `demo_data.py`, `screenshots.py` | вымышленные данные и скриншоты для README |
 | `check_public.py`, `i18n_check.py` | нет ли личного в коммите; у всех строк интерфейса есть перевод |
 

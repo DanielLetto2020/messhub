@@ -37,6 +37,7 @@ class FakeImap(socketserver.ThreadingTCPServer):
         self.uidvalidity = 7
         self.password = "app-pass"
         self.seen_flags_changed = False
+        self.searches = []
         super().__init__(("127.0.0.1", 0), Handler)
 
 
@@ -67,7 +68,16 @@ class Handler(socketserver.StreamRequestHandler):
                 self.out(f"* OK [UIDVALIDITY {srv.uidvalidity}] ok")
                 self.out(f"{tag} OK [READ-ONLY] done")
             elif cmd == "UID" and arg.upper().startswith("SEARCH"):
-                self.out("* SEARCH " + " ".join(map(str, sorted(srv.box))))
+                srv.searches.append(arg)
+                uids = sorted(srv.box)
+                if "UID " in arg.upper():
+                    tail = arg.upper().split("UID ", 1)[1].strip()
+                    if ":" in tail:
+                        start_s = tail.split(":", 1)[0]
+                        if start_s.isdigit():
+                            start = int(start_s)
+                            uids = [u for u in uids if u >= start]
+                self.out("* SEARCH " + " ".join(map(str, uids)))
                 self.out(f"{tag} OK done")
             elif cmd == "UID" and arg.upper().startswith("FETCH"):
                 _, uid, what = arg.split(" ", 2)
@@ -133,7 +143,9 @@ class MailTest(unittest.TestCase):
                                  attach=True)
         self.srv.box[3] = letter("=?utf-8?b?0J/RgNC40LLQtdGC?=", "x@example.org", "", html=True)
         self.assertEqual(mail.check(self.db, a), 2)
+        self.assertTrue(any("UID 2:*" in s for s in self.srv.searches))
         self.assertEqual(mail.check(self.db, a), 0)              # второй раз те же не приходят
+        self.assertTrue(self.srv.searches[-1].endswith("UID 4:*"))
         self.assertFalse(self.srv.seen_flags_changed)            # только PEEK — на сервере не прочитано
         rows = self.conn.execute("SELECT app, chat, sender, message, has_media FROM messages ORDER BY id").fetchall()
         self.assertEqual(rows[0][:3], ("mail-imap", "Работа", "Бухгалтерия"))
@@ -184,6 +196,25 @@ class MailTest(unittest.TestCase):
         self.assertNotIn("mail", [s["key"] for s in serve.sources(self.db)])
         mail.save_account(self.conn, self.acc)
         self.assertIn("mail", [s["key"] for s in serve.sources(self.db)])   # колонка «Почта» зарезервирована
+
+    def test_html_entities_utf7_and_long_body(self):
+        """HTML-сущности раскодированы, кириллические папки — в IMAP UTF-7, длинные письма > 300 символов не режутся на 240."""
+        self.assertEqual(mail._imap_utf7("Отправленные"), "&BB4EQgQ,BEAEMAQyBDsENQQ9BD0ESwQ1-")
+        self.assertEqual(mail._quote("R&D"), '"R&-D"')
+        long_text = " ".join(f"слово{i}" for i in range(60))
+        self.assertGreater(len(long_text), 300)
+        msg_html = EmailMessage()
+        msg_html["From"], msg_html["Subject"] = "n@example.org", "Отчёт"
+        msg_html.set_content("<p>AT&amp;T &mdash; тест &quot;ок&quot;</p>", subtype="html")
+        a = mail.save_account(self.conn, self.acc)
+        self.assertEqual(mail.check(self.db, a), 0)
+        self.srv.box[2] = letter("Длинное", "n@example.org", long_text)
+        self.srv.box[3] = msg_html.as_bytes()
+        self.assertEqual(mail.check(self.db, a), 2)
+        msgs = [r[0] for r in self.conn.execute("SELECT message FROM messages ORDER BY id").fetchall()]
+        self.assertGreater(len(msgs[0]), 300)
+        self.assertIn("слово59", msgs[0])
+        self.assertIn('AT&T — тест "ок"', msgs[1])
 
 
 if __name__ == "__main__":

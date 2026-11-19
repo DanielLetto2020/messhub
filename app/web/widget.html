@@ -177,10 +177,19 @@
   body.light .det pre { background: rgba(0,0,0,.06); }
   .det .dfull { margin-left: 4px; font-size: 10.5px; color: var(--accent); cursor: pointer; }
   .det .dfull:hover { text-decoration: underline; text-underline-offset: 2px; }
-  /* длинный текст на плашке — не больше 10 строк; остальное — в окне «целиком» */
+  /* длинный текст на плашке — не больше 10 строк; можно развернуть в карточке или открыть в окне ⤢ */
   .msg > .body { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 10; overflow: hidden; }
   .compact .msg > .body { -webkit-line-clamp: 6; }
+  body.full-text #board .msg > .body,
+  .msg.expanded > .body,
+  .compact .msg.expanded > .body,
+  #strip .msg.expanded > .body,
+  .compact #strip .msg.expanded > .body { display: block; -webkit-line-clamp: unset; overflow: visible; }
+  .more-row { display: flex; align-items: center; gap: 10px; margin-top: 3px; }
+  .more-row .more { margin-top: 0; }
   .more { display: inline-block; margin-top: 2px; font-size: 10.5px; font-weight: 600; color: var(--accent); cursor: pointer; }
+  .more.sec { color: var(--muted); font-weight: 500; }
+  .more.sec:hover { color: var(--accent); }
   /* время из текста → «напомнить»; заведённое напоминание — колокольчик */
   .tchip { display: inline-flex; align-items: center; gap: 3px; margin: 3px 6px 0 0; font-size: 10.5px; color: var(--muted);
     border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; cursor: pointer; }
@@ -260,7 +269,7 @@
   .rz.sw { bottom: 0; left: 0;  width: 14px; height: 14px; cursor: sw-resize; }
   /* страница открыта в обычном браузере, а не в окне виджета — двигать нечего */
   .nohost .rz, .nohost .lock { display: none; }
-  /* окно pywebview (winwidget.py, Windows и Mac): подложка сплошная, без скруглений; прозрачность — у окна целиком */
+  /* окно pywebview (winwidget.py, Windows): подложка сплошная, без скруглений; прозрачность — у окна целиком */
   html.pyw, html.pyw body { background: rgb(var(--glass)); }
   .pyw .wrap { background: rgb(var(--glass)); border-radius: 0; border: 0; box-shadow: none;
     -webkit-backdrop-filter: none; backdrop-filter: none; }
@@ -385,13 +394,13 @@
 <script>
 // ошибки страницы — в журнал программы (настройки → «Логи»), не чаще 10 в минуту
 (()=>{let n=0,t0=Date.now();const send=(msg,where)=>{if(Date.now()-t0>6e4){n=0;t0=Date.now();}if(++n>10)return;
-  try{fetch('/api/logs/client',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({page:'widget',msg:String(msg).slice(0,1000),where})}).catch(()=>{});}catch(e){}};
+  try{fetch('/api/logs/client',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({page:'widget',msg:String(msg).slice(0,1000),where})}).catch(()=>{});}catch(e){}};
   window.addEventListener('error',e=>send(e.message,(e.filename||'').split('/').pop()+':'+e.lineno));
   window.addEventListener('unhandledrejection',e=>send('Promise: '+((e.reason&&e.reason.message)||e.reason),''));})();
 const $ = id => document.getElementById(id);
 const board = $('board'), empty = $('empty'), dot = $('dot'), countEl = $('count'), menu = $('menu');
 const QS = new URLSearchParams(location.search);
-// окно-хозяин: GTK+WebKit (widget.py, Linux) или pywebview (winwidget.py, Windows и Mac, адрес с ?host=pywebview:
+// окно-хозяин: GTK+WebKit (widget.py, Linux) или pywebview (winwidget.py, Windows, адрес с ?host=pywebview:
 // подложка сплошная, а полупрозрачным окно делает само — целиком, по настройке, которую страница ему шлёт).
 // У pywebview мост window.pywebview.api появляется позже (событие pywebviewready) — до него копим
 const PYW = QS.get('host') === 'pywebview';
@@ -436,9 +445,10 @@ const fresh = new Set();    // только что пришедшие — миг
 const gids = new Map(), gkeys = new Map();   // группа ↔ короткий номер для data-атрибута
 const skipped = new Set();  // пришли, но их колонка скрыта или вне ?only= — сверка их не возвращает
 const openDet = new Set();  // карточки с раскрытым хвостом лога
+const expanded = new Set(); // карточки с развёрнутым целиком текстом
 let focus = false; try { focus = localStorage.getItem('focus') === '1'; } catch (e) {}
 
-// esc(), attr(), escRe(), post() - в /common.js; свой toast: у него кнопка «Вернуть».
+// esc(), attr(), escRe(), post(), copyText(), mskHm() - в /common.js; свой toast: у него кнопка «Вернуть».
 function fmtTime(iso){if(!iso)return'';const x=iso.replace('T',' ');return x.length>=19?x.slice(11,16):x;}
 function gid(g){if(!gids.has(g)){const i=gids.size+1;gids.set(g,i);gkeys.set(i,g);}return gids.get(g);}
 const important = m => !!(m.pinned || m.highlight || m.mention);
@@ -542,11 +552,11 @@ function cardHtml(m, withChat, withSrc){
   const who = !(seen(m.chat)||seen(m.sender)) ? `<span class="chat">${esc(m.orig_name||m.src_name||'—')}</span>` : withChat
     ? `<span class="chat">${esc(m.chat)}</span>`+(m.sender&&m.sender!==m.chat?` · <span class="sender">${esc(m.sender)}</span>`:'')
     : `<span class="sender">${esc(m.sender||m.chat)}</span>`;
-  const cls='msg'+(fresh.has(m.id)?' flash':'')+(m.highlight?' hl hl-'+m.highlight:'')+(m.pinned?' pinned':'')+(m.resolved_at?' resolved':'');
+  const cls='msg'+(fresh.has(m.id)?' flash':'')+(m.highlight?' hl hl-'+m.highlight:'')+(m.pinned?' pinned':'')+(m.resolved_at?' resolved':'')+(expanded.has(m.id)?' expanded':'');
   const nLines=m.details?m.details.split('\n').length:0, dOpen=openDet.has(m.id);
   const det=m.details?`<div class="det${dOpen?' open':''}"><span class="dt" data-act="det">${ICON.chev}${esc(t('Лог'))} · ${esc(tp(nLines,...W.line))}</span><span class="dfull" data-act="full">${esc(t('целиком'))}</span>${
     dOpen?`<pre class="log" title="${attr(t('Двойной клик — скопировать лог'))}">${esc(m.details)}</pre>`:''}</div>`:'';
-  const fixed=m.resolved_at?`<div class="fixed">${esc(t('✓ Починилось в {hm}',{hm:m.resolved_at.slice(11,16)}))}</div>`:'';
+  const fixed=m.resolved_at?`<div class="fixed">${esc(t('✓ Починилось в {hm}',{hm:mskHm(m.resolved_at)}))}</div>`:'';
   const tchip=m.remind_at?`<div><span class="tchip on" data-act="remind" title="${attr(t('Напоминание заведено — нажми, чтобы отменить'))}">🔔 ${esc(t('напомню {w}',{w:whenLabel(m.remind_at)}))}</span></div>`
     :(m.times&&m.times.length)?`<div>${m.times.slice(0,2).map((x,i)=>`<span class="tchip" data-act="remind" data-ti="${i}" title="${attr(t('Напомнить об этом'))}">⏰ ${esc(whenLabel(x.at,x.date_only))}</span>`).join('')}</div>`:'';
   const go=goTitle(m);
@@ -624,12 +634,17 @@ function renderCol(key){
   c.body.dataset.empty=t(focus?'важного нет':'нет новых');
   c.cEl.textContent=items.length;
 }
-// текст не влез в 10 строк плашки — под ним «Показать целиком» (открывает окно с полным текстом)
+// текст не влез в 10 строк плашки — под ним «Развернуть целиком» прямо в карточке и «В окне ⤢»
 // (сразу после отрисовки: размеры считаются тут же; requestAnimationFrame в свёрнутом окне не приходит)
 function markLong(root){
+  if(!root) return;
+  root.querySelectorAll('.msg > .more-row').forEach(el=>el.remove());
   root.querySelectorAll('.msg > .body').forEach(b=>{
-    const cut=b.scrollHeight>b.clientHeight+2, more=b.nextElementSibling&&b.nextElementSibling.classList.contains('more');
-    if(cut&&!more) b.insertAdjacentHTML('afterend',`<span class="more" data-act="full">${esc(t('Показать целиком'))}</span>`);
+    const card=b.closest('.msg'), id=card&&+card.dataset.id, isExp=expanded.has(id);
+    const cut=!isExp&&b.scrollHeight>b.clientHeight+2;
+    if(isExp||cut){
+      b.insertAdjacentHTML('afterend',`<div class="more-row"><span class="more" data-act="expand">${esc(t(isExp?'Свернуть':'Развернуть целиком'))}</span><span class="more sec" data-act="full">${esc(t('В окне ⤢'))}</span></div>`);
+    }
   });
 }
 function renderAll(){for(const k of cols.keys())renderCol(k);renderStrip();fresh.clear();updateCount();}
@@ -725,6 +740,7 @@ board.addEventListener('click',e=>{
     const ids=colItems(col.dataset.key).filter(m=>!m.pinned&&(m.sub||'')===sk).map(m=>m.id);
     if(ids.length)readIds(ids,t('Прочитано: {n}',{n:ids.length}));}
   else if(act==='det'){openDet.has(id)?openDet.delete(id):openDet.add(id);renderCol(col.dataset.key);}
+  else if(act==='expand'){expanded.has(id)?expanded.delete(id):expanded.add(id);renderCol(col.dataset.key);}
   else if(act==='full') openFull(id);
   else if(act==='remind') openRemind(a,id,+(a.dataset.ti||0));
 });
@@ -765,7 +781,7 @@ function blockedHtml(st){
 async function closeCol(key){
   const c=cols.get(key); if(!c) return;
   let r, res;
-  try{res=await fetch('/api/close-column',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({src:key})});
+  try{res=await fetch('/api/close-column',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({src:key})});
     r=await res.json();}
   catch(e){toast(t('Не удалось закрыть — сервер не отвечает'),{err:true});return;}
   if(res.status===409){const b=c.col.querySelector('[data-act="close-col"]');showMenu(b,blockedHtml(r),'close',key);return;}
@@ -796,11 +812,6 @@ function onDblCopy(e){
   });
 }
 board.addEventListener('dblclick',onDblCopy);
-async function copyText(s){
-  try{await navigator.clipboard.writeText(s);return true;}
-  catch(e){const ta=document.createElement('textarea');ta.value=s;ta.style.cssText='position:fixed;opacity:0';
-    document.body.appendChild(ta);ta.select();let ok=false;try{ok=document.execCommand('copy');}catch(_){}ta.remove();return ok;}
-}
 // перейти в приложение-источник: окно ищет и активирует widget.py; сайт — в браузере
 function openSource(m){
   if(!m) return;
@@ -876,8 +887,9 @@ async function cancelRemind(id){
 }
 
 // ── поиск в шапке: окно результатов выпадает над панелью (окно-хозяин держит его рядом с полем) ──
-const hq=$('hq'); let hqT=0;
+const hq=$('hq'); let hqT=0, hqLast='';
 function hqSend(q){
+  hqT=0; hqLast=q;
   $('hqClr').hidden=!q;
   if(host){
     if(!q){host.postMessage('search-close');return;}
@@ -891,7 +903,9 @@ hq.addEventListener('input',()=>{clearTimeout(hqT);hqT=setTimeout(()=>hqSend(hq.
 hq.addEventListener('keydown',e=>{
   if(e.key==='Escape'){e.preventDefault();hq.value='';hqSend('');hq.blur();}
   else if(host&&(e.key==='ArrowDown'||e.key==='ArrowUp')){e.preventDefault();host.postMessage('search-nav:'+(e.key==='ArrowDown'?'down':'up'));}
-  else if(e.key==='Enter'){e.preventDefault();clearTimeout(hqT);if(host)host.postMessage('search-nav:enter');else hqSend(hq.value.trim());}
+  else if(e.key==='Enter'){e.preventDefault();const q=hq.value.trim();
+    if(host){if(hqT||q!==hqLast){clearTimeout(hqT);hqSend(q);}else host.postMessage('search-nav:enter');}
+    else{clearTimeout(hqT);hqSend(q);}}
 });
 // ушли из поля (клик по доске или в другое окно) — окно результатов закрывается; клики в самом окне результатов
 // фокус не забирают, поэтому их это не касается
@@ -1011,7 +1025,7 @@ menu.addEventListener('click',async e=>{
   if(menuKind==='snooze'&&b.dataset.p){
     const id=menuFor; hideMenu();
     try{const r=await post('/api/snooze',{ids:[id],preset:b.dataset.p});dropIds([id]);bcPost({type:'read',ids:[id]});
-      toast(t('Отложено до {t}',{t:r.until.slice(11,16)}));}
+      toast(t('Отложено до {t}',{t:mskHm(r.until)}));}
     catch(e){toast(t('Не удалось отложить — сервер не отвечает'),{err:true});}
   } else if(menuKind==='prof'){
     hideMenu();
@@ -1125,6 +1139,8 @@ function applyPrefs(p){
   setLang(p._lang); translateDom(); applyLock(); applyPriv();
   document.body.classList.toggle('light',p.theme==='light');
   document.body.classList.toggle('compact',!!p.compact);
+  document.body.classList.toggle('full-text',!!p.full_text);
+  if(p.full_text) expanded.clear();
   document.documentElement.style.setProperty('--op',p.opacity);
   document.documentElement.style.setProperty('--fs',p.font_size+'px');
   mentionRe=buildMentionRe(p.mentions);
@@ -1136,7 +1152,7 @@ function applyPrefs(p){
   if(PYW) host.postMessage('opacity:'+p.opacity);     // подложка сплошная — прозрачным окно делает хозяин
 }
 
-// ── лента важного: строка карточек в своём окне (widget.py, класс Strip; winwidget.py на Windows и Mac) ──
+// ── лента важного: строка карточек в своём окне (widget.py, класс Strip; winwidget.py на Windows) ──
 // закреплённое — слева, дальше подсвеченное и упоминания по времени прихода: новое въезжает справа.
 // Несколько важных из одного чата — одна плашка, раскрывается от доски прочь (над строкой)
 function stripModel(){
@@ -1221,7 +1237,7 @@ function placePop(first){
   // плашку чата увели за край строки — окошко прячется, вернётся вместе с ней
   pop.style.visibility=r.right<row.left+24||r.left>row.right-24?'hidden':'';
   pop.style.left=Math.max(6,Math.min(r.left,innerWidth-w-6))+'px';
-  // сколько места — окно ленты на X11 высотой с запасом; растущее по содержимому (Windows, Mac, Wayland) — до 380 px
+  // сколько места — окно ленты на X11 высотой с запасом; растущее по содержимому (Windows, Wayland) — до 380 px
   const room=fitMode?380:Math.max(120,(dock==='below'?innerHeight-r.bottom:r.top)-14);
   pop.style.maxHeight=room+'px';
   if(dock==='below'){pop.style.bottom='';pop.style.top=(r.bottom+6)+'px';}
@@ -1235,7 +1251,7 @@ function stripArrows(){
   $('sarrL').hidden=r.scrollLeft<=2; $('sarrR').hidden=r.scrollLeft+r.clientWidth>=r.scrollWidth-2;
 }
 // окну-хозяину — что нарисовано: там клики ловит лента, в остальных местах окна они уходят окнам под ним.
-// need — сколько окну нужно в высоту (Windows, Mac и Wayland растят окно под раскрытый чат и меню)
+// need — сколько окну нужно в высоту (Windows и Wayland растят окно под раскрытый чат и меню)
 function shapeSoon(){if(STRIP&&host&&!shapeT)shapeT=setTimeout(sendShape,40);}
 function sendShape(){
   shapeT=0;
@@ -1264,7 +1280,7 @@ if(STRIP){
   $('sarrL').innerHTML=$('sarrR').innerHTML=ICON.chev.replace(/width="11" height="11"/,'width="16" height="16"');
   $('sarrL').addEventListener('click',()=>row.scrollBy({left:-row.clientWidth*.8,behavior:'smooth'}));
   $('sarrR').addEventListener('click',()=>row.scrollBy({left:row.clientWidth*.8,behavior:'smooth'}));
-  window.addEventListener('resize',()=>{stripArrows();placePop(false);shapeSoon();});
+  window.addEventListener('resize',()=>{markLong($('sin'));markLong($('spop'));stripArrows();placePop(false);shapeSoon();});
   st.addEventListener('dblclick',onDblCopy);
   st.addEventListener('click',e=>{
     if(e.target.closest('a.lnk')) return;
@@ -1276,6 +1292,7 @@ if(STRIP){
     else if(act==='snooze') openSnooze(a,id);
     else if(act==='open') openSource(msgs.get(id));
     else if(act==='why') openWhy(a,id);
+    else if(act==='expand'){expanded.has(id)?expanded.delete(id):expanded.add(id);renderStrip();}
     else if(act==='full') openFull(id);
     else if(act==='remind') openRemind(a,id,+(a.dataset.ti||0));
     else if(act==='det'){openDet.has(id)?openDet.delete(id):openDet.add(id);renderStrip();}
@@ -1361,6 +1378,7 @@ async function checkUpdate(){
   }catch(e){}
 }
 applyLock(); applyPriv();
+if(!STRIP){let rzT=0;window.addEventListener('resize',()=>{clearTimeout(rzT);rzT=setTimeout(()=>markLong(board),120);});}
 initial(); setInterval(poll,1500); setInterval(sync,15000);
 if(!STRIP){checkUpdate(); setTimeout(checkUpdate,10000); setInterval(checkUpdate,3*36e5);}
 </script>

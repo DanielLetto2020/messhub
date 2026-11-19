@@ -8,7 +8,7 @@ messhub run — выполнить команду и положить итог �
     messhub-run.exe -- npm run build          # Windows (лежит рядом с messhub.exe)
 
 Команда работает как обычно: вывод идёт в терминал, код выхода сохраняется (можно
-ставить в скрипты). На Linux/macOS команда видит настоящий терминал (цвета, прогресс,
+ставить в скрипты). На Linux команда видит настоящий терминал (цвета, прогресс,
 ввод пароля), остальное — через обычные каналы. По окончании на 127.0.0.1 уходит
 итог: команда, папка, код выхода, сколько шла и последние строки вывода (их сервер
 покажет только при ошибке). Удачный запуск той же команды в той же папке гасит
@@ -110,7 +110,19 @@ def run_pipe(argv, tail):
     return p.wait()
 
 
+def _portable(exe=None):
+    """Переносная версия (Windows): если рядом с exe лежит portable.txt — данные и session.json в data/."""
+    if not exe:
+        if not getattr(sys, "frozen", False):
+            return
+        exe = sys.executable
+    exe_dir = os.path.dirname(os.path.abspath(exe))
+    if os.path.exists(os.path.join(exe_dir, "portable.txt")) and not os.environ.get("MESSHUB_HOME"):
+        os.environ["MESSHUB_HOME"] = os.path.join(exe_dir, "data")
+
+
 def report(cmd, code, seconds, tail_text, port):
+    _portable()
     body = json.dumps({"kind": "command", "cmd": cmd, "code": code, "seconds": round(seconds, 1),
                        "cwd": os.getcwd(), "tail": tail_text}).encode("utf-8")
     # Токен сеанса: сервер не принимает POST без него (app/session.py). «messhub run» - это
@@ -133,6 +145,7 @@ def report(cmd, code, seconds, tail_text, port):
 
 
 def main(argv=None):
+    _portable()
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "--":
         argv = argv[1:]

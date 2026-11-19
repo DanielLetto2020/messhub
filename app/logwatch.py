@@ -36,27 +36,43 @@ class Bucket:
     """Совпадения одного наблюдения за текущий час и когда карточку обновляли последний раз."""
 
     def __init__(self):
+        self.lock = threading.Lock()
         self.lines = collections.deque(maxlen=KEEP)
         self.count, self.start, self.flushed, self.pending = 0, 0.0, 0.0, False
 
     def add(self, line, now):
-        if now - self.start > WINDOW_S:
-            self.lines.clear()
-            self.count, self.start = 0, now
-        self.count += 1
-        self.lines.append(line[:400])
-        self.pending = True
+        with self.lock:
+            if now - self.start > WINDOW_S:
+                self.lines.clear()
+                self.count, self.start = 0, now
+            self.count += 1
+            self.lines.append(line[:400])
+            self.pending = True
+            if self.count == 1:
+                self.flushed = 0.0
+
+    def take_if_due(self, now, every_s):
+        with self.lock:
+            if not self.pending or now - self.flushed < every_s:
+                return None
+            self.pending = False
+            self.flushed = now
+            return self.count, list(self.lines)
+
+    def restore_pending(self):
+        with self.lock:
+            self.pending = True
 
 
-def card(db_path, w, b):
+def card(db_path, w, count, lines):
     conn = events.connect(db_path)
     try:
         events._lang(conn)
-        last = b.lines[-1] if b.lines else ""
-        text = (L(f"{b.count} совпадений за час, последнее:", f"{b.count} matches in an hour, the latest:")
-                if b.count > 1 else L("совпадение:", "match:")) + "\n" + last
+        last = lines[-1] if lines else ""
+        text = (L(f"{count} совпадений за час, последнее:", f"{count} matches in an hour, the latest:")
+                if count > 1 else L("совпадение:", "match:")) + "\n" + last
         where = w["target"] if w["kind"] == "file" else (w["target"] + (" (user)" if w["scope"] == "user" else ""))
-        events.emit(conn, "logwatch", w["name"], text, sender=where, details="\n".join(b.lines),
+        events.emit(conn, "logwatch", w["name"], text, sender=where, details="\n".join(lines),
                     key=f"logwatch:{w['id']}", urgency=1)
     finally:
         conn.close()
@@ -94,24 +110,32 @@ def _follow_file(path, stop):
         f.close()
 
 
-def _follow_unit(w, stop, procs):
+def _follow_unit(w, stop, procs, procs_lock):
     args = ["journalctl"] + (["--user"] if w["scope"] == "user" else []) + \
         ["-u", w["target"], "-f", "-n", "0", "-o", "cat", "--no-pager"]
     p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8",
                          errors="replace", bufsize=1, creationflags=NO_WINDOW)
-    procs.append(p)
-    for line in p.stdout:
-        if stop.is_set():
-            break
-        yield line.rstrip("\n")
-    err = (p.stderr.read() or "").strip()
-    p.wait()                                     # без этого завершённый journalctl висел бы зомби
-    procs.remove(p)
+    with procs_lock:
+        procs.append(p)
+    err = ""
+    try:
+        for line in p.stdout:
+            if stop.is_set():
+                break
+            yield line.rstrip("\n")
+        err = (p.stderr.read() or "").strip()
+        p.wait()                                 # без этого завершённый journalctl висел бы зомби
+    finally:
+        with procs_lock:
+            if p in procs:
+                procs.remove(p)
     if err and not stop.is_set():
         yield OSError(err.splitlines()[-1][:300])
 
 
-def watch(db_path, w, stop, procs):
+def watch(db_path, w, stop, procs, procs_lock=None):
+    if procs_lock is None:
+        procs_lock = threading.Lock()
     st = status.setdefault(w["id"], {})
     st.update(running=True, error="", matches=0, last="")
     rx = re.compile(w["pattern"], re.I if w["icase"] else 0)
@@ -119,19 +143,22 @@ def watch(db_path, w, stop, procs):
 
     def flusher():
         while not stop.wait(5):
-            if b.pending and time.time() - b.flushed >= EVERY_S:
-                b.pending, b.flushed = False, time.time()
+            snap = b.take_if_due(time.time(), EVERY_S)
+            if snap is not None:
+                count, lines = snap
                 try:
-                    card(db_path, w, b)
+                    card(db_path, w, count, lines)
                 except Exception as e:  # noqa: BLE001 — база занята: попробуем в следующий раз
-                    b.pending = True
+                    b.restore_pending()
                     st["error"] = str(e)[:300]
     threading.Thread(target=flusher, name=f"logwatch-{w['id']}-flush", daemon=True).start()
     while not stop.is_set():
         if w["kind"] == "unit" and (WINDOWS or not shutil.which("journalctl")):
             st.update(running=False, error=L("journald есть только на Linux", "journald is Linux-only"))
+            stop.set()
             return
-        src = _follow_file(os.path.expanduser(w["target"]), stop) if w["kind"] == "file" else _follow_unit(w, stop, procs)
+        src = _follow_file(os.path.expanduser(w["target"]), stop) if w["kind"] == "file" else \
+            _follow_unit(w, stop, procs, procs_lock)
         for line in src:
             if isinstance(line, OSError):
                 st.update(error=str(line))
@@ -141,11 +168,11 @@ def watch(db_path, w, stop, procs):
                 b.add(line, time.time())
                 st["matches"] += 1
                 st["last"] = time.strftime("%H:%M:%S")
-                if b.count == 1:                 # первое совпадение за час — сразу, дальше не чаще раза в минуту
-                    b.flushed = 0.0
         if not stop.is_set():
             stop.wait(15)                        # journalctl завершился — перезапустим
-    for p in procs:
+    with procs_lock:
+        alive = list(procs)
+    for p in alive:
         try:
             p.terminate()
         except OSError:
@@ -164,10 +191,12 @@ def start(db_path):
                 finally:
                     conn.close()
                 want = {w["id"]: w for w in cfg["watches"]} if cfg["enabled"] else {}
-                for wid, (old, stop, procs) in list(_threads.items()):
+                for wid, (old, stop, procs, plock) in list(_threads.items()):
                     if want.get(wid) != old:
                         stop.set()
-                        for p in procs:           # journalctl ждёт новую строку — без этого жил бы до неё
+                        with plock:
+                            alive = list(procs)
+                        for p in alive:           # journalctl ждёт новую строку — без этого жил бы до неё
                             try:
                                 p.terminate()
                             except OSError:
@@ -176,10 +205,10 @@ def start(db_path):
                         status.pop(wid, None)
                 for wid, w in want.items():
                     if wid not in _threads:
-                        stop, procs = threading.Event(), []
-                        _threads[wid] = (w, stop, procs)
-                        threading.Thread(target=watch, args=(db_path, w, stop, procs), name=f"logwatch-{wid}",
-                                         daemon=True).start()
+                        stop, procs, plock = threading.Event(), [], threading.Lock()
+                        _threads[wid] = (w, stop, procs, plock)
+                        threading.Thread(target=watch, args=(db_path, w, stop, procs, plock),
+                                         name=f"logwatch-{wid}", daemon=True).start()
                         print(f"Журналы: слежу за «{w['name']}»", flush=True)
             except Exception as e:  # noqa: BLE001
                 print(f"Журналы: ошибка: {e!r}", flush=True)

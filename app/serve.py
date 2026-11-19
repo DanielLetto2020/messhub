@@ -47,13 +47,18 @@
     /api/mail (ящики IMAP, см. mail.py) + /api/mail/channel|account|delete|test|check
 
   Ассистент на локальной модели (ai.py):
-    GET  /api/ai/status, /api/ai/sessions, /api/ai/session?id=N, /api/ai/pull, /api/ai/defaults,
+    GET  /api/ai/status, /api/ai/sessions, /api/ai/session?id=N, /api/ai/pull,
          /api/ai/model-info?provider=&model=, /api/ai/openrouter/models, /api/ai/export?id=N
     POST /api/ai/setup {ai}, /api/ai/openrouter {enabled, key, consent} — облако только так,
          /api/ai/session {id?, title, settings}, /api/ai/session/delete {id},
          /api/ai/defaults {settings}, /api/ai/pull {model}, /api/ai/pull/cancel,
          /api/ai/delete-model {model}, /api/ai/lmstudio/start
     POST /api/ai/chat — ответ потоком (NDJSON), отдельно от таблицы: тело до 48 МБ (картинки)
+
+  Настройка уведомлений приложений (appsetup.py):
+    GET  /api/notify-setup — проверка системы, браузеров и приложений
+    POST /api/notify-setup/gnome {slug, enable} | /api/notify-setup/open-os |
+         /api/notify-setup/open-browser {browser_id} | /api/notify-setup/test
 
   Прочее:
     GET  /api/quiet (луна и «Не беспокоить»), /api/scripts (свои источники из sources.d)
@@ -99,6 +104,7 @@ from urllib.parse import urlparse, parse_qs, unquote
 import actions
 import ai
 import applog
+import appsetup
 import avatars
 import backup
 import calendar_src
@@ -337,8 +343,9 @@ def search(db_path, q="", src="", chat="", date_from="", date_to="", status="all
     try:
         v = View(conn)
         sw = src_where(conn, src, v.names) if src else None
-        if src and sw is None:                  # своя колонка — фильтр в Python, как раньше
-            return _search_scan(conn, v, q, src, chat, date_from, date_to, status, limit, offset)
+        has_move_from = bool(src) and any(r["src"] in (src, "*") for r in v.rs.rows if r["action"] == "move")
+        if src and (sw is None or has_move_from):
+            return _search_scan(conn, v, q, src, chat, date_from, date_to, status, limit, offset, sw=sw)
         where, params = _search_where(q, chat, date_from, date_to, status)
         if sw:
             where = [sw[0]] + where
@@ -382,12 +389,14 @@ def _empty_my_column(v, src):
     return src not in v.rs.my_columns()
 
 
-def _search_scan(conn, v, q, src, chat, date_from, date_to, status, limit, offset):
-    """Поиск, когда источник в SQL не выразить (своя колонка): фильтруем построчно.
-    Таких колонок мало и наполняются они правилами, поэтому полный проход здесь - редкость."""
-    if _empty_my_column(v, src):
+def _search_scan(conn, v, q, src, chat, date_from, date_to, status, limit, offset, sw=None):
+    """Поиск с построчным фильтром через правила (свои колонки my:… или источники с правилом move)."""
+    if sw is None and _empty_my_column(v, src):
         return {"total": 0, "rows": []}
     where, params = _search_where(q, chat, date_from, date_to, status)
+    if sw is not None:
+        where = [sw[0]] + where
+        params = sw[1] + params
     wsql = _where_sql(where)
     rows = []
     for r in conn.execute(f"SELECT {', '.join(FIELDS)} FROM messages{wsql} ORDER BY id DESC", params):
@@ -455,18 +464,23 @@ _visible_cache = {"key": None, "val": None}
 _visible_lock = threading.Lock()
 
 
-def _board_key(conn, v):
+def _board_key(conn, v, now):
     """Подпись состояния доски: что изменилось с прошлого запроса /api/visible.
 
-    max(id) и счётчики по видимым строкам ловят новые сообщения и отметки «прочитано»,
-    «закреплено», «отложено» и «починилось» у тематических карточек; версии правил и
-    настроек - их правку. Единственное, что подпись пропускает, - перенос сообщения между
-    колонками правилом «перенести в колонку», но такое правило меняет версию правил."""
-    unread = conn.execute("SELECT COUNT(*), COALESCE(SUM(is_read), 0), COALESCE(SUM(pinned), 0), "
-                          "COALESCE(SUM(snooze_until IS NOT NULL), 0), "
-                          "COALESCE(SUM(resolved_at IS NOT NULL), 0) FROM messages "
-                          "WHERE is_read = 0 OR pinned = 1 OR snooze_until IS NOT NULL "
-                          "OR resolved_at IS NOT NULL").fetchone()
+    max(id) и суммы id по флагам ловят новые сообщения, любые изменения «прочитано»,
+    «закреплено», активных отложенных (snooze_until > now) и «починилось» (даже при одновременных
+    взаимных переключениях), а версии правил и настроек — их правку."""
+    unread = conn.execute(
+        "SELECT COUNT(*), COALESCE(SUM(id), 0), "
+        "COALESCE(SUM(CASE WHEN is_read = 0 THEN id ELSE 0 END), 0), "
+        "COALESCE(SUM(CASE WHEN pinned = 1 THEN id ELSE 0 END), 0), "
+        "COALESCE(SUM(CASE WHEN snooze_until IS NOT NULL AND snooze_until > ? THEN id ELSE 0 END), 0), "
+        "COALESCE(SUM(CASE WHEN resolved_at IS NOT NULL THEN id ELSE 0 END), 0), "
+        "COALESCE(MAX(resolved_at), '') "
+        "FROM messages "
+        "WHERE is_read = 0 OR pinned = 1 OR (snooze_until IS NOT NULL AND snooze_until > ?) OR resolved_at IS NOT NULL",
+        (now, now),
+    ).fetchone()
     return (conn.execute("SELECT COALESCE(MAX(id), 0) FROM messages").fetchone()[0], *unread,
             v.rs.ver, rules.prefs_ver(v.prefs))
 
@@ -480,13 +494,13 @@ def visible_ids(db_path):
         return {"max_id": 0, "ids": []}
     conn = open_db(db_path)
     try:
-        v = View(conn)
-        sign = _board_key(conn, v)
+        v, now = View(conn), catcher.msk_time()
+        sign = _board_key(conn, v, now)
         key = (os.path.abspath(db_path), sign)
         with _visible_lock:
             if _visible_cache["key"] == key:
                 return _visible_cache["val"]
-        rows = _visible_rows(conn, v, sign[0])
+        rows = _visible_rows(conn, v, sign[0], now)
         val = {"max_id": sign[0], "ids": [r["id"] for r in rows],
                "resolved": {str(r["id"]): r["resolved_at"] for r in rows if r.get("resolved_at")},
                "pinned": [r["id"] for r in rows if r.get("pinned")]}   # закрепили в окне сообщения
@@ -497,12 +511,12 @@ def visible_ids(db_path):
         conn.close()
 
 
-def _visible_rows(conn, v, max_id):
+def _visible_rows(conn, v, max_id, now):
     """Непрочитанные, которые виджет должен показать (до max_id), — как видит правила."""
     out = []
     for r in conn.execute(f"SELECT {', '.join(FIELDS)} FROM messages "
                           f"WHERE is_read = 0 AND id <= ? AND (snooze_until IS NULL OR snooze_until <= ?) "
-                          f"ORDER BY id", (max_id, catcher.msk_time())):
+                          f"ORDER BY id", (max_id, now)):
         d = v.row(dict(r))
         if v.visible(d):
             out.append(d)
@@ -622,17 +636,19 @@ SNOOZE_PRESETS = ("1h", "3h", "evening", "tomorrow")
 
 
 def snooze_until(preset):
-    """До какого времени (МСК) отложить. «Вечером» — 19:00 (после 18:00 — завтра)."""
-    now = datetime.now(catcher.MSK).replace(tzinfo=None)
+    """До какого времени отложить: расчёт в местном времени, запись в БД по МСК.
+    «Вечером» — 19:00 (после 18:00 — завтра 19:00), «Завтра» — 09:00."""
+    local_now = datetime.now().astimezone()
     if preset == "1h":
-        t = now + timedelta(hours=1)
+        t = local_now + timedelta(hours=1)
     elif preset == "3h":
-        t = now + timedelta(hours=3)
+        t = local_now + timedelta(hours=3)
     elif preset == "evening":
-        t = now.replace(hour=19, minute=0, second=0) + timedelta(days=1 if now.hour >= 18 else 0)
+        t = local_now.replace(hour=19, minute=0, second=0, microsecond=0) + \
+            timedelta(days=1 if local_now.hour >= 18 else 0)
     else:
-        t = (now + timedelta(days=1)).replace(hour=9, minute=0, second=0)
-    return t.strftime(TS)
+        t = (local_now + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
+    return t.astimezone(catcher.MSK).strftime(TS)
 
 
 def set_snooze(conn, ids, preset):
@@ -801,7 +817,7 @@ def themed_info(db_path):
     run_cmd = (f'"{os.path.join(os.path.dirname(os.path.abspath(sys.executable)), run_exe)}" -- …'
                if getattr(sys, "frozen", False) else
                "messhub run -- …" if HERE.startswith("/usr/lib/") else f"python3 {os.path.join(HERE, 'run.py')} -- …")
-    hook = "" if os.name == "nt" or sys.platform == "darwin" else (      # хук шлёт notify-send — он есть на Linux
+    hook = "" if os.name == "nt" else (      # хук шлёт notify-send — он есть на Linux
         "source /usr/lib/messhub/hooks/long-command.sh" if HERE.startswith("/usr/lib/")
         else f"source {os.path.join(HERE, 'hooks', 'long-command.sh')}")
     demo = os.environ.get(f"{paths.ENV_PREFIX}_THEMED_DEMO") == "1"      # снимки экрана: без настоящих движков
@@ -819,7 +835,7 @@ def themed_info(db_path):
         cal, cal_srcs = dict(cal, running=True, events=4, sources=2), ["~/.local/share/evolution/calendar/system/calendar.ics",
                                                                      "~/Календари/работа.ics"]
     return {"prefs": rules.themed(prefs),
-            "platform": "windows" if os.name == "nt" else "mac" if sys.platform == "darwin" else "linux",
+            "platform": "windows" if os.name == "nt" else "linux",
             "containers": cont, "services": serv, "commands": {"run": run_cmd, "hook": hook},
             "resources": res, "logwatch": logwatch.public_status(), "calendar": dict(cal, files=cal_srcs),
             "log_lines": list(rules.LOG_LINES)}
@@ -930,7 +946,8 @@ def _r_update(c):
 
 
 def _r_messages(c):
-    data, rver, pver = query(c.db, after=c.num("after") or None,
+    after = c.num("after") if c.arg("after").isdigit() else None
+    data, rver, pver = query(c.db, after=after,
                              limit=max(1, min(1000, c.num("limit", 100))),
                              app=c.arg("app"), q=c.arg("q"),
                              unread=c.flag("unread"), widget=c.flag("rules"), ids=c.query_ids())
@@ -1035,6 +1052,7 @@ GET_ROUTES = {
     "/api/logs": _r_logs,
     "/api/diag": lambda c: diag.checks(c.db),
     "/api/autostart": lambda c: diag.autostart_status(),
+    "/api/notify-setup": lambda c: appsetup.inspect(c.db),
 }
 
 
@@ -1109,8 +1127,7 @@ def _p_scripts_open(_c):
     if os.name == "nt":
         os.startfile(scripts.DIR)      # noqa: S606 — своя папка настроек
     else:
-        subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", scripts.DIR],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(["xdg-open", scripts.DIR], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return {"ok": True}
 
 
@@ -1176,8 +1193,8 @@ def _p_prefs(c):
 
 def _p_purge(c):
     days = int(c.payload.get("days"))
-    if days < 1:
-        raise BadRequest(L("Срок — от 1 дня", "The period must be at least 1 day"))
+    if not 1 <= days <= 36500:
+        raise BadRequest(L("Срок — от 1 до 36500 дней", "The period must be between 1 and 36500 days"))
     return {"deleted": write(c.db, purge, days)}
 
 
@@ -1185,7 +1202,10 @@ def _p_export(c):
     fmt = c.payload.get("format")
     if fmt not in ("csv", "json"):
         raise BadRequest(L("Формат — csv или json", "Format must be csv or json"))
-    path, n = export(c.db, fmt, int(c.payload.get("days") or 0))
+    days = int(c.payload.get("days") or 0)
+    if not 0 <= days <= 36500:
+        raise BadRequest(L("Срок — от 0 до 36500 дней", "The period must be between 0 and 36500 days"))
+    path, n = export(c.db, fmt, days)
     return {"path": path, "rows": n}
 
 
@@ -1223,7 +1243,7 @@ def _p_rag_disable(c):
 
 
 def _p_rag_remove_model(c):
-    rag.remove_model(str(c.payload.get("model") or ""))
+    read(c.db, lambda conn: rag.remove_model(str(c.payload.get("model") or ""), conn))
     return {"ok": True}
 
 
@@ -1310,6 +1330,10 @@ POST_ROUTES = {
     "/api/session/token": lambda c: {"ok": True, "token": session.rotate()},
     "/api/autostart": _p_autostart,
     "/api/restart": _p_restart,
+    "/api/notify-setup/gnome": lambda c: appsetup.set_gnome_app(str(c.payload.get("slug") or ""), bool(c.payload.get("enable"))),
+    "/api/notify-setup/open-os": lambda c: appsetup.open_os_settings(str(c.payload.get("kind") or "notifications")),
+    "/api/notify-setup/open-browser": lambda c: appsetup.open_browser_settings(str(c.payload.get("browser_id") or "")),
+    "/api/notify-setup/test": lambda c: appsetup.send_test(c.db),
 }
 
 
@@ -1404,7 +1428,7 @@ def make_handler(db_path):
                     self._json(result)
             except sqlite3.OperationalError as e:
                 self._json({"error": str(e)}, 503)
-            except (ValueError, TypeError) as e:      # например, /api/search?to=не-дата
+            except (ValueError, TypeError, OverflowError) as e:      # например, /api/search?to=не-дата
                 self._json({"error": str(e) or L("Неверный запрос", "Bad request")}, 400)
 
         def do_POST(self):
@@ -1415,12 +1439,13 @@ def make_handler(db_path):
             if not (self.headers.get("Content-Type") or "").startswith("application/json"):
                 self._send(415, b"application/json expected", "text/plain; charset=utf-8")
                 return
-            if p == "/api/ingest" and not ingest.authorized(self.headers.get("Authorization")):
-                return self._json({"error": L("Неверный ключ приёма событий", "Bad ingest key")}, 401)
-            # токен сеанса: без него любой местный процесс и любая страница в этом браузере
-            # могли вызвать POST (удалить базу, сменить настройки, выполнить скрипт).
-            # Страница получила токен cookie вместе с собой, скрипт - заголовком.
-            if not session.ok(self.headers):
+            if p == "/api/ingest":
+                if not ingest.authorized(self.headers.get("Authorization")):
+                    return self._json({"error": L("Неверный ключ приёма событий", "Bad ingest key")}, 401)
+            elif not session.ok(self.headers):
+                # токен сеанса: без него любой местный процесс и любая страница в этом браузере
+                # могли вызвать POST (удалить базу, сменить настройки, выполнить скрипт).
+                # Страница получила токен cookie вместе с собой, скрипт - заголовком.
                 return self._json({"error": L("Нужен токен сеанса (см. настройки → «Система»)",
                                               "Session token required (see settings → “System”)"),
                                    "token_header": session.HEADER}, 401)
@@ -1428,6 +1453,8 @@ def make_handler(db_path):
                 return self._ai_chat()
             try:
                 size = int(self.headers.get("Content-Length") or 0)
+                if size < 0:
+                    raise ValueError("negative Content-Length")
                 cap = 1024 * 1024 if p == "/api/config/import" else 65536
                 payload = json.loads(self.rfile.read(min(size, cap)) or b"{}")
                 if not isinstance(payload, dict):
@@ -1444,7 +1471,7 @@ def make_handler(db_path):
                 self._send(404, b"not found", "text/plain; charset=utf-8")
             except Conflict as e:
                 self._json(dict(e.data, error=str(e)), 409)
-            except (BadRequest, ValueError, TypeError, AttributeError) as e:
+            except (BadRequest, ValueError, TypeError, AttributeError, OverflowError) as e:
                 self._json({"error": str(e) or L("Неверный запрос", "Bad request")}, 400)
             except sqlite3.OperationalError as e:
                 self._json({"error": str(e)}, 503)
@@ -1455,7 +1482,7 @@ def make_handler(db_path):
             """Ответ ассистента потоком (NDJSON, по строке на событие); закрыли окно — модель останавливается."""
             try:
                 size = int(self.headers.get("Content-Length") or 0)
-                if size > 48 * 1024 * 1024:          # до 4 картинок по 8 МБ в base64
+                if size < 0 or size > 48 * 1024 * 1024:          # до 4 картинок по 8 МБ в base64
                     raise ValueError
                 payload = json.loads(self.rfile.read(size) or b"{}")
                 sid, text = int(payload.get("session")), str(payload.get("text") or "")

@@ -55,3 +55,12 @@ function confirmBtn(b, ask, run){
     await run();
   };
 }
+
+/* Время из БД хранится в МСК (+03:00): переводим в локальное HH:MM (при сбое — срез как раньше). */
+function mskHm(s){
+  if(!s||s.length<16) return '';
+  const d=new Date(s.slice(0,19).replace(' ','T')+'+03:00');
+  if(isNaN(d)) return s.slice(11,16);
+  const p=n=>String(n).padStart(2,'0');
+  return p(d.getHours())+':'+p(d.getMinutes());
+}

@@ -14,6 +14,7 @@ calendar.ics, подключённые учётные записи — кэш ~/
 исключённые даты (EXDATE) пропускаются.
 """
 
+import calendar
 import glob
 import os
 import re
@@ -91,8 +92,11 @@ def parse_dt(value, params):
     return dt, False
 
 
+_UNESC = {"n": "\n", "N": "\n", ",": ",", ";": ";", "\\": "\\"}
+
+
 def unescape(s):
-    return s.replace("\\n", "\n").replace("\\N", "\n").replace("\\,", ",").replace("\\;", ";").replace("\\\\", "\\")
+    return re.sub(r"\\([nN,;\\])", lambda m: _UNESC[m.group(1)], s)
 
 
 def parse_events(text):
@@ -182,6 +186,7 @@ def occurrences(e, frm, to):
         k = (frm - length - timedelta(weeks=1) - cur) // step
         if k > 0:
             cur += step * k
+    m_step = y_step = 0
     for _ in range(5000):
         cands = [cur] if not byday else [
             (cur - timedelta(days=cur.weekday()) + timedelta(days=d)).replace(hour=start.hour, minute=start.minute)
@@ -199,16 +204,34 @@ def occurrences(e, frm, to):
         elif freq == "WEEKLY":
             cur += timedelta(weeks=interval)
         elif freq == "MONTHLY":
-            y, m = divmod(cur.month - 1 + interval, 12)
-            try:
-                cur = cur.replace(year=cur.year + y, month=m + 1)
-            except ValueError:
-                return out
+            cur = None
+            while cur is None:
+                m_step += 1
+                if m_step > 20000:
+                    return out
+                y_off, mo0 = divmod(start.month - 1 + m_step * interval, 12)
+                yr, mo = start.year + y_off, mo0 + 1
+                if yr > 9999:
+                    return out
+                first = datetime(yr, mo, 1)
+                if first >= to or (until and first > until):
+                    return out
+                if start.day <= calendar.monthrange(yr, mo)[1]:
+                    cur = start.replace(year=yr, month=mo)
         elif freq == "YEARLY":
-            try:
-                cur = cur.replace(year=cur.year + interval)
-            except ValueError:
-                return out
+            cur = None
+            while cur is None:
+                y_step += 1
+                if y_step > 5000:
+                    return out
+                yr = start.year + y_step * interval
+                if yr > 9999:
+                    return out
+                first = datetime(yr, start.month, 1)
+                if first >= to or (until and first > until):
+                    return out
+                if start.day <= calendar.monthrange(yr, start.month)[1]:
+                    cur = start.replace(year=yr)
         else:
             return out
     return out

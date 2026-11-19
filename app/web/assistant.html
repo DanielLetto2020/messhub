@@ -323,7 +323,7 @@
 <script>
 // ошибки страницы — в журнал программы (настройки → «Логи»)
 (()=>{let n=0;window.addEventListener('error',e=>{if(++n>10)return;
-  fetch('/api/logs/client',{method:'POST',headers:{'Content-Type':'application/json'},
+  fetch('/api/logs/client',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({page:'assistant',msg:String(e.message).slice(0,1000),where:(e.filename||'').split('/').pop()+':'+e.lineno})}).catch(()=>{});});})();
 const $ = id => document.getElementById(id);
 const QS = new URLSearchParams(location.search);
@@ -810,7 +810,7 @@ async function send(){
     live.innerHTML=md(acc,true)+'<span class="caret"></span>';bindMsgs(live);
     const c=$('chat');if(c.scrollHeight-c.scrollTop-c.clientHeight<160)c.scrollTop=c.scrollHeight;};
   try{
-    const r=await fetch('/api/ai/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session:CUR.id,text,images}),signal:ctl.signal});
+    const r=await fetch('/api/ai/chat',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({session:CUR.id,text,images}),signal:ctl.signal});
     if(!r.ok){let d=null;try{d=await r.json();}catch(e){}throw new Error((d&&d.error)||t('Сервер ответил {c}',{c:r.status}));}
     const reader=r.body.getReader(), dec=new TextDecoder(); let buf='';
     for(;;){

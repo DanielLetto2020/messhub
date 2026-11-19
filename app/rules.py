@@ -26,7 +26,7 @@
 
 ПРОФИЛЬ («Работа», «Дом», «Созвон»…) — набор правил: правило с profile = '' действует
 всегда, с id профиля — только когда этот профиль активен. Активный профиль выбирают
-вручную или «авто» — по расписанию профилей (дни недели + время, МСК).
+вручную или «авто» — по расписанию профилей (дни недели + местное время).
 
 Правила влияют на виджет и на действия при записи; сами сообщения сохраняются
 всегда (их видно в «Поиске»). Удалил правило — скрытое снова видно.
@@ -57,9 +57,6 @@ SOURCES = (
     ("max", "max", ("MAX", "MAX"), "🅼", 2),
     ("alarm-notify", "calendar", ("Календарь", "Calendar"), "📅", 3),   # evolution-alarm-notify — до evolution
     ("org.gnome.calendar", "calendar", ("Календарь", "Calendar"), "📅", 3),
-    ("com.apple.ical", "calendar", ("Календарь", "Calendar"), "📅", 3),   # macOS: Календарь
-    ("com.apple.mobilesms", "imessage", ("Сообщения", "Messages"), "💬", 1),   # macOS: Сообщения (iMessage, SMS)
-    ("com.apple.mail", "mail", ("Почта", "Mail"), "✉️", 3),   # macOS: Почта
     ("mail-imap", "mail", ("Почта", "Mail"), "✉️", 3),        # письма из ящиков (mail.py)
     ("thunderbird", "mail", ("Почта", "Mail"), "✉️", 3),
     ("geary", "mail", ("Почта", "Mail"), "✉️", 3),
@@ -104,6 +101,7 @@ PREF_DEFAULTS = {
     "opacity": 0.72,          # непрозрачность подложки виджета
     "font_size": 13,          # px
     "compact": False,         # плотнее плашки
+    "full_text": False,       # показывать длинные сообщения на карточке целиком, без обрезки по 10 строк
     "theme": "dark",          # dark | light
     "group_by_chat": True,    # сворачивать сообщения одного чата в одну плашку
     "avatars": True,          # показывать картинки отправителей из уведомлений
@@ -144,7 +142,7 @@ PREF_DEFAULTS = {
     "ai": {"provider": "", "ollama_url": "http://127.0.0.1:11434", "lmstudio_url": "http://127.0.0.1:1234",
            "model": "", "temperature": 0.3, "num_ctx": 8192, "max_tokens": 1024, "system": "",
            "period": "7d", "max_msgs": 300, "include_logs": False, "include_read": True, "think": "hide",
-           "allow_lan": False, "setup_done": False,
+           "setup_done": False,
            "openrouter": False, "openrouter_consent": ""},   # ассистент (ai.py); OpenRouter — внешний, по согласию
     # служебное — не настройки, в выгрузку и в версию настроек не входит:
     "backup_last": "", "report_last": "", "services_win_last": "", "quiet_state": "", "agenda_last": "",
@@ -153,7 +151,7 @@ PREF_DEFAULTS = {
 STATE_PREFS = ("backup_last", "report_last", "services_win_last", "quiet_state", "agenda_last",
                "report_try")
 # от этих настроек зависит вид доски — по их хэшу (X-Prefs-Ver) виджет перечитывает её
-DISPLAY_PREFS = ("language", "opacity", "font_size", "compact", "theme", "group_by_chat",
+DISPLAY_PREFS = ("language", "opacity", "font_size", "compact", "full_text", "theme", "group_by_chat",
                  "avatars", "col_order", "split_cols", "hidden_cols", "closed_cols", "mail_channel", "mentions",
                  "source_names", "profiles", "profile", "time_hints", "share_blur", "share_patterns", "quiet",
                  "strip")
@@ -205,8 +203,8 @@ _RE_BUNDLE = re.compile(r"^[a-z0-9-]+(\.[A-Za-z0-9_-]+){2,}$")
 
 
 def _app_name(app):
-    """Название колонки незнакомого приложения: у bundle id macOS и desktop-entry вида
-    com.example.App — последняя часть («App»), иначе — как есть."""
+    """Название колонки незнакомого приложения: у desktop-entry вида
+    org.gnome.App — последняя часть («App»), иначе — как есть."""
     if app and _RE_BUNDLE.match(app):
         return app.rsplit(".", 1)[-1]
     return app or "—"
@@ -241,7 +239,7 @@ def active_profile(prefs, now=None):
     """id активного профиля ('' — без профиля)."""
     sel, profiles = prefs.get("profile") or "", prefs.get("profiles") or []
     if sel == "auto":
-        now = now or datetime.now(catcher.MSK).replace(tzinfo=None)
+        now = now or datetime.now()
         for p in profiles:
             if any(_in_slot(s, now) for s in p.get("schedule") or []):
                 return p["id"]
@@ -460,6 +458,11 @@ def get_prefs(conn):
         prefs["themed"] = clean_themed(prefs["themed"])
     except (ValueError, TypeError, AttributeError):
         prefs["themed"] = json.loads(json.dumps(PREF_DEFAULTS["themed"]))
+    if isinstance(prefs["ai"], dict):
+        prefs["ai"].pop("allow_lan", None)
+        for key in ("ollama_url", "lmstudio_url"):
+            url = str(prefs["ai"].get(key) or "").strip().rstrip("/")
+            prefs["ai"][key] = url if ai_url_ok(url) else PREF_DEFAULTS["ai"][key]
     return prefs
 
 
@@ -483,7 +486,7 @@ def _clean_pref(k, v):
         return round(min(1.0, max(0.3, float(v))), 2)
     if k == "font_size":
         return int(min(18, max(11, int(v))))
-    if k in ("compact", "group_by_chat", "avatars", "update_check", "time_hints", "share_blur"):
+    if k in ("compact", "full_text", "group_by_chat", "avatars", "update_check", "time_hints", "share_blur"):
         return bool(v)
     if k == "share_patterns":
         items = v.split(",") if isinstance(v, str) else list(v)
@@ -651,8 +654,7 @@ def clean_quiet(v):
             **{k: bool(v.get(k, d[k])) for k in ("sound", "forward", "follow_dnd", "set_dnd", "summary")}}
 
 
-_RE_LOCAL_URL = re.compile(r"^http://(127\.0\.0\.1|localhost|\[::1\]|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|"
-                           r"172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d{2,5})?/?$")
+_RE_LOCAL_URL = re.compile(r"^http://(127\.0\.0\.1|localhost|\[::1\])(:\d{2,5})?/?$")
 
 
 def clean_ai(v):
@@ -668,13 +670,13 @@ def clean_ai(v):
            "max_msgs": int(min(2000, max(10, int(v.get("max_msgs", d["max_msgs"]))))),
            # размышления «думающих» моделей: hide — отдельно и свёрнуты, show — видны сразу, off — не просить
            "think": _think_mode(v.get("think", d["think"])),
-           **{k: bool(v.get(k, d[k])) for k in ("include_logs", "include_read", "allow_lan", "setup_done", "openrouter")},
+           **{k: bool(v.get(k, d[k])) for k in ("include_logs", "include_read", "setup_done", "openrouter")},
            "openrouter_consent": str(v.get("openrouter_consent", d["openrouter_consent"]))[:19]}
     for key in ("ollama_url", "lmstudio_url"):
         url = str(v.get(key, d[key])).strip().rstrip("/")
-        if not ai_url_ok(url, out["allow_lan"]):
-            raise ValueError(L("Адрес модели — только на этом компьютере (или в домашней сети, если разрешено)",
-                               "The model address must be on this computer (or your home network, if allowed)"))
+        if not ai_url_ok(url):
+            raise ValueError(L("Адрес модели — только на этом компьютере (127.0.0.1, localhost или [::1])",
+                               "The model address must be on this computer (127.0.0.1, localhost or [::1])"))
         out[key] = url
     return out
 
@@ -685,12 +687,9 @@ def _think_mode(v):
     return v if v in ("hide", "show", "off") else "hide"
 
 
-def ai_url_ok(url, allow_lan=False):
-    """Модель — только на этом компьютере; домашняя сеть — если разрешено. Облака — никогда."""
-    m = _RE_LOCAL_URL.match(url + "/")
-    if not m:
-        return False
-    return allow_lan or m.group(1) in ("127.0.0.1", "localhost", "[::1]")
+def ai_url_ok(url):
+    """Модель — только на этом компьютере (loopback). Другие адреса и LAN не принимаются."""
+    return bool(_RE_LOCAL_URL.match((url or "").strip() + "/"))
 
 
 def themed(prefs):

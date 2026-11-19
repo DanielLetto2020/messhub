@@ -63,7 +63,7 @@ const host = (window.webkit && window.webkit.messageHandlers && window.webkit.me
   (PYW ? {postMessage: m => { if (window.pywebview && window.pywebview.api) window.pywebview.api.post(m); else pywQueue.push(m); }} : null);
 if (PYW) { document.documentElement.classList.add('pyw'); window.addEventListener('pywebviewready', () => { while (pywQueue.length) window.pywebview.api.post(pywQueue.shift()); }); }
 // esc(), escRe(), api() - в /common.js
-let rows=[], sel=-1, query='', seq=0;
+let rows=[], sel=-1, query='', seq=0, lastTotal=0;
 // кусок текста вокруг первого совпадения, совпадения подсвечены
 function snippet(text, q){
   const t0=(text||'').replace(/\s+/g,' '), i=q?t0.toLowerCase().indexOf(q.toLowerCase()):-1;
@@ -74,7 +74,8 @@ function snippet(text, q){
 function when(iso){if(!iso)return'';const x=iso.replace('T',' '),d=new Date(x.replace(' ','T')),now=new Date();
   return d.toDateString()===now.toDateString()?x.slice(11,16):x.slice(8,10)+'.'+x.slice(5,7)+' '+x.slice(11,16);}
 function draw(total){
-  $('info').innerHTML=query?(rows.length?`${esc(t('Найдено'))}: <b>${total}</b>`:''):'';
+  if(total!==undefined) lastTotal=total;
+  $('info').innerHTML=query?(rows.length?`${esc(t('Найдено'))}: <b>${lastTotal}</b>`:''):'';
   $('more').textContent=query?t('Все результаты в «Поиске»'):'';
   $('list').innerHTML=!query?'':rows.length?rows.map((r,i)=>`<div class="r${i===sel?' sel':''}" data-i="${i}">
       <div class="h"><span class="ico">${esc(r.src_ico||'🔔')}</span><span class="who"><b>${esc(r.chat||r.src_name)}</b>${r.sender&&r.sender!==r.chat?` · <span>${esc(r.sender)}</span>`:''}</span>
@@ -106,7 +107,7 @@ window.hostNav=k=>{
   if(k==='down') sel=Math.min(rows.length-1,sel+1);
   else if(k==='up') sel=Math.max(0,sel-1);
   else if(k==='enter'){openRow(sel<0?0:sel);return;}
-  draw(rows.length);
+  draw();
 };
 window.hostPrivacy=v=>document.body.classList.toggle('wrap-privacy',!!v);
 $('closeBtn').onclick=()=>{if(host)host.postMessage('search-close');else window.close();};

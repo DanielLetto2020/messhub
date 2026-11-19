@@ -3,14 +3,13 @@
 """
 Недельный отчёт в Telegram — цифры без ИИ: сколько и откуда пришло, самые шумные
 чаты, кто больше писал, упоминания, что осталось непрочитанным и закреплённым.
-Шлётся через ту же пересылку (actions.send), в день и время из настроек (МСК).
+Шлётся через ту же пересылку (actions.send), в день и время из настроек (местное время).
 """
 
 import sqlite3
 from datetime import datetime, timedelta
 
 import actions
-import catcher
 import i18n
 import rules
 import stats
@@ -23,7 +22,7 @@ DOW_EN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 def build(conn, days=7):
     d = stats.stats(conn, days)
-    now = datetime.now(catcher.MSK)
+    now = datetime.now()
     frm = (now - timedelta(days=days)).strftime("%d.%m")
     unread = conn.execute("SELECT COUNT(*) FROM messages WHERE is_read = 0").fetchone()[0]
     pinned = conn.execute("SELECT COUNT(*) FROM messages WHERE pinned = 1").fetchone()[0]
@@ -79,7 +78,7 @@ def maybe_send(db_path):
     conn = sqlite3.connect(db_path, timeout=5)
     try:
         prefs = rules.get_prefs(conn)
-        now = datetime.now(catcher.MSK).replace(tzinfo=None)
+        now = datetime.now()
         if not due(prefs, now):
             return None
         i18n.set_lang(i18n.background(prefs["language"]))     # «авто» — язык системы, как у других фоновых карточек

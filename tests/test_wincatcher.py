@@ -1,8 +1,10 @@
 """Сбор на Windows: логика отбора новых уведомлений и разбор — без самой Windows (поддельные объекты WinRT)."""
+import enum
 import os
 import sqlite3
 import types
 import unittest
+from unittest import mock
 
 import common
 import catcher
@@ -92,6 +94,22 @@ class WinCatcherTest(unittest.TestCase):
         self.assertEqual(wincatcher._ts(types.SimpleNamespace(universal_time=wincatcher.EPOCH_1601 + 10 ** 7)), 1.0)
         if wincatcher._winrt() is None:                                  # на Linux WinRT нет
             self.assertEqual(wincatcher.access_status(), "unavailable")
+
+    def test_int_enum_zero_unspecified(self):
+        """IntEnum с нулевым значением (UNSPECIFIED = 0) не должен теряться."""
+        class FakeAccess(enum.IntEnum):
+            UNSPECIFIED = 0
+            ALLOWED = 1
+            DENIED = 2
+
+        fake_winrt = (object, FakeAccess, object, object)
+        self.assertEqual(wincatcher._enum(FakeAccess, "UNSPECIFIED"), FakeAccess.UNSPECIFIED)
+        self.assertEqual(wincatcher._access_name(FakeAccess.UNSPECIFIED, fake_winrt), "unspecified")
+        self.assertEqual(wincatcher._access_name(FakeAccess.ALLOWED, fake_winrt), "allowed")
+
+        fake_listener = types.SimpleNamespace(get_access_status=lambda: FakeAccess.UNSPECIFIED)
+        with mock.patch.object(wincatcher, "listener", return_value=(fake_listener, fake_winrt)):
+            self.assertEqual(wincatcher.access_status(), "unspecified")
 
 
 if __name__ == "__main__":

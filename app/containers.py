@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Тематическая колонка «Контейнеры»: Docker и Podman (Linux, Windows и macOS).
+Тематическая колонка «Контейнеры»: Docker и Podman (Linux и Windows).
 
 Слушаем поток событий движка — `podman events --format json` / `docker events
 --format '{{json .}}'` (только чтение: ничего не запускаем, не останавливаем и не
@@ -18,8 +18,8 @@
 Ключ события: container:<движок>:<имя>. Rootless podman видит только контейнеры этого
 пользователя; docker — если у пользователя есть доступ к сокету (группа docker).
 
-Где движок: у программы из Finder, автозапуска или службы PATH урезан (на Mac — /usr/bin:/bin:/usr/sbin:/sbin),
-а Docker Desktop, Homebrew, OrbStack, Colima и snap кладут docker и podman в свои папки — exe() ищет и там,
+Где движок: у программы из автозапуска или службы PATH может быть урезан, а Docker и Podman
+иногда лежат в своих папках (например /snap/bin или ~/.local/bin) — exe() ищет и там,
 а env() добавляет их к PATH (docker зовёт оттуда свои помощники).
 """
 
@@ -29,7 +29,6 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 import threading
 import time
 
@@ -89,10 +88,6 @@ def parse(engine, line):
 def _extra_dirs():
     """Обычные места установки docker и podman, которых может не быть в PATH программы."""
     home = os.path.expanduser("~")
-    if sys.platform == "darwin":
-        return ["/usr/local/bin", "/opt/homebrew/bin", os.path.join(home, ".docker", "bin"),
-                "/Applications/Docker.app/Contents/Resources/bin", os.path.join(home, ".orbstack", "bin"),
-                os.path.join(home, ".rd", "bin"), "/opt/podman/bin", "/opt/local/bin"]
     if os.name == "nt":
         pf = os.environ.get("ProgramFiles") or r"C:\Program Files"
         return [os.path.join(pf, "Docker", "Docker", "resources", "bin"), os.path.join(pf, "RedHat", "Podman")]
@@ -169,7 +164,12 @@ class Watcher:
     def handle(self, ev, now=None, later=None):
         """later(delay, fn) — отложить решение (в тестах вызывается сразу)."""
         now = now or time.time()
-        later = later or (lambda d, fn: threading.Timer(d, fn).start())
+
+        def _spawn(d, fn):
+            t = threading.Timer(d, fn)
+            t.daemon = True
+            t.start()
+        later = later or _spawn
         name = ev["name"]
         if not name:
             return

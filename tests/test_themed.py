@@ -2,23 +2,30 @@
 защита сервера от чужих страниц. Без docker/podman/systemd: их вывод подставлен."""
 import json
 import os
+import shutil
 import sqlite3
 import sys
+import tempfile
 import threading
 import unittest
 import urllib.error
 import urllib.request
+from datetime import datetime
 from http.server import ThreadingHTTPServer
 from unittest import mock
 
 import common
 import applog
+import calendar_src
 import collect
 import containers
 import events
 import ingest
+import logwatch
+import reminders
 import rules
 import run
+import scripts
 import serve
 import services
 import session
@@ -176,11 +183,9 @@ class LifecycleTest(ServerCase):
 
 
 class EngineLookupTest(unittest.TestCase):
-    @unittest.skipIf(os.name == "nt", "исполняемый файл без .exe — только на Linux и Mac")
+    @unittest.skipIf(os.name == "nt", "исполняемый файл без .exe — только на Linux")
     def test_engine_found_outside_path(self):
-        """Mac: у программы из Finder PATH урезан — docker ищем и в обычных местах установки (Docker Desktop,
-        Homebrew…), а движку передаём полный PATH."""
-        import tempfile
+        """Движок может лежать вне минимального PATH (snap, ~/.local/bin и т.п.)."""
         d = tempfile.mkdtemp(dir=common.TMP)
         f = os.path.join(d, "docker")
         with open(f, "w") as fh:
@@ -408,6 +413,91 @@ class LogTest(ServerCase):
         r = applog.query()["rows"]
         self.assertEqual([x["msg"] for x in reversed(r)], ["GTK: что-то странное", "вторая строка"])
         self.assertTrue(all(x["lvl"] == "warn" for x in r))
+
+
+class ReliabilityAndEdgesTest(unittest.TestCase):
+    """Тесты критических исправлений: scripts._tick, календарь (31/29 фев, unescape),
+    logwatch Bucket/stop, напоминания без chat и portable.txt."""
+
+    def test_scripts_tick_launches_worker(self):
+        db = common.new_db("scripts-tick.db")
+        prefs_on(db)
+        conn = sqlite3.connect(db)
+        rules.set_prefs(conn, {"scripts": {"enabled": True}})
+        conn.commit()
+        conn.close()
+        os.makedirs(scripts.DIR, exist_ok=True)
+        path = os.path.join(scripts.DIR, "tick_ok.py")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write('import json\nprint(json.dumps({"source": "Tick", "chat": "t", "text": "ok"}))\n')
+        running, last = set(), {}
+
+        def worker(name, p):
+            scripts.run_one(db, name, p)
+            running.discard(name)
+
+        try:
+            scripts._tick(db, running, last, worker, now=1000.0, spawn=lambda fn, n, p: fn(n, p))
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+        self.assertEqual([r["app"] for r in rows(db, "app = 'Tick'")], ["Tick"])
+        self.assertEqual(running, set())
+
+    def test_calendar_monthly_31_yearly_leap_and_unescape(self):
+        self.assertEqual(calendar_src.unescape(r"a\\nb\nc"), "a\\nb\nc")
+        ev_m = {"start": datetime(2026, 1, 31, 10, 0), "end": datetime(2026, 1, 31, 11, 0),
+                "rrule": {"FREQ": "MONTHLY"}, "exdates": set()}
+        occ_m = calendar_src.occurrences(ev_m, datetime(2026, 1, 1), datetime(2026, 6, 1))
+        self.assertEqual(occ_m, [
+            datetime(2026, 1, 31, 10, 0),
+            datetime(2026, 3, 31, 10, 0),
+            datetime(2026, 5, 31, 10, 0),
+        ])
+        ev_y = {"start": datetime(2024, 2, 29, 9, 0), "end": datetime(2024, 2, 29, 10, 0),
+                "rrule": {"FREQ": "YEARLY"}, "exdates": set()}
+        occ_y = calendar_src.occurrences(ev_y, datetime(2024, 1, 1), datetime(2029, 1, 1))
+        self.assertEqual(occ_y, [datetime(2024, 2, 29, 9, 0), datetime(2028, 2, 29, 9, 0)])
+
+    def test_logwatch_bucket_and_missing_journalctl_sets_stop(self):
+        b = logwatch.Bucket()
+        b.add("ERR 1", 100.0)
+        b.add("ERR 2", 101.0)
+        self.assertEqual(b.take_if_due(110.0, 5.0), (2, ["ERR 1", "ERR 2"]))
+        self.assertIsNone(b.take_if_due(111.0, 5.0))
+        b.restore_pending()
+        self.assertEqual(b.take_if_due(120.0, 5.0), (2, ["ERR 1", "ERR 2"]))
+
+        db = common.new_db("lw-stop.db")
+        stop = threading.Event()
+        w = rules.clean_watch({"id": "u1", "name": "demo", "kind": "unit", "target": "x.service", "pattern": "ERR"})
+        with mock.patch.object(shutil, "which", return_value=None):
+            logwatch.watch(db, w, stop, [])
+        self.assertTrue(stop.is_set())
+
+    def test_reminders_none_chat_and_portable_txt(self):
+        db = common.new_db("rem-none.db")
+        conn = sqlite3.connect(db)
+        try:
+            conn.execute("INSERT INTO messages (app, chat, sender, message, received_at) VALUES (?, NULL, NULL, ?, ?)",
+                         ("eXpress", "Встреча завтра в 10:00", "2026-09-25 10:00:00"))
+            mid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute("INSERT INTO reminders (message_id, at, event_at) VALUES (?, '2000-01-01 00:00', '2026-09-26 10:00')",
+                         (mid,))
+            conn.commit()
+            with mock.patch.object(reminders, "popup"), mock.patch("actions.play_sound"):
+                self.assertEqual(reminders.fire_due(conn), 1)
+        finally:
+            conn.close()
+
+        d = tempfile.mkdtemp(dir=common.TMP)
+        with open(os.path.join(d, "portable.txt"), "w", encoding="utf-8") as f:
+            f.write("")
+        fake_exe = os.path.join(d, "messhub.exe")
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("MESSHUB_HOME", None)
+            run._portable(fake_exe)
+            self.assertEqual(os.environ.get("MESSHUB_HOME"), os.path.join(d, "data"))
 
 
 if __name__ == "__main__":

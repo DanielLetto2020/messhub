@@ -19,8 +19,8 @@ def stats(conn, days, src=""):
     total, mentions = 0, 0
     senders, chats, by_src = Counter(), Counter(), Counter()
     heat, srcs, meta_of = [[0] * 24 for _ in range(7)], {}, {}
-    for app, site, chat, sender, at, text in conn.execute(
-            "SELECT app, COALESCE(site, ''), chat, sender, received_at, message FROM messages "
+    for app, site, chat, sender, at, iso, text in conn.execute(
+            "SELECT app, COALESCE(site, ''), chat, sender, received_at, event_iso, message FROM messages "
             "WHERE received_at >= ?", (since,)):
         s = meta_of.get((app, site)) or meta_of.setdefault((app, site), rules.source_of(app, site, names))
         srcs[s["key"]] = {k: s[k] for k in ("key", "name", "ico", "rank")}
@@ -32,11 +32,21 @@ def stats(conn, days, src=""):
         chats[(s["key"], chat or "")] += 1
         if mre and mre.search(text or ""):
             mentions += 1
-        try:
-            t = datetime.strptime(at, TS)
+        t = None
+        if iso:
+            try:
+                t = datetime.fromisoformat(iso)
+                if t.tzinfo is not None:
+                    t = t.astimezone()
+            except (TypeError, ValueError):
+                t = None
+        if t is None:
+            try:
+                t = datetime.strptime(at, TS).replace(tzinfo=catcher.MSK).astimezone()
+            except (TypeError, ValueError):
+                t = None
+        if t is not None:
             heat[t.weekday()][t.hour] += 1
-        except (TypeError, ValueError):
-            pass
     by_hour = [sum(heat[d][h] for d in range(7)) for h in range(24)]
     busiest = max(range(24), key=lambda h: by_hour[h]) if total else None
     busy_day = max(range(7), key=lambda d: sum(heat[d])) if total else None

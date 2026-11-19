@@ -256,8 +256,9 @@ class LogwatchTest(unittest.TestCase):
         b = logwatch.Bucket()
         for i in range(3):
             b.add(f"ERROR {i}", time.time())
+        snap = b.take_if_due(time.time() + logwatch.EVERY_S + 1, logwatch.EVERY_S)
         w = rules.clean_watch({"id": "w1", "name": "app", "target": path, "pattern": "ERROR"})
-        logwatch.card(db, w, b)
+        logwatch.card(db, w, *snap)
         c = rows(db, "app = 'messhub-logwatch'")[0]
         self.assertIn("3 совпадений за час", c["message"])
         self.assertEqual(c["details"].splitlines(), ["ERROR 0", "ERROR 1", "ERROR 2"])
@@ -334,12 +335,28 @@ class AiTest(unittest.TestCase):
     def test_urls_only_local(self):
         self.assertTrue(rules.ai_url_ok("http://127.0.0.1:11434"))
         self.assertTrue(rules.ai_url_ok("http://localhost:1234"))
-        self.assertFalse(rules.ai_url_ok("http://192.168.1.5:11434"))
-        self.assertTrue(rules.ai_url_ok("http://192.168.1.5:11434", allow_lan=True))
-        for bad in ("https://api.openai.com", "http://evil.example:11434", "http://8.8.8.8:11434"):
-            self.assertFalse(rules.ai_url_ok(bad, allow_lan=True), bad)
+        self.assertTrue(rules.ai_url_ok("http://[::1]:11434"))
+        for bad in ("http://192.168.1.5:11434", "http://10.0.0.2:11434",
+                    "https://api.openai.com", "http://evil.example:11434", "http://8.8.8.8:11434"):
+            self.assertFalse(rules.ai_url_ok(bad), bad)
+        with self.assertRaises(ValueError):
+            rules.clean_ai({"ollama_url": "http://192.168.1.5:11434", "allow_lan": True})
         with self.assertRaises(ValueError):
             rules.clean_ai({"ollama_url": "http://evil.example:11434"})
+        # Устаревшие настройки с allow_lan и LAN-адресом очищаются при чтении
+        db = common.new_db("ai_legacy.db")
+        conn = sqlite3.connect(db)
+        conn.execute("INSERT OR REPLACE INTO prefs (key, value) VALUES (?, ?)", ("ai", json.dumps({
+            "allow_lan": True,
+            "ollama_url": "http://192.168.1.5:11434",
+            "lmstudio_url": "http://192.168.1.5:1234",
+        })))
+        conn.commit()
+        p = rules.get_prefs(conn)["ai"]
+        conn.close()
+        self.assertNotIn("allow_lan", p)
+        self.assertEqual(p["ollama_url"], "http://127.0.0.1:11434")
+        self.assertEqual(p["lmstudio_url"], "http://127.0.0.1:1234")
 
     def test_context_selection(self):
         conn = sqlite3.connect(self.db)
@@ -351,6 +368,13 @@ class AiTest(unittest.TestCase):
         lines, ids, _, _ = ai.build_context(conn, dict(st, sources=["containers"]), "что упало?")
         self.assertEqual(len(ids), 1)
         self.assertIn("shop-api", lines[0])
+        # Фильтр источников учитывает перенос в свою колонку my:личное
+        rules.save_rule(conn, rules.clean_rule({"src": "telegram", "chat": "Мама", "action": "move", "param": "Личное"}))
+        rules.set_my_icon(conn, "Личное", "🏠")
+        _, ids_my, _, _ = ai.build_context(conn, dict(st, sources=["my:личное"]), "что от мамы?")
+        _, ids_tg, _, _ = ai.build_context(conn, dict(st, sources=["telegram"]), "что в телеграме?")
+        self.assertEqual(len(ids_my), 1)
+        self.assertEqual(ids_tg, [])
         conn.close()
 
     def test_sessions_and_streaming_chat(self):
@@ -629,10 +653,28 @@ class RagTest(unittest.TestCase):
             self.assertEqual(len(rag.search(conn, "отчёт", 5)), 2)         # пропущенное не мешает поиску
             self.assertEqual(rag.retry_skipped(db), 1)                     # и снова пробуется позже
             self.assertEqual(rag.status(conn)["skipped"], 0)
+            # Вектор другой размерности пропускается без падения search()
+            from array import array
+            conn.execute("INSERT INTO embeddings (message_id, model, vec) VALUES (999999, 'bge-m3', ?)",
+                         (array("f", [1.0, 2.0, 3.0]).tobytes(),))
+            conn.commit()
+            self.assertEqual(len(rag.search(conn, "отчёт", 5)), 2)
         conn.close()
         e = urllib.error.HTTPError("u", 404, "nf", {}, None)
         self.assertIn("Установить", rag.human_error(e))
         self.assertIn("не запущена", rag.human_error(urllib.error.URLError(ConnectionRefusedError("refused"))))
+
+    def test_ollama_url_from_prefs(self):
+        """rag.ollama_url читает prefs['ai']['ollama_url'], если OLLAMA_HOST не задан."""
+        db = common.new_db("rag_url.db")
+        prefs(db, {"ai": {"ollama_url": "http://localhost:11435"}})
+        conn = sqlite3.connect(db)
+        try:
+            with mock.patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("OLLAMA_HOST", None)
+                self.assertEqual(rag.ollama_url(conn), "http://localhost:11435")
+        finally:
+            conn.close()
 
 
 if __name__ == "__main__":
