@@ -358,8 +358,7 @@ const EN = {
   'Сообщения нет: его удалили по сроку хранения или вручную.': 'The message is gone: it was removed by the retention period or by hand.',
   'Сервер виджета не отвечает — сообщение не загрузилось.': 'The widget server is not responding, so the message could not load.',
 
-  // ── доска: напоминания, тихие часы, ассистент, показ экрана ──
-  'Ассистент: вопросы по сообщениям на модели на этом компьютере': 'Assistant: ask about your messages, on a model on this computer',
+  // ── доска: напоминания, тихие часы, показ экрана ──
   'В {hm}': 'At {hm}', 'За 10 минут': '10 minutes before', 'За 30 минут': '30 minutes before', 'За час': 'An hour before',
   'Утром в {hm}': 'In the morning at {hm}', 'Накануне в 18:00': 'The day before at 18:00',
   'Напоминание {w}': 'Reminder {w}', 'Напомнить: {w}': 'Remind: {w}', 'Напомню {w}': 'Will remind {w}', 'напомню {w}': 'reminder {w}',
@@ -434,106 +433,7 @@ const EN = {
     'Executable files (chmod +x) and .py work. The interval can also be set with a “# messhub: interval=60” line at the top of the file. The example is off (.off at the end of its name): rename it and make it executable.',
   'Создан пример: {p}': 'Example created: {p}', 'Карточек: {n}': 'Cards: {n}',
 
-  // ── ассистент ──
-  'Ассистент': 'Assistant', 'на модели на этом компьютере': 'on a model on this computer', 'Новая беседа': 'New conversation',
-  'Найти беседу': 'Find a conversation', 'Модели': 'Models', 'Настроить заново': 'Set up again',
-  'Модель работает на этом компьютере — сообщения никуда не отправляются.': 'The model runs on this computer — messages are not sent anywhere.',
-  'Нажми, чтобы переименовать': 'Click to rename', 'Модель и настройки беседы': 'Model and conversation settings',
-  'Скопировать беседу (Markdown)': 'Copy the conversation (Markdown)', 'Настройки беседы': 'Conversation settings',
-  'Сегодня': 'Today', 'Раньше': 'Earlier', 'Бесед пока нет': 'No conversations yet', 'Ничего не нашлось': 'Nothing found',
-  'Беседа удалена': 'Conversation deleted', 'Дождись ответа или останови его': 'Wait for the answer or stop it',
-  'Беседа скопирована (Markdown)': 'Conversation copied (Markdown)', 'модель не выбрана': 'no model selected',
-  '{p} не отвечает — запусти или выбери другую модель': '{p} is not responding — start it or pick another model', 'Модель': 'Model',
-  'Что я пропустил?': 'What did I miss?', 'Коротко о главном за сутки': 'The gist of the last day',
-  'Кратко перескажи, что было в сообщениях за период: по каждому активному чату 1–2 пункта, отдельно — что адресовано мне и что ждёт моего ответа.':
-    'Briefly summarize the messages for the period: 1–2 points per active chat, and separately what is addressed to me and waits for my reply.',
-  'Упоминания и вопросы ко мне': 'Mentions and questions to me', 'Где меня звали или спрашивали': 'Where I was mentioned or asked',
-  'Найди сообщения, где упоминают меня или задают мне вопрос, и перечисли их с номерами и кратко — что от меня хотят.':
-    'Find messages that mention me or ask me something, and list them with numbers and briefly what is wanted from me.',
-  'Сроки и договорённости': 'Deadlines and agreements', 'Встречи, дедлайны, обещания': 'Meetings, deadlines, promises',
-  'Выпиши все сроки, встречи и договорённости со временем, кто и что обещал — с номерами сообщений. Сначала ближайшие.':
-    'List all deadlines, meetings and agreements with times, who promised what — with message numbers. Nearest first.',
-  'Отчёт по серверам': 'Server report', 'Контейнеры, службы, команды': 'Containers, services, commands',
-  'Сделай отчёт по контейнерам, службам и командам: что падало, что починилось, что до сих пор не работает. С номерами сообщений.':
-    'Make a report on containers, services and commands: what failed, what got fixed, what still does not work. With message numbers.',
-  'Сводка по чату…': 'Chat summary…', 'Подставь название чата': 'Fill in the chat name',
-  'Сделай сводку по чату «»: о чём говорили, что решили, что осталось открытым.': 'Summarize the chat “”: what was discussed, what was decided, what is still open.',
-  'Найти…': 'Find…', 'Поиск своими словами': 'Search in your own words', 'Найди сообщения про ': 'Find messages about ',
-  'Спроси о своих сообщениях…': 'Ask about your messages…', 'Отправить · Enter': 'Send · Enter', 'Остановить': 'Stop',
-  'Слова «сегодня», «вчера», «за неделю» в вопросе сами сузят выборку.': 'Words like “today”, “yesterday”, “this week” in the question narrow the selection.',
-  'Enter — отправить, Shift+Enter — новая строка': 'Enter — send, Shift+Enter — new line', 'Выборка: {p}': 'Selection: {p}',
-  'за сутки': 'last day', 'за 2 дня': 'last 2 days', 'за неделю': 'last week', 'за месяц': 'last month', 'за всё время': 'all time',
-  'опирался на {n}': 'based on {n}', 'сообщений в выборке не было': 'no messages in the selection', '{n} токенов': '{n} tokens',
-  'остановлено': 'stopped', 'О чём спросить?': 'What to ask?',
-  'Ассистент читает твои сообщения из базы — выборку за период — и отвечает моделью на этом компьютере. Номера вида #123 в ответе открывают само сообщение.':
-    'The assistant reads your messages from the database — a selection for the period — and answers with a model on this computer. Numbers like #123 in the answer open the message itself.',
-  '{p} не отвечает. Запусти его или выбери другую модель в настройках беседы.': '{p} is not responding. Start it or pick another model in the conversation settings.',
-  'Модель не выбрана — открой «Модели» или настройки беседы.': 'No model selected — open “Models” or the conversation settings.',
-  'Выбери модель в настройках беседы': 'Pick a model in the conversation settings', 'Собираю сообщения…': 'Collecting messages…',
-  'Выборка: {s}': 'Selection: {s}', 'Остановлено': 'Stopped', 'Открыть сообщение': 'Open the message',
-  'моделей нет — открой «Модели»': 'no models — open “Models”', 'недоступна': 'unavailable',
-  'Модель умеет контекст до {n} токенов.': 'The model supports a context of up to {n} tokens.', 'Температура': 'Temperature',
-  'Ниже — точнее и повторяемее (для сводок и поиска), выше — свободнее.': 'Lower — more precise and repeatable (summaries, search), higher — freer.',
-  'Размер контекста': 'Context size', 'токенов': 'tokens',
-  'У LM Studio размер контекста задаётся при загрузке модели в самой программе; здесь он лишь решает, сколько сообщений отдать.':
-    'In LM Studio the context size is set when the model is loaded in the app; here it only decides how many messages to pass.',
-  'Больше — больше сообщений влезет в выборку, но нужно больше видеопамяти и ответ медленнее.': 'Bigger — more messages fit into the selection, but it needs more VRAM and answers slower.',
-  'Длина ответа, не больше': 'Answer length, at most', 'Какие сообщения давать модели': 'Which messages to give the model', 'Период': 'Period',
-  'Ничего не выбрано — все источники.': 'Nothing selected — all sources.', 'Сообщений в выборке, не больше': 'Messages in the selection, at most',
-  'Брать и прочитанные': 'Include read ones', 'Брать хвосты логов (тематические колонки)': 'Include log tails (themed columns)',
-  'Системный промпт': 'System prompt', 'Пусто — стандартный (виден подсказкой). Здесь можно задать тон, язык ответа, формат отчётов.':
-    'Empty — the standard one (shown as a hint). Set the tone, answer language or report format here.',
-  'Сделать по умолчанию': 'Make default', 'Стандартный промпт': 'Standard prompt', 'Сохранено как настройки новых бесед': 'Saved as settings for new conversations',
-  'ГБ': 'GB', 'ошибка: {e}': 'error: {e}', 'скачана': 'downloaded', 'Отменить': 'Cancel', 'Отменяю…': 'Cancelling…',
-  'поместится в видеокарту': 'fits the graphics card', 'на процессоре — медленнее': 'on the CPU — slower', 'может не хватить памяти': 'may run out of memory',
-  'Установленные': 'Installed', 'Скачать': 'Download', 'Найти в каталоге или ввести своё имя модели…': 'Search the catalog or type a model name…',
-  'Найти среди установленных…': 'Search installed…', 'загружена': 'loaded', 'контекст до {n}': 'context up to {n}',
-  'По умолчанию': 'Make default', 'Среди установленных такой нет.': 'No such model installed.', 'Посмотри во вкладке «Скачать».': 'Look in the Download tab.',
-  'В LM Studio нет моделей для чата — скачай модель в самой программе (вкладка Discover) и нажми «Проверить ещё раз».':
-    'LM Studio has no chat models — download one in the app (Discover tab) and click “Check again”.',
-  'Моделей для чата ещё нет — открой вкладку «Скачать».': 'No chat models yet — open the Download tab.',
-  'Видеопамять: {v}, оперативная: {r}. Размеры — примерно. Модель скачивается один раз и дальше работает без интернета.':
-    'VRAM: {v}, RAM: {r}. Sizes are approximate. A model is downloaded once and then works offline.',
-  'нет NVIDIA': 'no NVIDIA', 'своё имя: из ollama.com/library (qwen3:30b) или с Hugging Face (hf.co/автор/модель:Q4_K_M)':
-    'your own name: from ollama.com/library (qwen3:30b) or Hugging Face (hf.co/author/model:Q4_K_M)',
-  'В каталоге такой нет — впиши точное имя модели, и появится кнопка «Скачать».': 'Not in the catalog — type the exact model name and a Download button appears.',
-  'Всё из каталога уже установлено.': 'Everything from the catalog is installed.',
-  'Полный список моделей — на ollama.com/library; любое имя оттуда можно вписать в поиск.': 'The full list is at ollama.com/library; type any name from there into the search.',
-  'Точно удалить?': 'Delete for sure?', 'Модель удалена': 'Model deleted', 'Модель по умолчанию: {m}': 'Default model: {m}',
-  'Не скачалось: {e}': 'Download failed: {e}', 'Модель {m} скачана': 'Model {m} downloaded', 'Скачивание остановлено': 'Download stopped',
-  'Модели, которые можно использовать в беседах. Всё работает на этом компьютере.': 'Models you can use in conversations. Everything runs on this computer.',
-  '← К беседе': '← Back to the conversation', 'Ollama не отвечает': 'Ollama is not responding',
-  'Установи Ollama (ollama.com) — на Linux одной командой, потом она работает сама:': 'Install Ollama (ollama.com) — on Linux with one command, then it runs by itself:',
-  'На Windows — установщик с ollama.com/download. Уже стоит, но не запущена: ollama serve.': 'On Windows use the installer from ollama.com/download. Installed but not running: ollama serve.',
-  'LM Studio не отвечает': 'LM Studio is not responding',
-  'Скачай LM Studio (lmstudio.ai), скачай в ней модель и включи сервер: вкладка Developer → Start Server.': 'Get LM Studio (lmstudio.ai), download a model in it and start the server: Developer tab → Start Server.',
-  'Запустить сервер LM Studio': 'Start the LM Studio server', 'Запускаю…': 'Starting…', 'Сервер LM Studio запущен': 'LM Studio server started',
-  'Не получилось': 'Did not work', 'Знакомство': 'Welcome', 'Где модель': 'Where', 'Какая модель': 'Which model', 'Готово': 'Done',
-  'Привет! Это ассистент по твоим сообщениям': 'Hi! This is an assistant for your messages',
-  'Можно спросить своими словами: «что я пропустил за утро?», «кто спрашивал про отчёт?», «что падало на серверах за неделю?», «сделай сводку по чату…». Ассистент соберёт подходящие сообщения из базы и ответит, а номера #123 в ответе откроют сами сообщения.':
-    'Ask in your own words: “what did I miss this morning?”, “who asked about the report?”, “what failed on the servers this week?”, “summarize the chat…”. The assistant gathers matching messages from the database and answers; numbers like #123 open the messages.',
-  'Отвечает модель на этом компьютере — через Ollama или LM Studio. Сообщения никуда не уходят, интернет нужен только чтобы один раз скачать модель.':
-    'A model on this computer answers — via Ollama or LM Studio. Messages go nowhere; the internet is only needed once, to download a model.',
-  'Начать настройку': 'Start setup', 'Где будет работать модель': 'Where the model will run',
-  'Обе программы бесплатные и работают на этом компьютере. Если ни одной нет — проще начать с Ollama: модели скачиваются прямо отсюда.':
-    'Both are free and run on this computer. If you have neither, start with Ollama: models download right from here.',
-  'Простая, модели скачиваются одной кнопкой прямо в этом окне.': 'Simple: models download with one button right in this window.',
-  'Программа с окном: модели ищутся и скачиваются в ней самой.': 'An app with a window: models are found and downloaded in the app itself.',
-  'найдена · моделей для чата: {n}': 'found · chat models: {n}', 'не отвечает — {e}': 'not responding — {e}', '← Назад': '← Back', 'Дальше': 'Next',
-  'Выбери установленную модель или скачай новую. Для сводок и поиска по русским сообщениям хороши модели с флажком 🇷🇺.':
-    'Pick an installed model or download a new one. Models with the 🇷🇺 flag are good for Russian messages.',
-  'Выбери установленную модель (или скачай и выбери)': 'Pick an installed model (or download one and pick it)',
-  'Модель: {m} ({p}). Её и другие настройки — температуру, размер контекста, какие сообщения брать — можно поменять в любой беседе кнопкой настроек вверху.':
-    'Model: {m} ({p}). It and other settings — temperature, context size, which messages to use — can be changed in any conversation with the settings button at the top.',
-  'Начать беседу': 'Start a conversation', 'Сервер виджета не отвечает — ассистент не загрузился.': 'The widget server is not responding — the assistant could not load.',
-
-  // ── ассистент: размышления моделей ──
-  'Думает…': 'Thinking…', 'Размышления модели': 'Model thinking', '{n} символов': '{n} characters',
-  'Скрывать — свёрнуты над ответом': 'Hide — collapsed above the answer', 'Показывать сразу': 'Show right away',
-  'Не просить размышлять — быстрее': 'Do not ask it to think — faster',
-  'Модель «думающая» (qwen3, deepseek-r1 и подобные): сначала рассуждает, потом отвечает. «Не просить» ускоряет гибридные модели, но модели, которые думают всегда, будут рассуждать прямо в ответе.':
-    'A “thinking” model (qwen3, deepseek-r1 and similar) reasons first and answers after. “Do not ask” speeds up hybrid models, but always-thinking models will reason right in the answer.',
-  'Эта модель не размышляет — настройка на неё не влияет.': 'This model does not think — the setting has no effect.',
+  // ── своя колонка и лента важного ──
   'Перенести в колонку': 'Move to a column', 'переносить в колонку': 'move to the column', 'Колонка': 'Column',
   'Значок': 'Icon', 'Значок колонки': 'Column icon', 'Свой значок': 'Your own icon', 'Свой значок — любой эмодзи': 'Your own icon: any emoji',
   'например: Личное': 'e.g. Personal', 'Из колонки «{name}»': 'From the “{name}” column', 'без текста': 'no text',
@@ -543,10 +443,6 @@ const EN = {
   'Что в неё уходит:': 'What goes into it:', 'закреплённое': 'pinned', 'подсвеченное правилами': 'highlighted by rules',
   'упоминания': 'mentions', 'Свернуть': 'Collapse',
   'Важное уходит из колонок в отдельную строку прямо над доской: закреплённое стоит слева, новое важное въезжает справа. Карточки те же, что в колонках, с названием источника; не влезают — по краям стрелки. Несколько важных из одного чата собираются в плашку, она раскрывается вверх. Пустые места строки прозрачны и пропускают клики к окнам под ней.': 'Important messages leave the columns for a separate row right above the board: pinned ones stay on the left, new important ones slide in from the right. The cards are the same as in the columns, with the source name; when they do not fit, arrows appear at the edges. Several important messages from one chat gather into one card that opens upwards. Empty parts of the row are transparent and let clicks through to the windows below.',
-  'Эта модель размышляет всегда: «Не просить» лишь просит думать как можно меньше.': 'This model always thinks: “Don’t ask” only asks it to think as little as possible.',
-  'Берётся у самой модели: {n} токенов. Сколько сообщений отдать — решает «Сообщений в выборке» ниже.': 'Taken from the model itself: {n} tokens. How many messages to send is set by “Messages in the selection” below.',
-  'Берётся у самой модели.': 'Taken from the model itself.',
-  '«Думающей» модели нужно место и на размышления — лучше от 16 384.': 'A “thinking” model also needs room to think — 16,384 or more is better.',
 
   // ── поиск в шапке доски ──
   'Поиск…': 'Search…', 'Поиск по всем сообщениям · клавиша /': 'Search all messages · key /', 'Найдено': 'Found',
@@ -569,64 +465,13 @@ const EN = {
   'Чтобы сообщить об ошибке, выгрузи журнал: домашняя папка в выгрузке заменится на «~», имя пользователя — на <user>. Всё равно просмотри файл перед отправкой.':
     'To report a bug, export the log: your home folder becomes “~” and your user name becomes <user>. Still, look through the file before sending it.',
 
-  // ── ассистент: OpenRouter, картинки, код, графики ──
-  'Ollama и LM Studio бесплатные и работают на этом компьютере. Если ни одной нет — проще начать с Ollama: модели скачиваются прямо отсюда. OpenRouter — облачные модели, по желанию.':
-    'Ollama and LM Studio are free and run on this computer. If you have neither, Ollama is the easiest start: models download right from here. OpenRouter is cloud models, optional.',
-  'OpenRouter выключен — включи его в «Моделях» или выбери локальную модель': 'OpenRouter is off — turn it on under “Models” or pick a local model',
-  'OpenRouter даёт доступ к сотням облачных моделей по твоему ключу. В беседе с такой моделью к каждому вопросу уйдут выборка твоих сообщений (тексты, имена, названия чатов, хвосты логов, если они включены) и приложенные картинки — на серверы OpenRouter и компании, чья это модель. Что с ними будет дальше, решают их правила, а не messhub.':
-    'OpenRouter gives access to hundreds of cloud models with your key. In a conversation with such a model every question sends a selection of your messages (texts, names, chat titles, log tails if enabled) and attached pictures to the servers of OpenRouter and of the company behind the model. What happens next is up to their rules, not messhub.',
-  'OpenRouter отключён — облачные модели недоступны': 'OpenRouter is off — cloud models are unavailable',
-  'OpenRouter подключён': 'OpenRouter connected',
-  'OpenRouter подключён — облачные модели': 'OpenRouter connected — cloud models',
-  'SVG скопирован — можно вставить в документ': 'SVG copied — paste it into a document',
-  '{i} / {o} за 1 млн токенов': '{i} / {o} per 1M tokens',
+  // ── умный поиск (RAG) ──
   '{n} не посчитались — модель сбоит на этих текстах. Умный поиск их не найдёт, обычный — найдёт. Попробую снова при перезапуске и раз в сутки.':
     '{n} could not be indexed — the model fails on these texts. Smart search will not find them, plain search will. I will retry on restart and once a day.',
-  'В беседах с этими моделями выборка сообщений, вопросы и картинки уходят в OpenRouter и к провайдеру модели. Такие беседы помечены ☁.':
-    'Conversations with these models send the message selection, questions and pictures to OpenRouter and the model provider. They are marked ☁.',
-  'Видит картинки.': 'Sees pictures.',
-  'Выборка сообщений (тексты, имена, названия чатов), вопрос и картинки уйдут в OpenRouter и к провайдеру модели. Для личного и рабочего лучше локальная модель.':
-    'The message selection (texts, names, chat titles), the question and pictures will go to OpenRouter and the model provider. For personal and work chats a local model is better.',
-  'Выборка сообщений, вопрос и картинки уходят в OpenRouter и к провайдеру модели. Локальную модель можно выбрать в настройках беседы.':
-    'The message selection, the question and pictures go to OpenRouter and the model provider. You can pick a local model in the conversation settings.',
-  'Годятся PNG, JPEG, GIF и WebP': 'PNG, JPEG, GIF and WebP work',
-  'График': 'Chart', 'Таблица': 'Table', 'Другое': 'Other', 'Значение': 'Value', 'всего': 'total', 'Ряд {n}': 'Series {n}',
-  'График не нарисовался: данные не похожи на JSON.': 'The chart was not drawn: the data does not look like JSON.',
-  'График не нарисовался: нужны labels и series с числами.': 'The chart was not drawn: it needs labels and series with numbers.',
-  'Картинка не открылась': 'The picture did not open',
-  'Ключ {k} хранится только на этом компьютере. Согласие дано {d}.': 'The key {k} is stored only on this computer. Consent given {d}.',
-  'Ключ создаётся на openrouter.ai в разделе Keys. Он хранится только на этом компьютере (файл с доступом только для тебя) и странице обратно не показывается.':
-    'Create a key on openrouter.ai under Keys. It is stored only on this computer (a file only you can read) and is never shown back on the page.',
-  'Ключ сохранён': 'Key saved', 'Ключ удалён': 'Key deleted', 'Код скопирован': 'Code copied',
-  'Локальные модели работают на этом компьютере. Беседы с облачными моделями OpenRouter помечены ☁ — их сообщения уходят наружу.':
-    'Local models run on this computer. Conversations with OpenRouter cloud models are marked ☁ — their messages leave the computer.',
-  'Модели, которые можно использовать в беседах. Ollama и LM Studio работают на этом компьютере; OpenRouter — облако, подключается по желанию.':
-    'Models you can use in conversations. Ollama and LM Studio run on this computer; OpenRouter is the cloud, connected only if you want.',
-  'Найти модель…': 'Find a model…', 'Найти среди {n} моделей: gemini, qwen, deepseek…': 'Search {n} models: gemini, qwen, deepseek…',
-  'Не больше {n} картинок к одному вопросу': 'No more than {n} pictures per question',
-  'Ничего не нашлось — поменяй поиск или сними фильтры.': 'Nothing found — change the search or clear the filters.',
-  'Облачная модель': 'Cloud model', 'Облачная модель.': 'Cloud model.', 'Обновить список': 'Refresh list',
-  'Отключить': 'Disconnect', 'Отключить и удалить ключ': 'Disconnect and delete the key',
-  'Подключаешь на свой страх и риск. Для рабочих и личных переписок лучше оставить локальные модели. Локальные беседы работают как раньше, облачные помечены ☁.':
-    'You connect it at your own risk. For work and personal chats keep local models. Local conversations work as before, cloud ones are marked ☁.',
-  'Подключить OpenRouter': 'Connect OpenRouter', 'Показаны {a} из {b} — уточни поиск.': 'Showing {a} of {b} — refine the search.',
-  'Понимаю: выборка сообщений и вопросы будут уходить в OpenRouter': 'I understand: message selections and questions will be sent to OpenRouter',
-  'Попробовать сейчас': 'Retry now', 'Приложить картинку (можно вставить из буфера или перетащить)': 'Attach a picture (paste or drag it in too)',
-  'Рисую график…': 'Drawing the chart…', 'Скопировать SVG': 'Copy SVG', 'Сменить ключ': 'Change key', 'Снова в очереди: {n}': 'Queued again: {n}',
-  'Сотни облачных моделей по твоему ключу, часть бесплатно. Сообщения уходят наружу — на твой страх и риск.':
-    'Hundreds of cloud models with your key, some free. Messages leave the computer — at your own risk.',
-  'Сохранить ключ': 'Save key', 'Список моделей не загрузился: {e}': 'The model list did not load: {e}',
-  'Список моделей пуст — проверь интернет и нажми «Проверить ещё раз».': 'The model list is empty — check the internet and press “Check again”.',
-  'Точно удалить ключ?': 'Delete the key?', 'Убрать': 'Remove',
-  'Цена: {i} / {o} за 1 млн токенов (вход / ответ).': 'Price: {i} / {o} per 1M tokens (input / answer).',
-  'Цены — за 1 млн токенов, их берёт OpenRouter со счёта твоего ключа. Бесплатные модели обычно с ограничением запросов в минуту.':
-    'Prices are per 1M tokens, charged by OpenRouter to your key’s balance. Free models are usually rate-limited per minute.',
-  'Что на картинке?': 'What is in the picture?', 'Эта модель, похоже, не видит картинки': 'This model probably cannot see pictures',
-  'Это облако, а не этот компьютер': 'This is the cloud, not this computer',
-  'бесплатно': 'free', 'видит картинки': 'sees pictures', 'размышляет': 'reasons', 'облако': 'cloud', 'пишет…': 'writing…',
-  'Бесплатные': 'Free', 'Видят картинки': 'See pictures', 'Размышляют': 'Reason',
-  'локальные модели и облачные (OpenRouter)': 'local and cloud models (OpenRouter)',
-  'не подключён': 'not connected', 'подключён · моделей: {n}': 'connected · models: {n}', 'повторю сам через {n} с': 'retrying by itself in {n} s',
+  'Попробовать сейчас': 'Retry now',
+  'Снова в очереди: {n}': 'Queued again: {n}',
+  'повторю сам через {n} с': 'retrying by itself in {n} s',
+  'Не получилось': 'Did not work',
   // ── справка ──
   'Инструкции по настройке. Если что-то не ловится — начни с раздела «Система»: он сам подскажет известные случаи.':
     'Setup instructions. If something is not captured, start with “System”: it points out known issues.',
@@ -703,6 +548,62 @@ const EN = {
     'Web apps (Telegram Web, MAX, WhatsApp, webmail) only send notifications while their tab is open or pinned and notifications are allowed for the site in browser settings.',
   'В самом мессенджере должен быть включён показ уведомлений (и текста сообщения), а нужный чат не должен быть выключен (без звука / mute).':
     'Inside the messenger itself, notifications (and message previews) must be enabled, and the chat must not be muted.',
+  // ── прямой канал Telegram (MTProto) и подсказка при обрезке источником ──
+  'Похоже, сам Telegram Desktop обрезал системное уведомление (ограничение около 255 символов) ещё до отправки в messhub. Чтобы получать длинные сообщения целиком без отметки «прочитано», подключи прямой канал Telegram в настройках.':
+    'Telegram Desktop appears to have truncated this notification pop-up (around 255 chars) before sending it to messhub. To receive long messages in full without sending read receipts, enable the direct Telegram channel in Settings.',
+  'Похоже, сам источник обрезал текст ещё до отправки системного уведомления — здесь показан весь текст, который передала система.':
+    'The source app appears to have truncated the text before sending the OS notification — everything passed by the system is shown here.',
+  'Настроить прямой канал Telegram': 'Set up direct Telegram channel',
+  'Откуда messhub берёт сообщения Telegram. Работает один из двух каналов, чтобы сообщения не приходили дважды.':
+    'Where messhub gets Telegram messages from. Only one channel is active at a time so messages are never duplicated.',
+  'Канал Telegram': 'Telegram channel',
+  'Системные уведомления ОС': 'OS system notifications',
+  'Telegram Desktop или web.telegram.org показывают уведомление, и оно попадает на доску. Telegram обрезает длинный текст примерно на 255 символах.':
+    'Telegram Desktop or web.telegram.org shows a notification and it lands on the board. Telegram trims long text at around 255 characters.',
+  'Прямой канал (MTProto, только чтение)': 'Direct channel (MTProto, read-only)',
+  'Программа принимает входящие сообщения целиком (до 4096 символов) без отправки отметки «прочитано» в Telegram.':
+    'The app receives incoming messages in full (up to 4096 chars) without sending read receipts to Telegram.',
+  'Безопасность: messhub только слушает входящие сообщения и никогда не отправляет отметку прочтения или ответы в Telegram. Ключи и сессия хранятся только на этом компьютере в telegram-direct.json (600).':
+    'Security: messhub only listens to incoming messages and never marks chats read or sends replies on Telegram. Keys and session stay on this computer only in telegram-direct.json (mode 600).',
+  'Библиотека Telethon не установлена': 'Telethon library is not installed',
+  'Для прямого канала Telegram нужна библиотека Python Telethon. Её можно установить одной кнопкой (в папку данных программы, без sudo) или вручную:':
+    'The direct Telegram channel needs the Python Telethon library. Install it in one click (into the app data folder, no sudo needed) or by hand:',
+  'Установить Telethon': 'Install Telethon',
+  'Устанавливаю Telethon…': 'Installing Telethon…',
+  'Подключённый аккаунт': 'Connected account',
+  'Подключено к Telegram (только чтение)': 'Connected to Telegram (read-only)',
+  'получено: {n}': 'received: {n}',
+  'Ожидает подключения…': 'Waiting to connect…',
+  'Соединение на паузе — включи «Прямой канал (MTProto)» выше': 'Paused — select “Direct channel (MTProto, read-only)” above',
+  'Переподключить': 'Reconnect',
+  'Выйти': 'Sign out',
+  'Выйти? Нажми ещё раз': 'Sign out? Click again',
+  'Сессия Telegram удалена': 'Telegram session removed',
+  'Какие сообщения забирать': 'Which messages to collect',
+  'Личные чаты': 'Direct chats',
+  'Группы и супергруппы': 'Groups and supergroups',
+  'Каналы': 'Channels',
+  'Сообщения от ботов': 'Bot messages',
+  'Чаты без звука (mute)': 'Muted chats',
+  'Загружать аватары собеседников': 'Download contact avatars',
+  'Подключение аккаунта': 'Connect account',
+  'Для прямого подключения Telegram просит api_id и api_hash твоего приложения: открой my.telegram.org → «API development tools», создай приложение с любым названием и скопируй оба значения.':
+    'Telegram asks for your app api_id and api_hash: open my.telegram.org → “API development tools”, create an app with any title and copy both values.',
+  'Номер телефона': 'Phone number',
+  'Отправить код': 'Send code',
+  'Код отправлен': 'Code sent',
+  'Вход в Telegram': 'Sign in to Telegram',
+  'Код подтверждения отправлен в Telegram для {p}. Введи его ниже.': 'A login code was sent in Telegram for {p}. Enter it below.',
+  'Код из Telegram': 'Code from Telegram',
+  'Войти': 'Sign in',
+  'В аккаунте включена двухэтапная проверка — введи облачный пароль Telegram.': 'Two-step verification is on — enter your Telegram cloud password.',
+  'Облачный пароль (2FA)': 'Cloud password (2FA)',
+  'Подтвердить': 'Confirm',
+  'Telegram подключён (только чтение)': 'Telegram connected (read-only)',
+  'Включён прямой канал Telegram': 'Direct Telegram channel enabled',
+  'Выбран прямой канал — осталось войти в аккаунт ниже': 'Direct channel selected — sign in below to finish',
+  'Включены системные уведомления Telegram': 'Telegram system notifications enabled',
+  'Переподключаю…': 'Reconnecting…',
 };
 
 let LANG = 'ru';

@@ -388,6 +388,7 @@
       <button type="button" data-nav="data"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg><span data-t="Данные">Данные</span></button>
       <div class="gap"></div>
       <button type="button" data-nav="mail"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg><span data-t="Почта">Почта</span></button>
+      <button type="button" data-nav="telegram"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 5L2 12.5l7 1M21 5l-2.5 15L9 13.5M21 5L9 13.5m0 0V19l3.2-3.3"/></svg><span>Telegram</span></button>
       <button type="button" data-nav="themed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="18" rx="1.5"/><rect x="14" y="3" width="7" height="11" rx="1.5"/><line x1="14" y1="18" x2="21" y2="18"/><line x1="14" y1="21" x2="18" y2="21"/></svg><span data-t="Тематические колонки">Тематические колонки</span></button>
       <button type="button" data-nav="forward"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg><span data-t="Пересылка в Telegram">Пересылка в Telegram</span></button>
       <button type="button" data-nav="ingest"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span data-t="Приём событий">Приём событий</span></button>
@@ -439,7 +440,7 @@ const DOW=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 const DOW_LONG=['понедельник','вторник','среда','четверг','пятница','суббота','воскресенье'];
 
 // esc(), attr(), confirmBtn(), api() - в /common.js; свой toast: у него свой класс
-// ('toast show'), в ассистенте и окне сообщения класса 'toast' нет.
+// ('toast show'), в окне сообщения класса 'toast' нет.
 const q = s => LANG==='en'?`<span class="q">“${esc(s)}”</span>`:`<span class="q">«${esc(s)}»</span>`;
 function when(s){
   if(!s)return'';
@@ -588,7 +589,7 @@ const newEd=(src,action)=>({src,conds:null,cond:0,chat:'',sender:'',text:'',text
 
 // ── маршрут ──
 const ROUTES={sources:showSources,setup:showNotifySetup,rules:showGlobalRules,profiles:showProfiles,quiet:showQuiet,mentions:showMentions,search:showSearch,
-  look:showLook,stats:showStats,data:showData,mail:showMail,themed:showThemed,forward:showForward,ingest:showIngest,
+  look:showLook,stats:showStats,data:showData,mail:showMail,telegram:showTelegram,themed:showThemed,forward:showForward,ingest:showIngest,
   system:showSystem,logs:showLogs,help:showHelp};
 let pageTimer=0;           // автообновление раздела (журнал, состояние колонок) — гасится при уходе
 function route(){
@@ -1575,6 +1576,145 @@ function mailEditor(d,a){
   (isNew?$('mUser'):$('mPass')).focus();
 }
 
+// ── Telegram: уведомления или прямой канал (MTProto) ──
+async function showTelegram(){
+  page.innerHTML=`<div class="state">${esc(t('Загружаю…'))}</div>`;
+  let d;try{d=await api('/api/telegram');}catch(e){failed(showTelegram);return;}
+  const direct=d.channel==='mtproto', s=d.settings||{};
+  const mode=(v,title,sub)=>`<button class="mode" type="button" role="radio" aria-checked="${d.channel===v}" data-tch="${v}"><span class="dot"></span>
+    <span><b>${esc(t(title))}</b><span>${esc(t(sub))}</span></span></button>`;
+  const stMark=d.error?'bad':d.connected?'ok':'info';
+  const stIcon=stMark==='ok'?'✓':stMark==='bad'?'✕':'·';
+  const stText=d.error?d.error:d.connected
+    ?t('Подключено к Telegram (только чтение)')+(d.received?', '+t('получено: {n}',{n:d.received}):'')
+    :(direct?t('Ожидает подключения…'):t('Соединение на паузе — включи «Прямой канал (MTProto)» выше'));
+
+  let libHtml='';
+  if(!d.lib.installed){
+    libHtml=`<div class="editor standalone" style="margin-bottom:16px">
+      <h3>${esc(t('Библиотека Telethon не установлена'))}</h3>
+      <p class="hint">${esc(t('Для прямого канала Telegram нужна библиотека Python Telethon. Её можно установить одной кнопкой (в папку данных программы, без sudo) или вручную:'))}</p>
+      <pre>python3 -m pip install telethon</pre>
+      <div class="actions">
+        ${d.lib.can_install?`<button class="btn primary" type="button" id="tgInst"${d.installing_lib?' disabled':''}>${esc(t(d.installing_lib?'Устанавливаю Telethon…':'Установить Telethon'))}</button>`:''}
+      </div>
+      ${d.install_error?`<div class="result err">${esc(d.install_error)}</div>`:''}
+    </div>`;
+  }
+
+  let accHtml='';
+  if(d.authorized){
+    const acc=d.account||{};
+    const sub=[acc.username?'@'+acc.username:'',acc.phone||'',d.last_at?t('последнее {w}',{w:when(d.last_at)}):''].filter(Boolean).join(' · ');
+    accHtml=`<h3>${esc(t('Подключённый аккаунт'))}</h3>
+      <div class="list"><div class="acc"><span class="st ${stMark}">${stIcon}</span>
+        <span class="ai"><span class="nm">${esc(acc.name||'Telegram')}</span> <span class="muted">${esc(sub)}</span><br>
+          <span class="sub${stMark==='bad'?' err':''}">${esc(stText)}</span></span>
+        <span class="btns"><button class="btn ghost" type="button" id="tgReconn"${direct?'':' disabled'}>${esc(t('Переподключить'))}</button>
+          <button class="btn danger" type="button" id="tgLogout">${esc(t('Выйти'))}</button></span></div></div>
+      <h3>${esc(t('Какие сообщения забирать'))}</h3>
+      <div class="field">
+        <label>${esc(t('Источники'))}</label><div class="ctl" style="flex-direction:column;align-items:flex-start;gap:6px">
+          <label class="switch"><input type="checkbox" data-tgs="chats"${s.chats?' checked':''}> ${esc(t('Личные чаты'))}</label>
+          <label class="switch"><input type="checkbox" data-tgs="groups"${s.groups?' checked':''}> ${esc(t('Группы и супергруппы'))}</label>
+          <label class="switch"><input type="checkbox" data-tgs="channels"${s.channels?' checked':''}> ${esc(t('Каналы'))}</label>
+          <label class="switch"><input type="checkbox" data-tgs="bots"${s.bots?' checked':''}> ${esc(t('Сообщения от ботов'))}</label>
+          <label class="switch"><input type="checkbox" data-tgs="include_muted"${s.include_muted?' checked':''}> ${esc(t('Чаты без звука (mute)'))}</label>
+          <label class="switch"><input type="checkbox" data-tgs="download_avatars"${s.download_avatars?' checked':''}> ${esc(t('Загружать аватары собеседников'))}</label>
+        </div>
+      </div>`;
+  } else if(d.auth_step==='code'||d.auth_step==='password'){
+    const isPw=d.auth_step==='password';
+    accHtml=`<h3>${esc(t('Вход в Telegram'))}</h3>
+      <div class="editor standalone">
+        <p class="lead" style="margin-bottom:12px">${esc(isPw
+          ?t('В аккаунте включена двухэтапная проверка — введи облачный пароль Telegram.')
+          :t('Код подтверждения отправлен в Telegram для {p}. Введи его ниже.',{p:d.auth_phone||''}))}</p>
+        <div class="field">
+          ${isPw
+            ?`<label for="tgPass">${esc(t('Облачный пароль (2FA)'))}</label><div class="ctl"><input class="inp" id="tgPass" type="password" autocomplete="off" style="width:240px"></div>`
+            :`<label for="tgCode">${esc(t('Код из Telegram'))}</label><div class="ctl"><input class="inp" id="tgCode" inputmode="numeric" autocomplete="one-time-code" placeholder="12345" style="width:160px"></div>`}
+        </div>
+        <div id="tgRes"></div>
+        <div class="actions"><button class="btn primary" type="button" id="tgSign">${esc(t(isPw?'Подтвердить':'Войти'))}</button>
+          <button class="btn ghost" type="button" id="tgCancel">${esc(t('Отмена'))}</button></div>
+      </div>`;
+  } else {
+    accHtml=`<h3>${esc(t('Подключение аккаунта'))}</h3>
+      <div class="editor standalone">
+        <p class="hint" style="margin-top:0">${esc(t('Для прямого подключения Telegram просит api_id и api_hash твоего приложения: открой my.telegram.org → «API development tools», создай приложение с любым названием и скопируй оба значения.'))}</p>
+        <div class="field">
+          <label for="tgId">api_id</label><div class="ctl"><input class="inp" id="tgId" inputmode="numeric" value="${attr(d.api_id||'')}" placeholder="12345678" style="width:180px"></div>
+          <label for="tgHash">api_hash</label><div class="ctl"><input class="inp" id="tgHash" type="password" autocomplete="off" placeholder="${attr(d.has_api_hash?t('оставь пустым, чтобы не менять'):'0123456789abcdef…')}" style="width:280px"></div>
+          <label for="tgPhone">${esc(t('Номер телефона'))}</label><div class="ctl"><input class="inp" id="tgPhone" type="tel" placeholder="+79991234567" style="width:220px"></div>
+        </div>
+        <div id="tgRes"></div>
+        <div class="actions"><button class="btn primary" type="button" id="tgSend"${d.lib.installed?'':' disabled'}>${esc(t('Отправить код'))}</button></div>
+      </div>`;
+  }
+
+  page.innerHTML=`<h1>Telegram</h1>
+    <p class="lead">${esc(t('Откуда messhub берёт сообщения Telegram. Работает один из двух каналов, чтобы сообщения не приходили дважды.'))}</p>
+    <div class="modes" role="radiogroup" aria-label="${attr(t('Канал Telegram'))}" style="margin-bottom:20px">
+      ${mode('notify','Системные уведомления ОС','Telegram Desktop или web.telegram.org показывают уведомление, и оно попадает на доску. Telegram обрезает длинный текст примерно на 255 символах.')}
+      ${mode('mtproto','Прямой канал (MTProto, только чтение)','Программа принимает входящие сообщения целиком (до 4096 символов) без отправки отметки «прочитано» в Telegram.')}</div>
+    <div class="warnbox">${esc(t('Безопасность: messhub только слушает входящие сообщения и никогда не отправляет отметку прочтения или ответы в Telegram. Ключи и сессия хранятся только на этом компьютере в telegram-direct.json (600).'))}</div>
+    ${libHtml}${accHtml}`;
+
+  page.querySelectorAll('[data-tch]').forEach(b=>b.onclick=async()=>{
+    if(b.dataset.tch===d.channel)return;
+    try{d=await api('/api/telegram/channel',{channel:b.dataset.tch});
+      toast(t(b.dataset.tch==='mtproto'
+        ?(d.authorized?'Включён прямой канал Telegram':'Выбран прямой канал — осталось войти в аккаунт ниже')
+        :'Включены системные уведомления Telegram'));
+      showTelegram();}
+    catch(e){toast(e.message,true);}
+  });
+  if($('tgInst')){
+    $('tgInst').onclick=async()=>{
+      $('tgInst').disabled=true;
+      try{await api('/api/telegram/install-lib',{});showTelegram();}
+      catch(e){toast(e.message,true);$('tgInst').disabled=false;}
+    };
+  }
+  if(d.installing_lib){
+    pageTimer=setInterval(async()=>{
+      try{const s=await api('/api/telegram');if(!s.installing_lib){clearInterval(pageTimer);pageTimer=0;showTelegram();}}
+      catch(e){}
+    },1500);
+  }
+  const tgErr=m=>{if($('tgRes'))$('tgRes').innerHTML=`<div class="result err">${esc(m)}</div>`;};
+  if($('tgSend')){
+    $('tgSend').onclick=async()=>{
+      const btn=$('tgSend');btn.disabled=true;
+      try{d=await api('/api/telegram/auth/send-code',{api_id:$('tgId').value,api_hash:$('tgHash').value,phone:$('tgPhone').value});
+        toast(t('Код отправлен'));showTelegram();}
+      catch(e){tgErr(e.message);btn.disabled=false;}
+    };
+  }
+  if($('tgSign')){
+    $('tgSign').onclick=async()=>{
+      const btn=$('tgSign');btn.disabled=true;
+      const body=d.auth_step==='password'?{password:$('tgPass').value}:{code:$('tgCode').value};
+      try{const r=await api('/api/telegram/auth/sign-in',body);
+        if(r.need_password){showTelegram();return;}
+        toast(t('Telegram подключён (только чтение)'));showTelegram();}
+      catch(e){tgErr(e.message);btn.disabled=false;}
+    };
+    const inp=$('tgCode')||$('tgPass');
+    if(inp){inp.focus();inp.onkeydown=e=>{if(e.key==='Enter')$('tgSign').click();};}
+  }
+  if($('tgCancel')) $('tgCancel').onclick=async()=>{try{await api('/api/telegram/auth/cancel',{});showTelegram();}catch(e){toast(e.message,true);}};
+  if($('tgReconn')) $('tgReconn').onclick=async()=>{try{await api('/api/telegram/reconnect',{});toast(t('Переподключаю…'));setTimeout(showTelegram,1200);}catch(e){toast(e.message,true);}};
+  if($('tgLogout')) confirmBtn($('tgLogout'),t('Выйти? Нажми ещё раз'),async()=>{
+    try{await api('/api/telegram/logout',{remote:true});toast(t('Сессия Telegram удалена'));showTelegram();}
+    catch(e){toast(e.message,true);}});
+  page.querySelectorAll('[data-tgs]').forEach(cb=>cb.onchange=async()=>{
+    try{await api('/api/telegram/settings',{[cb.dataset.tgs]:cb.checked});toast(t('Сохранено'));}
+    catch(e){cb.checked=!cb.checked;toast(e.message,true);}
+  });
+}
+
 // ── Приём событий ──
 async function showIngest(){
   page.innerHTML=`<div class="state">${esc(t('Загружаю…'))}</div>`;
@@ -1879,7 +2019,7 @@ ru: [
 <li>Внизу, в разделе <b>«Взаимодействие с системой»</b>, включи <b>«Использовать системные уведомления»</b>. Перезапуск не нужен.</li>
 <li>Там же оставь включёнными показ имени отправителя и текста сообщения — иначе в виджет придёт только «Новое сообщение».</li></ol>
 <p>Экспериментальную опцию «GNotification» не включай: с ней уведомления пойдут по каналу, который программа не слушает. Сообщения из открытого на экране чата уведомлений не дают — это нормально.</p>
-<p>Чтение в messhub не отмечает сообщения прочитанными в Telegram и других мессенджерах: длинный текст можно раскрыть прямо на карточке («Развернуть целиком») или в окне ⤢. При этом messhub получает ровно столько текста, сколько сам Telegram Desktop передаёт в системное уведомление (очень длинные посты сам Telegram обрезает при отправке уведомления).</p>`],
+<p>Чтение в messhub не отмечает сообщения прочитанными в Telegram и других мессенджерах: длинный текст можно раскрыть прямо на карточке («Развернуть целиком») или в окне ⤢. Сам Telegram Desktop при отправке системного уведомления обрезает посты примерно на 255 символах — чтобы получать длинные сообщения целиком без отметки «прочитано», включи прямой канал <b>MTProto</b> в разделе «Telegram».</p>`],
 ['Свои события: скрипты, сборки, бэкапы', `
 <p>Любая команда может положить событие в виджет — это обычное уведомление:</p>
 <pre>notify-send -a "Сборки" "CI: main" "Сборка #413 прошла"</pre>
@@ -1893,15 +2033,6 @@ ru: [
 <li><b>Ресурсы</b> — диск, память, swap, температура процессора и видеокарты; <b>Журналы</b> — строки логов по своему шаблону; <b>Календарь</b> — события из GNOME Календаря, Evolution и .ics.</li>
 <li><b>Свои источники</b> — скрипты в папке sources.d (раздел «Приём событий»): каждая напечатанная JSON-строка становится карточкой.</li></ul>
 <p>Когда проблема ушла (контейнер снова работает, служба поднялась, команда прошла), карточка бледнеет и получает «✓ починилось». Хвост лога свёрнут под карточкой, двойной клик по нему копирует лог. Свои скрипты могут делать так же через «Приём событий»: поле <code>key</code> и <code>status: "resolved"</code>.</p>`],
-['Ассистент: вопросы по сообщениям локальной модели', `
-<p>Кнопка ✨ в шапке доски открывает ассистента. Он собирает подходящие сообщения из базы и отвечает моделью на этом компьютере — через <b>Ollama</b> или <b>LM Studio</b>. Сообщения никуда не уходят; адреса моделей — только на этом компьютере.</p>
-<ul><li>При первом запуске мастер найдёт Ollama и LM Studio, покажет установленные модели и предложит скачать новую (для Ollama — прямо в окне, с подсказкой, поместится ли модель в видеокарту).</li>
-<li>У каждой беседы свои настройки: модель, температура, размер контекста, длина ответа, какие сообщения брать (период, источники, прочитанные, логи) и свой системный промпт.</li>
-<li>Номера вида #123 в ответе открывают само сообщение; «опирался на …» показывает всю выборку.</li>
-<li>Код и JSON подсвечиваются, таблицы рисуются таблицами. Попроси «построй график» — ответ нарисует столбцы, линии или кольцо; кнопки над графиком — «Таблица» и «Скопировать SVG».</li>
-<li>Картинку к вопросу можно приложить скрепкой, вставить из буфера или перетащить — для моделей, которые видят картинки.</li>
-<li><b>OpenRouter</b> (облачные модели) — только если сам подключишь в «Моделях» своим ключом и согласишься: в таких беседах (они помечены ☁) выборка сообщений, вопрос и картинки уходят в OpenRouter. Отключается там же.</li></ul>
-<pre>curl -fsSL https://ollama.com/install.sh | sh     # Ollama на Linux</pre>`],
 ['Тихие часы и показ экрана', `
 <p><b>Тихие часы</b> — по расписанию, вручную (луна в шапке доски: «тихо на час», «до утра») или вместе с «Не беспокоить» GNOME. Пока тихо, правила не играют звук, а в конце приходит сводка в колонку «Сводки». По желанию программа сама включает «Не беспокоить» на это время.</p>
 <p><b>Показ экрана</b>: пока идёт демонстрация (панелька «… предоставлен доступ к вашему экрану» в Chrome, индикатор Firefox, панель Zoom, поток захвата PipeWire), доска размывается сама и возвращается после. Свои признаки — в «Внешнем виде».</p>
@@ -1954,7 +2085,7 @@ en: [
 <li>At the bottom, under <b>System integration</b>, turn on <b>Use native notifications</b>. No restart needed.</li>
 <li>Keep sender name and message preview on, otherwise only “New message” arrives.</li></ol>
 <p>Don't enable the experimental “GNotification” option: notifications would go through a channel this app doesn't listen to.</p>
-<p>Reading in messhub never sends read receipts in Telegram or other messengers: expand long text inline (“Expand in full”) or open the ⤢ window. Note that messhub can display only as much text as Telegram Desktop sends in its system notification (very long posts are trimmed by Telegram itself).</p>`],
+<p>Reading in messhub never sends read receipts in Telegram or other messengers: expand long text inline (“Expand in full”) or open the ⤢ window. Telegram Desktop itself truncates system notification pop-ups at around 255 characters — to read long messages in full without sending read receipts, enable the direct <b>MTProto</b> channel under “Telegram”.</p>`],
 ['Your own events: scripts, builds, backups', `
 <p>Any command can post an event to the widget — it is a normal notification:</p>
 <pre>notify-send -a "Builds" "CI: main" "Build #413 passed"</pre>
@@ -1968,14 +2099,6 @@ en: [
 ['Logs: when something does not work', `
 <p>“Logs” is the app's own log: start-up, errors, background jobs. Message texts are never written there. The number next to the menu item is errors in the last day.</p>
 <p>“Export” saves the log to Downloads with your home folder replaced by “~”. You can attach it to a bug report on GitHub, but look through it first.</p>`],
-['Assistant: ask a local model about your messages', `
-<p>The ✨ button in the board header opens the assistant. It gathers matching messages from the database and answers with a model on this computer — via <b>Ollama</b> or <b>LM Studio</b>. Messages go nowhere; model addresses are restricted to this computer.</p>
-<ul><li>On first start a wizard finds Ollama and LM Studio, shows installed models and offers to download one (for Ollama right in the window, with a hint whether it fits your GPU).</li>
-<li>Each conversation has its own settings: model, temperature, context size, answer length, which messages to use (period, sources, read ones, logs) and its own system prompt.</li>
-<li>Numbers like #123 in an answer open the message; “based on …” shows the whole selection.</li>
-<li>Code and JSON are highlighted, tables are drawn as tables. Ask for a chart and the answer draws bars, lines or a ring; the buttons above it are “Table” and “Copy SVG”.</li>
-<li>Attach a picture with the paper clip, paste it or drag it in — for models that see pictures.</li>
-<li><b>OpenRouter</b> (cloud models) — only if you connect it yourself under “Models” with your key and agree: such conversations (marked ☁) send the message selection, the question and pictures to OpenRouter. Disconnect it in the same place.</li></ul>`],
 ['Quiet hours and screen sharing', `
 <p><b>Quiet hours</b> — by schedule, by hand (the moon in the board header: “quiet for an hour”, “until morning”) or together with GNOME “Do Not Disturb”. While quiet, rules play no sound, and a digest lands in the Digests column afterwards. Optionally the app turns “Do Not Disturb” on for that time.</p>
 <p><b>Screen sharing</b>: while you share your screen (Chrome's “… is sharing your screen” bar, the Firefox indicator, the Zoom toolbar, a PipeWire capture stream) the board blurs and comes back afterwards. Add your own signs under Appearance.</p>

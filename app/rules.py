@@ -110,6 +110,7 @@ PREF_DEFAULTS = {
     "hidden_cols": [],        # скрытые насовсем колонки (ключи источников)
     "closed_cols": [],        # закрытые до нового сообщения (снова открывает apply_on_insert)
     "mail_channel": "notify", # почта: notify — уведомления почтовых программ, imap — ящики (mail.py)
+    "telegram_channel": "notify",  # Telegram: notify — системные уведомления, mtproto — прямой канал (tgdirect.py)
     "mentions": [],           # моё имя/ник/ключевые слова — подсветка «упоминаний»
     "source_names": {},       # {ключ источника: {"name": …, "ico": …}}
     "profiles": [],           # [{"id", "name", "schedule": [{"days": [0..6], "from": "09:00", "to": "18:00"}]}]
@@ -117,7 +118,8 @@ PREF_DEFAULTS = {
     "retention_days": 0,      # хранить N дней (0 — всё); закреплённые не удаляются
     "backup": {"enabled": True, "keep": 7},                   # ежедневные копии базы
     "report": {"enabled": False, "weekday": 0, "time": "09:00"},  # недельный отчёт в Telegram
-    "rag": {"enabled": False, "model": "bge-m3", "chat_model": ""},  # умный поиск (rag.py)
+    "rag": {"enabled": False, "model": "bge-m3", "chat_model": "",   # умный поиск (rag.py)
+            "ollama_url": "http://127.0.0.1:11434"},
     "ingest_bind": "",        # приём событий из сети: "0.0.0.0:8766"; "" — только локально
     "update_check": True,     # раз в 12 ч узнавать у GitHub номер последнего выпуска (updates.py)
     # тематические колонки для ИТ (events.py): каждая включается отдельно, по умолчанию выключены
@@ -139,11 +141,6 @@ PREF_DEFAULTS = {
               "follow_dnd": False, "set_dnd": False, "summary": True},  # тихие часы (quiet.py); своё состояние,
                                                                         # «Не беспокоить» системы — только если попросят
     "scripts": {"enabled": True, "items": {}},   # свои источники: скрипты в <настройки>/sources.d (scripts.py)
-    "ai": {"provider": "", "ollama_url": "http://127.0.0.1:11434", "lmstudio_url": "http://127.0.0.1:1234",
-           "model": "", "temperature": 0.3, "num_ctx": 8192, "max_tokens": 1024, "system": "",
-           "period": "7d", "max_msgs": 300, "include_logs": False, "include_read": True, "think": "hide",
-           "setup_done": False,
-           "openrouter": False, "openrouter_consent": ""},   # ассистент (ai.py); OpenRouter — внешний, по согласию
     # служебное — не настройки, в выгрузку и в версию настроек не входит:
     "backup_last": "", "report_last": "", "services_win_last": "", "quiet_state": "", "agenda_last": "",
     "report_try": "",           # когда последний раз пытались отправить недельный отчёт (report.py)
@@ -152,7 +149,8 @@ STATE_PREFS = ("backup_last", "report_last", "services_win_last", "quiet_state",
                "report_try")
 # от этих настроек зависит вид доски — по их хэшу (X-Prefs-Ver) виджет перечитывает её
 DISPLAY_PREFS = ("language", "opacity", "font_size", "compact", "full_text", "theme", "group_by_chat",
-                 "avatars", "col_order", "split_cols", "hidden_cols", "closed_cols", "mail_channel", "mentions",
+                 "avatars", "col_order", "split_cols", "hidden_cols", "closed_cols", "mail_channel",
+                 "telegram_channel", "mentions",
                  "source_names", "profiles", "profile", "time_hints", "share_blur", "share_patterns", "quiet",
                  "strip")
 
@@ -217,6 +215,8 @@ def sub_of(app, site="", chat=""):
         return "site:" + site, site
     if app == "mail-imap":
         return "imap:" + (chat or ""), chat or "IMAP"
+    if app == "telegram-mtproto":
+        return "tg:mtproto", "MTProto"
     name = _app_name(app)
     return "app:" + (app or "").lower(), name.split("_")[0] if "_" in name else name   # snap: telegram-desktop_…
 
@@ -458,11 +458,9 @@ def get_prefs(conn):
         prefs["themed"] = clean_themed(prefs["themed"])
     except (ValueError, TypeError, AttributeError):
         prefs["themed"] = json.loads(json.dumps(PREF_DEFAULTS["themed"]))
-    if isinstance(prefs["ai"], dict):
-        prefs["ai"].pop("allow_lan", None)
-        for key in ("ollama_url", "lmstudio_url"):
-            url = str(prefs["ai"].get(key) or "").strip().rstrip("/")
-            prefs["ai"][key] = url if ai_url_ok(url) else PREF_DEFAULTS["ai"][key]
+    if isinstance(prefs["rag"], dict):
+        url = str(prefs["rag"].get("ollama_url") or "").strip().rstrip("/")
+        prefs["rag"]["ollama_url"] = url if ai_url_ok(url) else PREF_DEFAULTS["rag"]["ollama_url"]
     return prefs
 
 
@@ -502,14 +500,16 @@ def _clean_pref(k, v):
                 items[str(name)] = {"enabled": bool(o.get("enabled", True)),
                                     "interval": int(min(86400, max(10, int(o.get("interval", 300)))))}
         return {"enabled": bool(v.get("enabled", True)), "items": items}
-    if k == "ai":
-        return clean_ai(v)
     if k == "theme":
         if v not in ("dark", "light"):
             raise bad
         return v
     if k == "mail_channel":
         if v not in ("notify", "imap"):
+            raise bad
+        return v
+    if k == "telegram_channel":
+        if v not in ("notify", "mtproto"):
             raise bad
         return v
     if k in ("col_order", "hidden_cols", "closed_cols", "split_cols"):
@@ -562,8 +562,12 @@ def _clean_pref(k, v):
                 "time": t}
     if k == "rag":
         model = str(v.get("model", "bge-m3")).strip()[:100] or "bge-m3"
+        url = str(v.get("ollama_url", PREF_DEFAULTS["rag"]["ollama_url"])).strip().rstrip("/") or PREF_DEFAULTS["rag"]["ollama_url"]
+        if not ai_url_ok(url):
+            raise ValueError(L("Адрес Ollama — только на этом компьютере (127.0.0.1, localhost или [::1])",
+                               "The Ollama address must be on this computer (127.0.0.1, localhost or [::1])"))
         return {"enabled": bool(v.get("enabled")), "model": model,
-                "chat_model": str(v.get("chat_model", "")).strip()[:100]}
+                "chat_model": str(v.get("chat_model", "")).strip()[:100], "ollama_url": url}
     if k == "ingest_bind":
         v = str(v).strip()
         if v and not _RE_BIND.match(v):
@@ -657,36 +661,6 @@ def clean_quiet(v):
 _RE_LOCAL_URL = re.compile(r"^http://(127\.0\.0\.1|localhost|\[::1\])(:\d{2,5})?/?$")
 
 
-def clean_ai(v):
-    d = PREF_DEFAULTS["ai"]
-    v = dict(v or {})
-    out = {"provider": v.get("provider") if v.get("provider") in ("", "ollama", "lmstudio", "openrouter") else "",
-           "model": str(v.get("model", d["model"])).strip()[:200],
-           "temperature": round(min(2.0, max(0.0, float(v.get("temperature", d["temperature"])))), 2),
-           "num_ctx": int(min(262144, max(1024, int(v.get("num_ctx", d["num_ctx"]))))),
-           "max_tokens": int(min(32768, max(64, int(v.get("max_tokens", d["max_tokens"]))))),
-           "system": str(v.get("system", d["system"]))[:4000],
-           "period": v.get("period") if v.get("period") in ("1d", "2d", "7d", "30d", "all") else d["period"],
-           "max_msgs": int(min(2000, max(10, int(v.get("max_msgs", d["max_msgs"]))))),
-           # размышления «думающих» моделей: hide — отдельно и свёрнуты, show — видны сразу, off — не просить
-           "think": _think_mode(v.get("think", d["think"])),
-           **{k: bool(v.get(k, d[k])) for k in ("include_logs", "include_read", "setup_done", "openrouter")},
-           "openrouter_consent": str(v.get("openrouter_consent", d["openrouter_consent"]))[:19]}
-    for key in ("ollama_url", "lmstudio_url"):
-        url = str(v.get(key, d[key])).strip().rstrip("/")
-        if not ai_url_ok(url):
-            raise ValueError(L("Адрес модели — только на этом компьютере (127.0.0.1, localhost или [::1])",
-                               "The model address must be on this computer (127.0.0.1, localhost or [::1])"))
-        out[key] = url
-    return out
-
-
-def _think_mode(v):
-    if v is True:
-        return "show"
-    return v if v in ("hide", "show", "off") else "hide"
-
-
 def ai_url_ok(url):
     """Модель — только на этом компьютере (loopback). Другие адреса и LAN не принимаются."""
     return bool(_RE_LOCAL_URL.match((url or "").strip() + "/"))
@@ -697,27 +671,20 @@ def themed(prefs):
     return clean_themed(prefs.get("themed") or {})
 
 
-OR_KEYS = ("openrouter", "openrouter_consent")   # облако — только через ai.or_setup (ключ + согласие)
-
-
-def set_prefs(conn, patch, cloud_ok=False):
-    """cloud_ok — можно менять OR_KEYS (только ai.or_setup): ни /api/prefs, ни загрузка
-    файла настроек не включают OpenRouter в обход согласия."""
+def set_prefs(conn, patch):
     if not isinstance(patch, dict):
         raise ValueError(L("Ожидался объект настроек", "Expected a settings object"))
     for k, v in patch.items():
         try:
-            # тематические колонки, тихие часы, скрипты, ассистент и лента важного меняют по одной настройке —
+            # тематические колонки, тихие часы, скрипты, умный поиск и лента важного меняют по одной настройке —
             # остальное берём из сохранённого
             if k == "themed":
                 val = clean_themed(v, get_prefs(conn)["themed"])
-            elif k in ("quiet", "ai", "scripts", "strip"):
+            elif k in ("quiet", "rag", "scripts", "strip"):
                 if not isinstance(v, dict):
                     raise TypeError(k)
                 cur = get_prefs(conn)[k]
                 merged = {**cur, **v}
-                if k == "ai" and not cloud_ok:
-                    merged.update({x: cur[x] for x in OR_KEYS})
                 if k == "scripts" and isinstance(v.get("items"), dict):
                     merged["items"] = {**cur["items"], **v["items"]}
                 val = _clean_pref(k, merged)

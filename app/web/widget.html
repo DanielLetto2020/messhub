@@ -33,7 +33,7 @@
     display: flex; flex-direction: column; overflow: hidden;
   }
   .bar {
-    /* три части: слева название и поиск, по центру глаз, «прочитать всё» и ассистент, справа остальное;
+    /* три части: слева название и поиск, по центру глаз и «прочитать всё», справа остальное;
        середина — ровно по центру окна, какой бы ширины ни были края */
     display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 10px;
     padding: 7px 12px; border-bottom: 1px solid var(--line); flex: 0 0 auto;
@@ -352,9 +352,6 @@
       <span class="ib" id="readAll" data-t-title="Прочитать всё, кроме закреплённого">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 6 7 16 2 11"/><polyline points="22 8 14 16 12.5 14.5"/></svg>
       </span>
-      <span class="ib" id="aiBtn" data-t-title="Ассистент: вопросы по сообщениям на модели на этом компьютере">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
-      </span>
     </div>
     <div class="side right">
       <span class="count" id="count">0</span>
@@ -533,9 +530,9 @@ function ensureCol(meta){
 function colItems(key){
   return [...msgs.values()].filter(m=>m.src===key&&!inStripHere(m)&&(!focus||important(m))).sort((a,b)=>b.id-a.id);
 }
-// куда ведёт «перейти»: письма из ящиков (mail.py) и карточки тематических колонок (events.py) приходят
-// не из окна приложения — переходить некуда
-const goTitle = m => m.app==='mail-imap'||/^messhub-/.test(m.app||'')?'':m.site?t('Открыть {site}',{site:m.site}):t('Перейти в {app}',{app:m.src_name});
+// куда ведёт «перейти»: письма из ящиков (mail.py), прямой канал Telegram (tgdirect.py) и тематические колонки (events.py)
+// (в Telegram переход по уведомлению откроет чат и отметит сообщение прочитанным — здесь этого не делаем)
+const goTitle = m => m.app==='mail-imap'||m.app==='telegram-mtproto'||/^messhub-/.test(m.app||'')?'':m.site?t('Открыть {site}',{site:m.site}):t('Перейти в {app}',{app:m.src_name});
 // источник строкой над карточкой — в ленте важного, где карточки из разных колонок стоят рядом
 // (сайт или ящик — через точку; имя программы вроде telegram-desktop ничего не добавляет)
 const srcLine = m => `<div class="srcl">${esc(m.src_ico||'')} ${esc(m.src_name||'')}${m.orig_name?' · '+esc((m.orig_ico||'')+' '+m.orig_name):''}${
@@ -934,9 +931,6 @@ $('quietBtn').addEventListener('click',()=>{
     ${quietNow.active?`<button type="button" data-q="off"><span>${esc(t('Выключить сейчас'))}</span></button>`:''}<hr>
     <button type="button" data-qsetup="1"><span>${esc(t('Расписание и настройки…'))}</span></button>`,'quiet',null);
 });
-
-// ── ассистент: отдельное окно, как настройки ──
-$('aiBtn').addEventListener('click',()=>{if(host)host.postMessage('assistant');else window.open('/assistant','messhub-assistant','width=1120,height=760');});
 
 // ── показ экрана: окно (widget.py / winwidget.py) замечает индикаторы и говорит странице ──
 let autoPriv=false;

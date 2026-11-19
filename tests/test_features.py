@@ -1,5 +1,5 @@
 """Время в тексте и напоминания, тихие часы, календарь, ресурсы, журналы, свои скрипты, показ экрана,
-ассистент (выборка, беседы, поток ответа — модель подменена). Без сети и рабочего стола."""
+умный поиск (RAG). Без сети и рабочего стола."""
 import json
 import os
 import sqlite3
@@ -8,19 +8,13 @@ import tempfile
 import threading
 import time
 import unittest
-import urllib.request
-from datetime import datetime, timedelta
-import base64
 import urllib.error
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from datetime import datetime, timedelta
 from unittest import mock
 
 import common
-import ai
 import calendar_src
-import events
 import logwatch
-import paths
 import quiet
 import rag
 import reminders
@@ -29,7 +23,6 @@ import rules
 import screen
 import scripts
 import serve
-import session
 import when
 
 
@@ -304,326 +297,6 @@ class ScreenTest(unittest.TestCase):
             "state": "suspended", "props": {"media.class": "Video/Source", "node.name": "gnome-shell-screencast"}}}])))
 
 
-class AiTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.db = common.new_db("ai.db")
-        prefs(cls.db, {})
-        conn = sqlite3.connect(cls.db)
-        common.put(conn, "eXpress", "Команда", "Иван: отчёт по проекту нужен к пятнице")
-        common.put(conn, "telegram-desktop", "Мама", "Позвони, как освободишься")
-        events.emit(conn, "containers", "shop-api", "упал с кодом 1", key="container:podman:shop-api", urgency=2)
-        conn.commit()
-        conn.close()
-        cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), serve.make_handler(cls.db))
-        cls.base = f"http://127.0.0.1:{cls.httpd.server_address[1]}"
-        threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.httpd.shutdown()
-        cls.httpd.server_close()
-
-    def post(self, path, body):
-        """POST с cookie сеанса - как из браузера (сервер требует токен, см. app/session.py)."""
-        r = urllib.request.Request(self.base + path, data=json.dumps(body).encode(),
-                                   headers={"Content-Type": "application/json",
-                                            "Cookie": f"{session.COOKIE}={session.token()}"})
-        with urllib.request.urlopen(r, timeout=20) as resp:
-            return resp.read().decode()
-
-    def test_urls_only_local(self):
-        self.assertTrue(rules.ai_url_ok("http://127.0.0.1:11434"))
-        self.assertTrue(rules.ai_url_ok("http://localhost:1234"))
-        self.assertTrue(rules.ai_url_ok("http://[::1]:11434"))
-        for bad in ("http://192.168.1.5:11434", "http://10.0.0.2:11434",
-                    "https://api.openai.com", "http://evil.example:11434", "http://8.8.8.8:11434"):
-            self.assertFalse(rules.ai_url_ok(bad), bad)
-        with self.assertRaises(ValueError):
-            rules.clean_ai({"ollama_url": "http://192.168.1.5:11434", "allow_lan": True})
-        with self.assertRaises(ValueError):
-            rules.clean_ai({"ollama_url": "http://evil.example:11434"})
-        # Устаревшие настройки с allow_lan и LAN-адресом очищаются при чтении
-        db = common.new_db("ai_legacy.db")
-        conn = sqlite3.connect(db)
-        conn.execute("INSERT OR REPLACE INTO prefs (key, value) VALUES (?, ?)", ("ai", json.dumps({
-            "allow_lan": True,
-            "ollama_url": "http://192.168.1.5:11434",
-            "lmstudio_url": "http://192.168.1.5:1234",
-        })))
-        conn.commit()
-        p = rules.get_prefs(conn)["ai"]
-        conn.close()
-        self.assertNotIn("allow_lan", p)
-        self.assertEqual(p["ollama_url"], "http://127.0.0.1:11434")
-        self.assertEqual(p["lmstudio_url"], "http://127.0.0.1:1234")
-
-    def test_context_selection(self):
-        conn = sqlite3.connect(self.db)
-        st = dict(ai.session_defaults(conn), period="all")
-        lines, ids, summary, _ = ai.build_context(conn, st, "что с отчётом по проекту?")
-        self.assertEqual(len(ids), 3)
-        self.assertTrue(lines[0].startswith("#"))
-        self.assertIn("Всего сообщений: 3", summary)
-        lines, ids, _, _ = ai.build_context(conn, dict(st, sources=["containers"]), "что упало?")
-        self.assertEqual(len(ids), 1)
-        self.assertIn("shop-api", lines[0])
-        # Фильтр источников учитывает перенос в свою колонку my:личное
-        rules.save_rule(conn, rules.clean_rule({"src": "telegram", "chat": "Мама", "action": "move", "param": "Личное"}))
-        rules.set_my_icon(conn, "Личное", "🏠")
-        _, ids_my, _, _ = ai.build_context(conn, dict(st, sources=["my:личное"]), "что от мамы?")
-        _, ids_tg, _, _ = ai.build_context(conn, dict(st, sources=["telegram"]), "что в телеграме?")
-        self.assertEqual(len(ids_my), 1)
-        self.assertEqual(ids_tg, [])
-        conn.close()
-
-    def test_sessions_and_streaming_chat(self):
-        s = json.loads(self.post("/api/ai/session", {"settings": {"provider": "ollama", "model": "demo:1b", "period": "all"}}))
-        self.assertEqual(s["settings"]["model"], "demo:1b")
-        s = json.loads(self.post("/api/ai/session", {"id": s["id"], "settings": {"temperature": 0.1}}))
-        self.assertEqual((s["settings"]["temperature"], s["settings"]["model"]), (0.1, "demo:1b"))   # остальное не сбросилось
-        seen = {}
-
-        def fake_stream(ai_prefs, st, messages):
-            seen["system"] = messages[0]["content"]
-            yield {"think": "надо найти отчёт"}                     # отдельное поле размышлений (Ollama)
-            for piece in ("<think>ещё подумаю</think>Отчёт нужен ", "к пятнице (#1)."):   # и теги в тексте
-                yield {"t": piece}
-            yield {"tokens": 7, "done_reason": "stop"}
-        with mock.patch.object(ai, "_stream", fake_stream), mock.patch.object(ai, "thinks", return_value=True):
-            out = self.post("/api/ai/chat", {"session": s["id"], "text": "Что с отчётом?"})
-        evs = [json.loads(line) for line in out.splitlines() if line.strip()]
-        self.assertEqual([e["type"] for e in evs], ["context", "think", "think", "token", "token", "done"])
-        self.assertEqual(evs[-1]["tokens"], 7)
-        self.assertEqual(evs[-1]["thinking"], "надо найти отчётещё подумаю")
-        self.assertIn("#1 · ", seen["system"])                      # сообщения из базы — в промпте
-        with urllib.request.urlopen(f"{self.base}/api/ai/session?id={s['id']}", timeout=10) as r:
-            full = json.load(r)
-        self.assertEqual([m["role"] for m in full["messages"]], ["user", "assistant"])
-        self.assertEqual(full["messages"][1]["content"], "Отчёт нужен к пятнице (#1).")
-        self.assertEqual(full["title"], "Что с отчётом?")
-        with urllib.request.urlopen(f"{self.base}/api/ai/export?id={s['id']}", timeout=10) as r:
-            self.assertIn("**Ассистент**", json.load(r)["text"])
-        out = self.post("/api/ai/chat", {"session": s["id"], "text": ""})
-        self.assertEqual(json.loads(out.splitlines()[-1])["type"], "error")
-        self.post("/api/ai/session/delete", {"id": s["id"]})
-        with urllib.request.urlopen(f"{self.base}/api/ai/sessions", timeout=10) as r:
-            self.assertNotIn(s["id"], [x["id"] for x in json.load(r)])
-
-    def test_empty_answer_retried_without_thinking(self):
-        """Весь запас ушёл на размышления — второй заход без них; не помогло — объяснить, что поправить."""
-        s = json.loads(self.post("/api/ai/session", {"settings": {"provider": "ollama", "model": "demo:1b"}}))
-        calls = []
-
-        def think_then_answer(ai_prefs, st, messages):
-            calls.append((st["think"], st["_predict"]))
-            if st["think"] != "off":
-                yield {"think": "долго-долго думаю"}
-                yield {"tokens": 4000, "done_reason": "length"}
-            else:
-                yield {"t": "Коротко: всё спокойно."}
-                yield {"tokens": 12, "done_reason": "stop"}
-        with mock.patch.object(ai, "_stream", think_then_answer), mock.patch.object(ai, "thinks", return_value=True):
-            out = self.post("/api/ai/chat", {"session": s["id"], "text": "Что было?"})
-        evs = [json.loads(x) for x in out.splitlines() if x.strip()]
-        self.assertEqual([e["type"] for e in evs], ["context", "think", "retry", "token", "done"])
-        self.assertEqual([c[0] for c in calls], ["hide", "off"])
-        self.assertGreater(calls[0][1], 1024)            # размышлениям — весь остаток контекста, не «длина ответа»
-        done = evs[-1]
-        self.assertEqual((done["tokens"], done["thinking"]), (4012, "долго-долго думаю"))
-        self.assertIn("ответ дан без них", done["note"])
-        msgs = json.loads(urllib.request.urlopen(f"{self.base}/api/ai/session?id={s['id']}", timeout=10).read())["messages"]
-        self.assertEqual(msgs[-1]["content"], "Коротко: всё спокойно.")
-
-        def only_thinking(ai_prefs, st, messages):
-            yield {"think": "думаю"}
-            yield {"tokens": 1024, "done_reason": "length"}
-        with mock.patch.object(ai, "_stream", only_thinking), mock.patch.object(ai, "thinks", return_value=True):
-            out = self.post("/api/ai/chat", {"session": s["id"], "text": "А ещё?"})
-        done = json.loads(out.splitlines()[-1])
-        self.assertIn("весь запас ушёл на размышления", done["note"])
-
-    def test_context_plan(self):
-        """Контекст делится с запасом на размышления; у OpenRouter — контекст самой модели, не настройка."""
-        st = {"provider": "ollama", "num_ctx": 8192, "max_tokens": 1024}
-        p = ai.plan(st, None, thinking=True)
-        self.assertEqual(p["ctx"], 8192)
-        self.assertGreaterEqual(p["out"], 1024 + 2048)
-        self.assertEqual(p["prompt"], 8192 - p["out"] - ai.MARGIN)
-        self.assertEqual(ai.plan(st)["out"], 1024)
-        orst = dict(st, provider="openrouter")
-        p = ai.plan(orst, {"ctx": 1000000, "max_out": 128000}, thinking=True)
-        self.assertEqual((p["ctx"], p["out"]), (1000000, 1024 + ai.OR_THINK))
-        self.assertEqual(ai.plan(orst, {"ctx": 200000, "max_out": 8000}, thinking=True)["out"], 8000)
-        self.assertEqual(ai.plan(orst, {})["ctx"], 32768)          # каталог не загрузился
-        self.assertEqual(ai._or_reasoning(True, {}), None)
-        self.assertEqual(ai._or_reasoning(False, {}), {"effort": "none"})
-        self.assertEqual(ai._or_reasoning(False, {"efforts": ["high", "medium", "none"]}), {"effort": "none"})
-        self.assertEqual(ai._or_reasoning(False, {"efforts": ["xhigh", "medium", "low"]}), {"enabled": False})
-        self.assertEqual(ai._or_reasoning(False, {"mandatory": True, "efforts": ["high", "medium", "low"]}), {"effort": "low"})
-        # русский текст: ≈2 символа на токен (замер на qwen3) — оценка не должна занижать
-        self.assertGreaterEqual(ai.est_tokens("Созвон переносим на 15:00, пришлите отчёт"), 20)
-
-    def test_selection_says_what_did_not_fit(self):
-        conn = sqlite3.connect(self.db)
-        st = dict(ai.session_defaults(conn), period="all")
-        lines, ids, summary, _ = ai.build_context(conn, st, "что было?", budget=len(ai._line(
-            {"id": 1, "src_name": "x", "chat": "", "sender": "", "text": "", "iso": "", "details": ""}, False)) + 60)
-        self.assertLess(len(ids), 3)
-        self.assertIn("Не влезло в контекст:", summary)
-        conn.close()
-
-    def test_think_modes_and_splitter(self):
-        self.assertEqual(rules.clean_ai({"think": True})["think"], "show")
-        self.assertEqual(rules.clean_ai({"think": False})["think"], "hide")
-        self.assertEqual(rules.clean_ai({"think": "off"})["think"], "off")
-        sp, out = ai.ThinkSplitter(), []
-        for ch in ("<th", "ink>думаю</th", "ink>Отв", "ет <"):
-            out += sp.feed(ch)
-        out += sp.flush()
-        self.assertEqual("".join(p for k, p in out if k == "think"), "думаю")
-        self.assertEqual("".join(p for k, p in out if k == "answer"), "Ответ <")
-
-    def test_pages_served(self):
-        with urllib.request.urlopen(self.base + "/assistant", timeout=10) as r:
-            self.assertIn(b'id="view"', r.read())
-
-
-PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
-
-
-class FakeOpenRouter(BaseHTTPRequestHandler):
-    """Поддельный OpenRouter: каталог моделей и потоковый ответ (SSE) с размышлениями и ценой."""
-    seen = {}
-
-    def log_message(self, *a):
-        pass
-
-    def do_GET(self):
-        body = json.dumps({"data": [
-            {"id": "demo/vision-pro", "name": "Vision Pro", "context_length": 128000,
-             "top_provider": {"context_length": 128000, "max_completion_tokens": 64000},
-             "reasoning": {"mandatory": True, "supported_efforts": ["high", "medium", "low"]},
-             "architecture": {"input_modalities": ["text", "image"], "output_modalities": ["text"]},
-             "supported_parameters": ["reasoning"], "pricing": {"prompt": "0.000001", "completion": "0.000002"}},
-            {"id": "demo/free:free", "name": "Free", "context_length": 32000, "architecture": {},
-             "pricing": {"prompt": "0", "completion": "0"}},
-            {"id": "demo/painter", "name": "Painter", "architecture": {"output_modalities": ["image"]}}]}).encode()
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.end_headers()
-        self.wfile.write(body)
-
-    def do_POST(self):
-        FakeOpenRouter.seen = {"auth": self.headers.get("Authorization"),
-                               "body": json.loads(self.rfile.read(int(self.headers["Content-Length"])))}
-        self.send_response(200)
-        self.send_header("Content-Type", "text/event-stream")
-        self.end_headers()
-        for ev in ({"choices": [{"delta": {"reasoning": "считаю"}}]}, {"choices": [{"delta": {"content": "Готово "}}]},
-                   {"choices": [{"delta": {"content": "(#1)."}, "finish_reason": "stop"}]},
-                   {"choices": [], "usage": {"completion_tokens": 5, "cost": 0.00042}}):
-            self.wfile.write(b": OPENROUTER PROCESSING\n\ndata: " + json.dumps(ev).encode() + b"\n\n")
-        self.wfile.write(b"data: [DONE]\n\n")
-
-
-class OpenRouterTest(AiTest):
-    """Облачные модели: только по согласию и с ключом; ключ наружу не отдаётся; картинки к вопросу."""
-
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls.fake = ThreadingHTTPServer(("127.0.0.1", 0), FakeOpenRouter)
-        threading.Thread(target=cls.fake.serve_forever, daemon=True).start()
-        cls.patch = mock.patch.object(ai, "OPENROUTER", f"http://127.0.0.1:{cls.fake.server_address[1]}")
-        cls.patch.start()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.patch.stop()
-        cls.fake.shutdown()
-        cls.fake.server_close()
-        super().tearDownClass()
-
-    def get(self, path):
-        with urllib.request.urlopen(self.base + path, timeout=10) as r:
-            return json.load(r)
-
-    def post_err(self, path, body):
-        with self.assertRaises(urllib.error.HTTPError) as cm:
-            self.post(path, body)
-        return json.load(cm.exception)["error"]
-
-    def test_openrouter_consent_key_and_stream(self):
-        self.post("/api/ai/setup", {"ai": {"openrouter": True, "openrouter_consent": "x"}})   # в обход согласия — нельзя
-        self.assertFalse(self.get("/api/ai/status")["prefs"]["openrouter"])
-        self.assertIn("ключ", self.post_err("/api/ai/openrouter", {"enabled": True, "consent": True}))
-        self.assertIn("согласие", self.post_err("/api/ai/openrouter", {"enabled": True, "key": "sk-or-v1-demo-token-not-real-1234"}))
-        st = json.loads(self.post("/api/ai/openrouter", {"enabled": True, "consent": True}))
-        self.assertTrue(st["enabled"])
-        if os.name != "nt":                         # на Windows прав «600» нет — там профиль пользователя
-            self.assertEqual(stat.S_IMODE(os.stat(paths.OPENROUTER_CFG).st_mode), 0o600)
-        full = json.dumps(self.get("/api/ai/status"), ensure_ascii=False)
-        self.assertNotIn("demo-token-not-real", full)                      # ключ странице не отдаётся
-        self.assertIn("…1234", full)
-        models = self.get("/api/ai/openrouter/models")["models"]
-        self.assertEqual([m["name"] for m in models], ["demo/free:free", "demo/vision-pro"])   # без моделей-«художников»
-        self.assertTrue(models[0]["free"] and models[1]["vision"] and models[1]["reasoning"])
-        self.assertEqual(models[1]["price_in"], 1.0)
-        self.assertEqual((models[1]["mandatory"], models[1]["max_out"], models[0]["mandatory"]), (True, 64000, False))
-
-        s = json.loads(self.post("/api/ai/session", {"settings": {"provider": "openrouter", "model": "demo/vision-pro", "period": "all"}}))
-        out = self.post("/api/ai/chat", {"session": s["id"], "text": "Что было?", "images": ["data:image/png;base64," + base64.b64encode(PNG).decode()]})
-        evs = [json.loads(x) for x in out.splitlines() if x.strip()]
-        self.assertEqual(evs[-1]["type"], "done", evs[-1])
-        self.assertTrue(evs[-1]["external"])
-        self.assertEqual(evs[-1]["cost"], 0.00042)
-        self.assertEqual(evs[-1]["thinking"], "считаю")
-        self.assertEqual(FakeOpenRouter.seen["auth"], "Bearer sk-or-v1-demo-token-not-real-1234")
-        body = FakeOpenRouter.seen["body"]
-        self.assertEqual(body["max_tokens"], 1024 + ai.OR_THINK)          # размышлениям — запас сверх ответа
-        self.assertNotIn("reasoning", body)
-        conn = sqlite3.connect(self.db)
-        self.assertEqual(ai.model_info(conn, "openrouter", "demo/vision-pro")["mandatory"], True)
-        conn.close()
-        last = FakeOpenRouter.seen["body"]["messages"][-1]
-        self.assertEqual(last["content"][0], {"type": "text", "text": "Что было?"})
-        self.assertTrue(last["content"][1]["image_url"]["url"].startswith("data:image/png;base64,"))
-        msgs = self.get(f"/api/ai/session?id={s['id']}")["messages"]
-        self.assertEqual(msgs[1]["content"], "Готово (#1).")
-        # «не просить размышлять» у модели, которая думает всегда, — наименьшее усилие, а не exclude
-        self.post("/api/ai/session", {"id": s["id"], "settings": {"think": "off"}})
-        self.post("/api/ai/chat", {"session": s["id"], "text": "Коротко?"})
-        self.assertEqual(FakeOpenRouter.seen["body"]["reasoning"], {"effort": "low"})
-        name = msgs[0]["meta"]["images"][0]
-        with urllib.request.urlopen(f"{self.base}/ai-image/{name}", timeout=10) as r:
-            self.assertEqual((r.headers["Content-Type"], r.read()), ("image/png", PNG))
-
-        self.post("/api/ai/setup", {"ai": {"provider": "openrouter", "model": "demo/vision-pro"}})
-        st = json.loads(self.post("/api/ai/openrouter", {"enabled": False}))
-        self.assertFalse(st["enabled"])
-        self.assertEqual(self.get("/api/ai/status")["prefs"]["provider"], "")      # новые беседы — не в облако
-        out = self.post("/api/ai/chat", {"session": s["id"], "text": "Ещё?"})
-        self.assertIn("OpenRouter выключен", json.loads(out.splitlines()[-1])["error"])
-        self.post("/api/ai/session/delete", {"id": s["id"]})
-        self.assertIsNone(ai.image_file(name))                             # картинка удалена вместе с беседой
-        self.post("/api/ai/openrouter", {"enabled": False, "key": ""})
-        self.assertFalse(os.path.exists(paths.OPENROUTER_CFG))
-
-    def test_images_checked_and_formatted(self):
-        for bad in ("data:text/plain;base64,aGk=", "data:image/png;base64," + base64.b64encode(b"not an image").decode(), "http://x/y.png"):
-            with self.assertRaises(ValueError):
-                ai.save_images([bad])
-        url = "data:image/png;base64," + base64.b64encode(PNG).decode()
-        a, b = ai.save_images([url, url])
-        self.assertEqual(a, b)                                             # одна и та же картинка — один файл
-        self.assertIsNone(ai.image_file("../../etc/passwd"))
-        msg = {"role": "user", "content": "что тут?"}
-        self.assertEqual(ai._with_images("ollama", msg, [a])["images"], [base64.b64encode(PNG).decode()])
-        self.assertEqual(ai._with_images("lmstudio", msg, [a])["content"][1]["type"], "image_url")
-        self.assertIs(ai._with_images("ollama", msg, []), msg)
-
-
 class RagTest(unittest.TestCase):
     """Умный поиск: сбойный текст (NaN у bge-m3 → 500 на всю порцию) не держит очередь."""
 
@@ -664,10 +337,35 @@ class RagTest(unittest.TestCase):
         self.assertIn("Установить", rag.human_error(e))
         self.assertIn("не запущена", rag.human_error(urllib.error.URLError(ConnectionRefusedError("refused"))))
 
+    def test_urls_only_local(self):
+        """Адрес Ollama для RAG — строго на этом компьютере (localhost / 127.0.0.1 / [::1])."""
+        self.assertTrue(rules.ai_url_ok("http://127.0.0.1:11434"))
+        self.assertTrue(rules.ai_url_ok("http://localhost:1234"))
+        self.assertTrue(rules.ai_url_ok("http://[::1]:11434"))
+        for bad in ("http://192.168.1.5:11434", "http://10.0.0.2:11434",
+                    "https://api.openai.com", "http://evil.example:11434", "http://8.8.8.8:11434"):
+            self.assertFalse(rules.ai_url_ok(bad), bad)
+        db = common.new_db("rag_local.db")
+        conn = sqlite3.connect(db)
+        try:
+            with self.assertRaises(ValueError):
+                rules.set_prefs(conn, {"rag": {"ollama_url": "http://192.168.1.5:11434"}})
+            with self.assertRaises(ValueError):
+                rules.set_prefs(conn, {"rag": {"ollama_url": "http://evil.example:11434"}})
+            conn.execute("INSERT OR REPLACE INTO prefs (key, value) VALUES (?, ?)", ("rag", json.dumps({
+                "enabled": True,
+                "ollama_url": "http://192.168.1.5:11434",
+            })))
+            conn.commit()
+            p = rules.get_prefs(conn)["rag"]
+            self.assertEqual(p["ollama_url"], "http://127.0.0.1:11434")
+        finally:
+            conn.close()
+
     def test_ollama_url_from_prefs(self):
-        """rag.ollama_url читает prefs['ai']['ollama_url'], если OLLAMA_HOST не задан."""
+        """rag.ollama_url читает prefs['rag']['ollama_url'], если OLLAMA_HOST не задан."""
         db = common.new_db("rag_url.db")
-        prefs(db, {"ai": {"ollama_url": "http://localhost:11435"}})
+        prefs(db, {"rag": {"ollama_url": "http://localhost:11435"}})
         conn = sqlite3.connect(db)
         try:
             with mock.patch.dict(os.environ, {}, clear=False):

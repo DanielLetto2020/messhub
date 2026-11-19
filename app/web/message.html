@@ -54,6 +54,9 @@
   .veil { display: none; margin: 0 0 12px; color: var(--muted); }
   .blurred .veil { display: block; }
   .priv-note { font-size: 11.5px; color: var(--muted); margin: 14px 0 0; }
+  .cut-note { margin: 14px 0 0; padding: 10px 12px; border-radius: 9px; border: 1px solid var(--line2);
+    background: var(--surface); font-size: 12.5px; color: var(--muted); line-height: 1.5; max-width: 90ch; }
+  .cut-note .btn { margin-top: 8px; padding: 4px 10px; font-size: 12px; }
 
   footer { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 18px; border-top: 1px solid var(--line);
     background: var(--bar); flex: 0 0 auto; }
@@ -140,13 +143,22 @@ function draw(){
     <div class="src">${esc(m.src_name)}${m.site?' · '+esc(m.site):''}</div>${pills?`<div class="pills">${pills}</div>`:''}`;
   $('when').textContent=when(m.event_iso);
   const n=m.details?m.details.split('\n').length:0;
+  const txt=(m.message||'').trim();
+  const cutBySrc=m.app!=='telegram-mtproto'&&txt.length>=200&&(/(\.\.\.|…)$/.test(txt));
+  const isTg=m.src==='telegram'||/telegram/i.test(m.app||'');
+  const cutNote=cutBySrc?`<div class="cut-note">${esc(isTg
+    ?t('Похоже, сам Telegram Desktop обрезал системное уведомление (ограничение около 255 символов) ещё до отправки в messhub. Чтобы получать длинные сообщения целиком без отметки «прочитано», подключи прямой канал Telegram в настройках.')
+    :t('Похоже, сам источник обрезал текст ещё до отправки системного уведомления — здесь показан весь текст, который передала система.'))}${
+    isTg?`<br><button class="btn" type="button" id="bTgCfg">${esc(t('Настроить прямой канал Telegram'))}</button>`:''}</div>`:'';
   $('main').innerHTML=`<p class="veil">${esc(t('Содержимое скрыто для показа экрана.'))} <button class="btn ghost" type="button" id="unveil">${esc(t('Показать'))}</button></p>
     <div class="text">${m.fmt?richFmt(m.fmt):rich(m.message||'')}</div>
+    ${cutNote}
     ${m.details?`<h2>${esc(t('Лог'))} · ${esc(tp(n,...W.line))}</h2><pre class="log">${esc(m.details)}</pre>`:''}
     <p class="priv-note">${esc(t('Просмотр здесь не отмечает сообщение прочитанным в мессенджере.'))}</p>`;
   const unveil=$('unveil'); if(unveil) unveil.onclick=()=>document.body.classList.remove('blurred');
-  // перейти можно только в приложение с окном: не у писем из ящиков и не у тематических колонок
-  const go=m.app==='mail-imap'||/^messhub-/.test(m.app||'')?'':m.site?t('Открыть {site}',{site:m.site}):host?t('Перейти в {app}',{app:m.src_name}):'';
+  if($('bTgCfg')) $('bTgCfg').onclick=()=>{if(host)host.postMessage('settings:telegram');else window.open('/settings#telegram','_blank');};
+  // перейти можно только в приложение с окном: не у писем из ящиков, не у прямого канала Telegram и не у тематических колонок
+  const go=m.app==='mail-imap'||m.app==='telegram-mtproto'||/^messhub-/.test(m.app||'')?'':m.site?t('Открыть {site}',{site:m.site}):host?t('Перейти в {app}',{app:m.src_name}):'';
   $('foot').innerHTML=`<button class="btn" type="button" id="bCopy">${esc(t('Скопировать текст'))}</button>
     ${m.details?`<button class="btn" type="button" id="bLog">${esc(t('Скопировать лог'))}</button>`:''}
     ${go?`<button class="btn" type="button" id="bGo">${esc(go)}</button>`:''}

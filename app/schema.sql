@@ -110,21 +110,3 @@ CREATE TABLE IF NOT EXISTS reminders (
     fired       INTEGER DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_reminders_due ON reminders(fired, at);
-
--- Ассистент (ai.py): беседы и их сообщения; настройки беседы — JSON (модель, контекст, выборка).
-CREATE TABLE IF NOT EXISTS ai_sessions (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    title       TEXT NOT NULL DEFAULT '',
-    created     TEXT,
-    updated     TEXT,
-    settings    TEXT NOT NULL DEFAULT '{}'
-);
-CREATE TABLE IF NOT EXISTS ai_messages (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id  INTEGER NOT NULL,
-    role        TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
-    content     TEXT NOT NULL,
-    created     TEXT,
-    meta        TEXT NOT NULL DEFAULT '{}'  -- на какие сообщения опирался ответ, модель, время, токены
-);
-CREATE INDEX IF NOT EXISTS idx_ai_messages_session ON ai_messages(session_id);

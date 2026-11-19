@@ -37,9 +37,11 @@ the screen anyway.
   from your manager, highlight mentions of your name, play a sound for urgent ones.
 - **Sharing your screen on a call.** The board blurs by itself as soon as you start sharing (or with
   one button), so colleagues don't read too much.
-- **"Ask your messages".** An assistant on a model on your own computer: "what did I miss?", "who
-  asked about the report?", "summarize the chat", "chart messages per day" - with message numbers in
-  the answer.
+- **"Ask your messages" and smart search (RAG).** Optional local semantic search and Q&A via
+  Ollama running on your own computer under Settings → Search.
+- **Full Telegram messages without read receipts.** Alongside OS notifications, you can enable an
+  optional direct MTProto channel (read-only): incoming messages arrive in full up to 4096 chars
+  without sending read receipts.
 - **Deadlines get lost in chats.** "Call tomorrow at 10", "report by Friday" - the card gets a ⏰, one
   click and the reminder comes on time. Quiet hours - no sounds at night and on weekends.
 - **You'd rather not hand your messages to a service.** Everything is stored and processed on your
@@ -137,48 +139,6 @@ same through Event intake (the `key` field and `status: "resolved"`).
 
 ![Resources, log watch, calendar](docs/screens/en/settings-themed-more.png)
 
-### An assistant on a model on your computer
-
-The ✨ button in the board header opens a separate window, like settings. Ask in your own words: the
-assistant gathers matching messages from the database and answers with a model on this computer -
-via [Ollama](https://ollama.com) or [LM Studio](https://lmstudio.ai). Numbers like #123 in the answer
-open the message itself.
-
-- **First start** - a wizard finds Ollama and LM Studio and shows installed models. For Ollama a
-  model downloads right in the window: Installed and Download tabs, catalog search, any name from
-  ollama.com/library or Hugging Face, a hint whether the model fits your GPU, download progress.
-- **Conversations** - listed on the left, each with its own settings: model, temperature, context
-  size, answer length, which messages to use (period, sources, read ones, logs) and its own system
-  prompt. Ready-made questions: "What did I miss?", "Mentions and questions to me", "Deadlines and
-  agreements", "Server report".
-- **"Thinking" models** (qwen3, deepseek-r1 and the like) - the thinking is collapsed above the
-  answer. It gets what is left of the context after the selection; if the model uses it all up, it
-  answers again right away, without thinking. Such models do better with a context of 16,384 or more.
-  Cloud models use their own context, and "Messages in the selection" decides how many to send; the
-  selection summary shows how many did not fit.
-- **Everything stays with you** - the model address is restricted to this computer; cloud addresses
-  are refused.
-- **Answers with code, tables and charts** - code and JSON highlighting with a Copy button, tables,
-  task lists, quotes. Ask for a chart and the answer draws bars, lines or a ring with hover tips; it
-  switches to a table and copies as SVG.
-- **Pictures with a question** - the paper clip, paste or drag and drop (up to 4); for models that see
-  pictures (gemma3, qwen2.5vl, llava and the like).
-- **OpenRouter - optional, at your own risk.** Hundreds of cloud models with your own key (some free).
-  It is connected only by hand: a key, a consent checkbox and a yellow warning that the message
-  selection, the question and pictures go to the servers of OpenRouter and of the company behind the
-  model. Cloud conversations are marked ☁ and with a yellow bar above the input; local ones work as
-  before. The key stays on this computer in a file only you can read.
-
-![Assistant](docs/screens/en/assistant.png)
-
-![A chart in the answer](docs/screens/en/assistant-chart.png)
-
-![OpenRouter cloud models](docs/screens/en/assistant-openrouter.png)
-
-![Models: installed and catalog](docs/screens/en/assistant-models.png)
-
-![Conversation settings](docs/screens/en/assistant-settings.png)
-
 ### Settings
 
 Open them with the gear in the corner of the board.
@@ -262,6 +222,13 @@ there), at what hours most messages arrive.
 messages stay unread on the server.
 
 ![Mail](docs/screens/en/settings-mail.png)
+
+**Telegram** - two channels to choose from: OS notifications (default) or direct MTProto channel
+(read-only, no read receipts). The direct channel receives full Telegram messages up to 4096 chars
+(Telegram Desktop trims system notifications at around 255 characters). Includes toggles for
+private chats, groups, channels, bots and muted chats.
+
+![Telegram](docs/screens/en/settings-telegram.png)
 
 **Telegram forwarding** - important messages go to your Telegram by rule when you're away from the
 computer. Also a weekly report: how much came from where, the noisiest chats.
@@ -390,14 +357,12 @@ keep the sender name and message preview on.
   `data/` folder on Windows). No servers, accounts or analytics.
 - Only what you turn on leaves the computer: forwarding to Telegram, the weekly report and checking
   your own mailboxes (read-only). Smart search uses an AI model on your own computer.
+- The optional direct Telegram channel (MTProto) is enabled manually and strictly read-only: read
+  receipts and replies are never sent, and your keys and session stay on this computer in a mode-600
+  file.
 - Passwords and keys are stored in files only you can read and are never sent anywhere.
 - The board and settings pages are open only to this computer, and other websites in your browser
   can't reach them: the server answers only its own pages.
-- The assistant answers with a model on this computer (Ollama or LM Studio). The internet is only
-  needed once to download a model; a cloud model address is refused. The only exception is
-  OpenRouter, if you connect it yourself with your key and agree: then conversations with a cloud
-  model (marked ☁) send the message selection, the question and pictures to OpenRouter. One button
-  turns it off, and the key can be deleted.
 - Themed columns and the app log are stored locally too. Log tails are never forwarded, not even
   by a "Forward to Telegram" rule.
 - Every 12 hours the app asks GitHub for the latest version number to show "a new version is out".

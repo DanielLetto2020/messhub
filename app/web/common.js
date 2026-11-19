@@ -1,6 +1,6 @@
 /* Общие мелочи для всех страниц messhub: экранирование, запросы к API, буфер обмена.
    Раньше esc(), attr(), escRe(), api() и copyText() были скопированы в каждую страницу
-   (widget, settings, assistant, message, find) — правка в одном месте расходилась с остальными.
+   (widget, settings, message, find) — правка в одном месте расходилась с остальными.
    Подключается везде рядом с i18n.js:  <script src="/common.js"></script>
    Страница может переопределить любую функцию ниже своей копией - тогда её версия победит
    (в widget.html и settings.html свой toast: с кнопкой действия и со своим классом). */
@@ -41,7 +41,7 @@ async function copyText(s){
 }
 
 /* Кнопка с подтверждением вторым кликом (удалить, восстановить, заменить ключ).
-   Текст кнопки (не разметка) — как в settings.html и assistant.html. */
+   Текст кнопки (не разметка) — как в settings.html. */
 function confirmBtn(b, ask, run){
   let armed=0; const orig=b.textContent;
   b.onclick=async e=>{

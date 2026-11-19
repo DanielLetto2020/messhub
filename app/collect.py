@@ -36,31 +36,42 @@ import rules
 import scripts
 import serve
 import services
+import tgdirect
 import version
 
-_mode = {"t": 0.0, "imap": False, "commands": False}
+_mode = {"t": 0.0, "tg_ver": -1, "imap": False, "tg": False, "commands": False}
 
 
 def make_skip(db_path):
     """Что не записывать:
       - когда почта берётся из ящиков (IMAP), — уведомления почтовых программ и сайтов,
         иначе каждое письмо было бы дважды;
+      - когда включён прямой канал Telegram (MTProto) и есть сессия — уведомления Telegram;
       - когда колонка «Команды» выключена, — уведомления хука терминала (messhub-commands).
-    Режимы перечитываем раз в 20 с."""
+    Режимы перечитываем раз в 20 с (или сразу при смене конфигурации Telegram)."""
     def skip(rec):
-        if time.time() - _mode["t"] > 20:
+        now = time.time()
+        tg_ver = tgdirect.mode_version()
+        if now - _mode["t"] > 20 or tg_ver != _mode["tg_ver"]:
             try:
                 conn = sqlite3.connect(db_path, timeout=5)
                 try:
                     _mode["imap"] = mail.channel(conn) == "imap"
+                    _mode["tg"] = tgdirect.channel(conn) == "mtproto" and tgdirect.has_session()
                     _mode["commands"] = rules.themed(rules.get_prefs(conn))["commands"]["enabled"]
+                    _mode["tg_ver"] = tg_ver
                 finally:
                     conn.close()
             except sqlite3.Error:
                 pass                     # база занята — пока живём с прежним режимом
-            _mode["t"] = time.time()
-        key = rules.source_of(rec["app"], rec.get("site", ""))["key"]
-        return (_mode["imap"] and key == "mail") or (key == "commands" and not _mode["commands"])
+            _mode["t"] = now
+        app = rec.get("app") or ""
+        if app == tgdirect.APP:
+            return False
+        key = rules.source_of(app, rec.get("site", ""))["key"]
+        return ((_mode["imap"] and key == "mail")
+                or (_mode["tg"] and key == "telegram")
+                or (key == "commands" and not _mode["commands"]))
     return skip
 
 
@@ -106,6 +117,8 @@ def main():
     serve.start_background(args.db)
     # почта из ящиков (IMAP) — работает, только если выбран такой канал почты
     mail.start(args.db)
+    # прямой канал Telegram (MTProto) — работает, только если включён и выполнена авторизация
+    tgdirect.start(args.db)
     # тематические колонки: контейнеры (docker/podman) и упавшие службы — пока включены в настройках
     containers.start(args.db)
     services.start(args.db)

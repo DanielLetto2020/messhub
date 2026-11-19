@@ -9,7 +9,6 @@ window.pywebview.api.post(…):
       (у окна без рамки на Windows нет системного перетаскивания — сдвиг считает страница);
   lock:1 / lock:0 — замок: не двигать, не менять размер, держать под остальными окнами;
   settings / settings:<раздел> — окно настроек;  message:<id> — окно одного сообщения (/message?id=N);
-  assistant — окно ассистента (/assistant);
   open:{"app","site"} — сайт открыть в браузере, приложение — по его AUMID (shell:AppsFolder);
   strip:{"on"} — лента важного (prefs.strip): закреплённое и подсвеченное строкой над доской, в своём окне
       (/widget?strip=1). Прозрачного по пикселям окна тут нет, поэтому окно ленты — по высоте содержимому:
@@ -65,7 +64,7 @@ class Api:
         self._base, self._state_path = base_url, state_path
         self._state = _load_state(state_path)
         self._win = self._settings = None
-        self._pages = {}             # отдельные окна страниц: message, assistant
+        self._pages = {}             # отдельные окна страниц: message
         self._share, self._share_thread = {"on": False}, None     # показ экрана → размыть доску
         self._find = None            # окно результатов поиска из шапки (над панелью)
         self._g0 = None
@@ -122,8 +121,6 @@ class Api:
             self._search_close()
         elif verb == "message":
             self._open_page("message", f"/message?id={arg}&host=pywebview", 900, 640)
-        elif verb == "assistant":
-            self._open_page("assistant", "/assistant?host=pywebview", 1120, 760)
         elif verb == "open":
             self._open(arg)
         elif verb == "opacity":
@@ -387,7 +384,7 @@ def _window_titles():
 
 class StripApi:
     """Мост окна ленты важного: strip-shape — сколько окну нужно в высоту (пусто — спрятать), opacity — прозрачность
-    этого окна; остальное (open, message, assistant, settings) — как с доски."""
+    этого окна; остальное (open, message, settings) — как с доски."""
 
     def __init__(self, main):
         self._main, self._win, self._h, self._shown, self._dock = main, None, 0, False, "above"
@@ -410,8 +407,8 @@ class StripApi:
 
 
 class PageApi:
-    """Мост отдельного окна (сообщение, ассистент): close — закрыть, open:{…} — перейти в приложение,
-    message:<id> / assistant / settings — открыть другое окно (как с доски)."""
+    """Мост отдельного окна (сообщение): close — закрыть, open:{…} — перейти в приложение,
+    message:<id> / settings — открыть другое окно (как с доски)."""
 
     def __init__(self, main):
         self._main, self._win = main, None

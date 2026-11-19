@@ -525,6 +525,9 @@ def _inspect_apps(gnome_apps, matched_slugs, recent_rows, prefs):
     tg_win = _win_app_enabled(("Telegram",)) if WINDOWS else None
     tg_n, tg_last = recent_for("telegram")
     tg_hints = []
+    if prefs.get("telegram_channel") == "mtproto":
+        tg_hints.append(L("Сейчас выбран прямой канал Telegram (MTProto), поэтому системные уведомления Telegram Desktop пропускаются во избежание дублей.",
+                          "Telegram channel is set to direct MTProto, so Telegram Desktop system notifications are skipped to avoid duplicates."))
     if tg_gnome and not tg_gnome["enable"]:
         tg_hints.append(L("Уведомления Telegram выключены в настройках GNOME — нажми «Включить в системе».",
                           "Telegram notifications are disabled in GNOME Settings — click “Enable in system”."))

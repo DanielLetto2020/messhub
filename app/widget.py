@@ -20,7 +20,6 @@ GTK + WebKit2:
   - колонки делят ширину окна поровну сами (flex: 1 на странице);
   - видно на всех рабочих столах, не мозолит в панели задач;
   - ⤢ на плашке (или «Показать целиком») — отдельное окно СООБЩЕНИЯ (/message?id=N): текст и лог целиком;
-  - ✨ в шапке — окно АССИСТЕНТА (/assistant): чат с локальной моделью (Ollama / LM Studio) по базе;
   - кнопка-«шестерёнка» открывает отдельное окно НАСТРОЕК (/settings): источники и
     правила, что показывать в виджете (см. rules.py);
   - кнопка-«глаз» на странице размывает все сообщения (для показа экрана);
@@ -91,7 +90,6 @@ DEFAULT_STATE = paths.WIDGET_STATE       # ~/.config/<APP_ID>/widget-state.json
 MIN_W, MIN_H = 260, 140      # меньше мышкой не сжать
 SETTINGS_W, SETTINGS_H = 1000, 680   # окно настроек по умолчанию
 MESSAGE_W, MESSAGE_H = 900, 640      # окно одного сообщения (/message?id=N)
-ASSIST_W, ASSIST_H = 1120, 760       # окно ассистента (/assistant)
 STRIP_H, STRIP_GAP = 460, 6          # окно ленты важного: строка карточек + место над ней для чатов и меню
 GEOM_KEYS = ("x", "y", "w", "h")
 
@@ -363,7 +361,7 @@ class Widget(Gtk.Window):
         self.base_url = f"{u.scheme}://{u.netloc}"   # тот же сервер отдаёт и /settings
         self.strip = None            # лента важного над доской (Strip), если включена в настройках
         self.settings_win = None
-        self.page_wins = {}          # отдельные окна страниц: message, assistant (по одному каждого)
+        self.page_wins = {}          # отдельные окна страниц: message (по одному каждого)
         self.find_win = None         # окно результатов поиска из шапки (над панелью)
         self.share = {"on": False, "patterns": [], "active": False, "tick": 0, "id": 0}
         self.saved = None if reset else load_state(state_path)   # что сейчас в файле
@@ -762,13 +760,11 @@ class Widget(Gtk.Window):
                                          -1, None, None, None, None)
         return True
 
-    # ── отдельные окна страниц: сообщение целиком, ассистент ──
+    # ── отдельные окна страниц: сообщение целиком ──
     def _page_cmd(self, cmd, web=None, win=None):
         """Команды, общие для доски и отдельных окон. → обработана ли."""
         if cmd.startswith("message:") and cmd[8:].isdigit():
             self._open_page("message", f"/message?id={int(cmd[8:])}", MESSAGE_W, MESSAGE_H)
-        elif cmd == "assistant":
-            self._open_page("assistant", "/assistant", ASSIST_W, ASSIST_H)
         elif cmd == "close" and win is not None:
             win.destroy()
         elif cmd == "search-close":
@@ -787,7 +783,7 @@ class Widget(Gtk.Window):
 
     def _open_page(self, kind, path, width, height):
         """Обычное окно с рамкой, как настройки; каждого вида — одно (уже открыто — показать в нём
-        новый адрес и поднять). Страница шлёт close, open:{…}, message:<id>, settings, assistant."""
+        новый адрес и поднять). Страница шлёт close, open:{…}, message:<id>, settings."""
         url = self.base_url + path
         win = self.page_wins.get(kind)
         if win is not None:

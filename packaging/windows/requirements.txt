@@ -8,3 +8,5 @@ winrt-Windows.Foundation.Collections>=2.3
 winrt-Windows.UI.Notifications>=2.3
 winrt-Windows.UI.Notifications.Management>=2.3
 winrt-Windows.ApplicationModel>=2.3
+# Опциональный прямой канал Telegram (MTProto, только чтение без «прочитано»)
+telethon>=1.36,<2

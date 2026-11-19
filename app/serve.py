@@ -6,12 +6,10 @@
   Страницы и файлы:
     / и /widget → widget.html (в браузере — та же доска)     /settings → settings.html
     /message?id=N → message.html — отдельное окно: сообщение и лог целиком
-    /assistant → assistant.html — ассистент на локальной модели (ai.py; API /api/ai/…)
     /find?q=… → find.html — результаты поиска из шапки доски (окно выпадает над панелью)
     /i18n.js — переводы страниц     /common.js — общие esc(), api(), буфер обмена
                          (её подключают все страницы вместо копий в каждой)
     /avatar/<файл> — аватары из уведомлений
-    /ai-image/<файл> — картинки, приложенные к вопросам ассистенту
 
   Сообщения:
     GET /api/messages   последние N (JSON); &after=ID — только новые (id > ID);
@@ -45,15 +43,7 @@
     /api/rag/status|install|disable|retry|remove-model|search|ask, /api/ingest/config|token, /api/session/token (сменить токен сеанса; см. session.py),
     /api/diag, /api/autostart, /api/restart, /api/version, /api/update (новая версия на GitHub),
     /api/mail (ящики IMAP, см. mail.py) + /api/mail/channel|account|delete|test|check
-
-  Ассистент на локальной модели (ai.py):
-    GET  /api/ai/status, /api/ai/sessions, /api/ai/session?id=N, /api/ai/pull,
-         /api/ai/model-info?provider=&model=, /api/ai/openrouter/models, /api/ai/export?id=N
-    POST /api/ai/setup {ai}, /api/ai/openrouter {enabled, key, consent} — облако только так,
-         /api/ai/session {id?, title, settings}, /api/ai/session/delete {id},
-         /api/ai/defaults {settings}, /api/ai/pull {model}, /api/ai/pull/cancel,
-         /api/ai/delete-model {model}, /api/ai/lmstudio/start
-    POST /api/ai/chat — ответ потоком (NDJSON), отдельно от таблицы: тело до 48 МБ (картинки)
+    /api/telegram (прямой канал MTProto, см. tgdirect.py) + /api/telegram/channel|install-lib|auth/send-code|auth/sign-in|auth/cancel|settings|reconnect|logout
 
   Настройка уведомлений приложений (appsetup.py):
     GET  /api/notify-setup — проверка системы, браузеров и приложений
@@ -102,7 +92,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs, unquote
 
 import actions
-import ai
 import applog
 import appsetup
 import avatars
@@ -127,6 +116,7 @@ import scripts
 import services
 import session
 import stats
+import tgdirect
 import updates
 import when
 import version
@@ -139,7 +129,6 @@ PAGES = {
     "/widget": ("widget.html", "text/html; charset=utf-8"),
     "/settings": ("settings.html", "text/html; charset=utf-8"),
     "/message": ("message.html", "text/html; charset=utf-8"),     # окно одного сообщения: /message?id=N
-    "/assistant": ("assistant.html", "text/html; charset=utf-8"), # окно ассистента на локальной модели
     "/find": ("find.html", "text/html; charset=utf-8"),           # результаты поиска из шапки доски
     "/i18n.js": ("i18n.js", "text/javascript; charset=utf-8"),
     "/common.js": ("common.js", "text/javascript; charset=utf-8"),
@@ -984,12 +973,6 @@ def _r_why(c):
         {"error": L("Нет такого сообщения", "No such message")}
 
 
-def _r_openrouter_models(c):
-    if not read(c.db, rules.get_prefs)["ai"]["openrouter"]:
-        return Json({"error": L("OpenRouter выключен", "OpenRouter is off")}, 400)
-    return {"models": ai.or_models(force=c.flag("force")), "error": ai._or_models["error"]}
-
-
 def _r_quiet(c):
     st = quiet.public_status()
     if os.environ.get(f"{paths.ENV_PREFIX}_THEMED_DEMO") == "1" and st["dnd"] is None:
@@ -1023,6 +1006,7 @@ GET_ROUTES = {
     "/api/mail": lambda c: {"channel": read(c.db, mail.channel),
                             "accounts": read(c.db, mail.public_accounts),
                             "presets": mail.PRESETS},
+    "/api/telegram": lambda c: read(c.db, tgdirect.public_status),
     "/api/search": _r_search,
     "/api/why": _r_why,
     "/api/settings/sources": lambda c: read(c.db, rules.overview),
@@ -1040,13 +1024,6 @@ GET_ROUTES = {
                                       "session": session.script_help()},
     # ключ приёма событий отдаёт этот GET - поэтому он под токеном сеанса (session.GUARDED_GET).
     "/api/themed": lambda c: themed_info(c.db),
-    "/api/ai/status": lambda c: read(c.db, ai.status),
-    "/api/ai/sessions": lambda c: read(c.db, ai.list_sessions),
-    "/api/ai/session": lambda c: read(c.db, ai.get_session, c.num("id")),
-    "/api/ai/pull": lambda c: dict(ai.pull),
-    "/api/ai/model-info": lambda c: read(c.db, ai.model_info, c.arg("provider"), c.arg("model")),
-    "/api/ai/openrouter/models": _r_openrouter_models,
-    "/api/ai/export": lambda c: {"text": read(c.db, ai.export_markdown, c.num("id"))},
     "/api/quiet": _r_quiet,
     "/api/scripts": _r_scripts,
     "/api/logs": _r_logs,
@@ -1080,29 +1057,6 @@ def _p_event(c):
     if c.payload.get("kind") != "command":
         raise BadRequest(L("Неизвестное событие", "Unknown event"))
     return events.command(c.db, c.payload)
-
-
-def _p_ai_setup(c):
-    # OpenRouter так не включить: только /api/ai/openrouter (rules.set_prefs, cloud_ok)
-    write(c.db, rules.set_prefs, {"ai": dict(c.payload.get("ai") or {})})
-    return read(c.db, ai.status)
-
-
-def _p_ai_openrouter(c):
-    return write(c.db, ai.or_setup, bool(c.payload.get("enabled")),
-                 None if c.payload.get("key") is None else str(c.payload.get("key")),
-                 bool(c.payload.get("consent")))
-
-
-def _p_ai_session(c):
-    if c.payload.get("id"):
-        return write(c.db, ai.update_session, int(c.payload["id"]), c.payload.get("title"),
-                     c.payload.get("settings"))
-    return write(c.db, ai.create_session, c.payload.get("settings"), str(c.payload.get("title") or ""))
-
-
-def _p_ai_session_delete(c):
-    return {"deleted": write(c.db, ai.delete_session, int(c.payload.get("id")))}
 
 
 def _p_remind(c):
@@ -1163,6 +1117,26 @@ def _p_mail_test(c):
 def _p_mail_check(c):
     return {"new": mail.check_now(c.db, str(c.payload.get("id") or "")),
             "accounts": read(c.db, mail.public_accounts)}
+
+
+def _p_tg_channel(c):
+    ch = c.payload.get("channel")
+    if ch not in ("notify", "mtproto"):
+        raise BadRequest(L("Канал Telegram — notify или mtproto", "Telegram channel must be notify or mtproto"))
+    write(c.db, rules.set_prefs, {"telegram_channel": ch})
+    tgdirect.bump_mode()
+    tgdirect.wake()
+    return read(c.db, tgdirect.public_status)
+
+
+def _p_tg_send_code(c):
+    res = tgdirect.send_code(c.payload.get("api_id"), c.payload.get("api_hash"), c.payload.get("phone"))
+    return {**res, **read(c.db, tgdirect.public_status)}
+
+
+def _p_tg_sign_in(c):
+    res = tgdirect.sign_in(c.db, str(c.payload.get("code") or ""), str(c.payload.get("password") or ""))
+    return {**res, **read(c.db, tgdirect.public_status)}
 
 
 def _p_rules(c):
@@ -1279,15 +1253,6 @@ POST_ROUTES = {
     "/api/snooze": _p_snooze,
     "/api/ingest": lambda c: ingest.accept_api(c.db, c.payload),
     "/api/event": _p_event,
-    "/api/ai/setup": _p_ai_setup,
-    "/api/ai/openrouter": _p_ai_openrouter,
-    "/api/ai/session": _p_ai_session,
-    "/api/ai/session/delete": _p_ai_session_delete,
-    "/api/ai/defaults": lambda c: write(c.db, ai.save_defaults, dict(c.payload.get("settings") or {})),
-    "/api/ai/pull": lambda c: read(c.db, ai.start_pull, str(c.payload.get("model") or "")),
-    "/api/ai/pull/cancel": lambda c: ai.cancel_pull(),
-    "/api/ai/delete-model": lambda c: read(c.db, ai.delete_model, str(c.payload.get("model") or "")),
-    "/api/ai/lmstudio/start": lambda c: ai.lmstudio_start(),
     "/api/quiet": lambda c: write(c.db, quiet.set_manual, str(c.payload.get("action") or "")),
     "/api/remind": _p_remind,
     "/api/remind/cancel": _p_remind_cancel,
@@ -1307,6 +1272,15 @@ POST_ROUTES = {
     "/api/mail/delete": _p_mail_delete,
     "/api/mail/test": _p_mail_test,
     "/api/mail/check": _p_mail_check,
+    "/api/telegram/channel": _p_tg_channel,
+    "/api/telegram/install-lib": lambda c: {**tgdirect.install_lib(), **read(c.db, tgdirect.public_status)},
+    "/api/telegram/auth/send-code": _p_tg_send_code,
+    "/api/telegram/auth/sign-in": _p_tg_sign_in,
+    "/api/telegram/auth/cancel": lambda c: {**tgdirect.cancel_auth(), **read(c.db, tgdirect.public_status)},
+    "/api/telegram/settings": lambda c: (tgdirect.save_settings(c.payload), read(c.db, tgdirect.public_status))[1],
+    "/api/telegram/reconnect": lambda c: (tgdirect.reconnect(), read(c.db, tgdirect.public_status))[1],
+    "/api/telegram/logout": lambda c: {**tgdirect.logout(c.db, bool(c.payload.get("remote", True))),
+                                       **read(c.db, tgdirect.public_status)},
     "/api/rules": _p_rules,
     "/api/rules/delete": lambda c: {"ok": True, "deleted": write(c.db, rules.delete_rule, int(c.payload.get("id")))},
     "/api/source-mode": _p_source_mode,
@@ -1406,12 +1380,6 @@ def make_handler(db_path):
                 if not f:
                     return self._send(404, b"not found", "text/plain; charset=utf-8")
                 return self._file(f, "image/png" if f.endswith(".png") else "image/jpeg")
-            if p.startswith("/ai-image/"):
-                f = ai.image_file(unquote(p[10:]))
-                if not f:
-                    return self._send(404, b"not found", "text/plain; charset=utf-8")
-                return self._file(f, {"png": "image/png", "jpg": "image/jpeg", "gif": "image/gif",
-                                      "webp": "image/webp"}[f.rsplit(".", 1)[1]])
 
             self._lang()
             try:
@@ -1449,8 +1417,6 @@ def make_handler(db_path):
                 return self._json({"error": L("Нужен токен сеанса (см. настройки → «Система»)",
                                               "Session token required (see settings → “System”)"),
                                    "token_header": session.HEADER}, 401)
-            if p == "/api/ai/chat":
-                return self._ai_chat()
             try:
                 size = int(self.headers.get("Content-Length") or 0)
                 if size < 0:
@@ -1477,36 +1443,6 @@ def make_handler(db_path):
                 self._json({"error": str(e)}, 503)
             except OSError as e:          # Ollama/Telegram недоступны, диск и т.п.
                 self._json({"error": str(e)}, 502)
-
-        def _ai_chat(self):
-            """Ответ ассистента потоком (NDJSON, по строке на событие); закрыли окно — модель останавливается."""
-            try:
-                size = int(self.headers.get("Content-Length") or 0)
-                if size < 0 or size > 48 * 1024 * 1024:          # до 4 картинок по 8 МБ в base64
-                    raise ValueError
-                payload = json.loads(self.rfile.read(size) or b"{}")
-                sid, text = int(payload.get("session")), str(payload.get("text") or "")
-                images = [str(x) for x in (payload.get("images") or [])][:ai.MAX_IMAGES]
-            except (ValueError, TypeError, AttributeError):
-                return self._json({"error": L("Неверный запрос", "Bad request")}, 400)
-            self.send_response(200)
-            self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("X-App-Version", version.__version__)
-            self.end_headers()
-            self.close_connection = True
-
-            def emit(ev):
-                try:
-                    self.wfile.write((json.dumps(ev, ensure_ascii=False) + "\n").encode("utf-8"))
-                    self.wfile.flush()
-                    return True
-                except OSError:              # окно закрыли или нажали «Стоп»
-                    return False
-            try:
-                ai.chat(db_path, sid, text, emit, i18n.lang(), images)
-            except (ValueError, sqlite3.Error) as e:
-                emit({"type": "error", "error": str(e)})
 
     return Handler
 

@@ -176,12 +176,14 @@ def main():
     import scripts
     import serve
     import services
+    import tgdirect
     import wincatcher
     print(f"{version.version_line()} — сбор → {a.db}", flush=True)
     serve.prepare(a.db)
     serve.start_background(a.db)
     mail.start(a.db)
     if not a.selftest:
+        tgdirect.start(a.db)
         containers.start(a.db)          # тематические колонки: пока включены в настройках
         services.start(a.db)
         for mod in (resources, logwatch, calendar_src, scripts, quiet, reminders):

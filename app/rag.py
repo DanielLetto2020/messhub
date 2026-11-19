@@ -57,11 +57,11 @@ _tls = threading.local()
 
 
 def ollama_url(conn=None):
-    """Адрес Ollama: OLLAMA_HOST (если явно задан) или настройка prefs.ai.ollama_url (только локальный)."""
+    """Адрес Ollama: OLLAMA_HOST (если явно задан) или настройка prefs.rag.ollama_url (только локальный)."""
     if os.environ.get("OLLAMA_HOST") or OLLAMA != DEFAULT_OLLAMA:
         return OLLAMA if rules.ai_url_ok(OLLAMA) else DEFAULT_OLLAMA
     if conn is not None:
-        url = (rules.get_prefs(conn)["ai"].get("ollama_url") or DEFAULT_OLLAMA).strip().rstrip("/")
+        url = (rules.get_prefs(conn)["rag"].get("ollama_url") or DEFAULT_OLLAMA).strip().rstrip("/")
         if rules.ai_url_ok(url):
             return url
     return DEFAULT_OLLAMA

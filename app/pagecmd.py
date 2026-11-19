@@ -22,7 +22,7 @@ EDGES = ("n", "s", "e", "w", "ne", "nw", "se", "sw")
 
 # verb → что делать с аргументом; None — команда не наша
 VERBS = ("geom-start", "geom", "geom-end", "move", "resize", "lock", "settings", "share",
-         "search", "search-nav", "search-close", "strip", "message", "assistant", "close",
+         "search", "search-nav", "search-close", "strip", "message", "close",
          "open", "opacity")
 
 

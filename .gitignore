@@ -17,6 +17,9 @@ widget-state.json
 
 # настройки пересылки в Telegram — там токен бота
 telegram-forward.json
+telegram-direct.json
+*.session
+*.session-journal
 
 # личный стоп-лист проверки публикации (tools/check_public.py) и локальные переменные
 .public-deny

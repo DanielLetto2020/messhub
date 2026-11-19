@@ -67,6 +67,7 @@ class ApiTest(unittest.TestCase):
                 self.assertIn(marker, body, path)
         code, v, _ = self.req("/api/version")
         self.assertEqual((v["author"], v["email"]), ("Кузьминский Максим", "i@m-letto.ru"))
+        self.assertEqual(self.req("/assistant")[0], 404)
 
     def test_version_header_and_json_only(self):
         code, v, h = self.req("/api/version")
@@ -262,14 +263,6 @@ class ApiTest(unittest.TestCase):
         with mock.patch("catcher.msk_time", side_effect=lambda h=0: orig(h - 2)):
             serve.auto_read(self.db)                      # «через два часа»
         self.assertIn(mid, self.req("/api/visible")[1]["ids"])
-
-    def test_openrouter_only_with_consent(self):
-        """Облако не включается ни общими настройками, ни загрузкой файла настроек."""
-        self.req("/api/prefs", {"ai": {"openrouter": True, "openrouter_consent": "2026-01-01 00:00:00"}})
-        self.req("/api/config/import", {"data": {"prefs": {"ai": {"openrouter": True}}, "rules": []}})
-        ai = self.req("/api/prefs")[1]["ai"]
-        self.assertEqual((ai["openrouter"], ai["openrouter_consent"]), (False, ""))
-        self.assertEqual(self.req("/api/prefs", {"ai": [["openrouter", True]]})[0], 400)
 
     def test_mentions_as_string_and_bad_date(self):
         self.assertEqual(self.req("/api/prefs", {"mentions": "Анна, Олег"})[1]["mentions"], ["Анна", "Олег"])

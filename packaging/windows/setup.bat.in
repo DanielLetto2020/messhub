@@ -26,7 +26,13 @@ if not exist "%ZIP%" goto fail
 
 :unpack
 taskkill /im messhub.exe /f >nul 2>&1
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -LiteralPath '%ZIP%' -DestinationPath '%UNPACK%' -Force"
+if exist "%UNPACK%" rmdir /s /q "%UNPACK%"
+mkdir "%UNPACK%" >nul 2>&1
+tar.exe -xf "%ZIP%" -C "%UNPACK%" >nul 2>&1
+if not exist "%UNPACK%\messhub\messhub.exe" (
+  rmdir /s /q "%UNPACK%" >nul 2>&1
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('%ZIP%', '%UNPACK%')"
+)
 if not exist "%UNPACK%\messhub\messhub.exe" goto fail
 if exist "%DEST%" rmdir /s /q "%DEST%"
 mkdir "%DEST%" >nul 2>&1

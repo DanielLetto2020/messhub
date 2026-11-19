@@ -31,7 +31,7 @@ def pyinstaller(src, v):
             "--name", "messhub", "--icon", os.path.join(src, "icons", "messhub.ico"),
             "--distpath", os.path.join(DIST, "win"), "--workpath", os.path.join(src, "_build"),
             "--specpath", os.path.join(src, "_build"),
-            "--collect-all", "winrt", "--collect-all", "webview",
+            "--collect-all", "winrt", "--collect-all", "webview", "--collect-all", "telethon",
             "--add-data", f"{os.path.join(src, 'icons')}{os.pathsep}icons",
             "--add-data", f"{os.path.join(src, 'web')}{os.pathsep}web"]
     for f in data:

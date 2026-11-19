@@ -13,7 +13,7 @@ import pagecmd
 class ParseTest(unittest.TestCase):
     def test_verbs_without_argument(self):
         for cmd, verb in (("move", "move"), ("geom-end", "geom-end"), ("search-close", "search-close"),
-                          ("assistant", "assistant"), ("close", "close")):
+                          ("close", "close")):
             self.assertEqual(pagecmd.parse(cmd)[0], verb, cmd)
 
     def test_numbers(self):
@@ -104,5 +104,5 @@ class DragTest(unittest.TestCase):
     def test_is_drag(self):
         self.assertTrue(pagecmd.is_drag("move"))
         self.assertTrue(pagecmd.is_drag("resize:e"))
-        for cmd in ("search:{}", "close", "assistant", "lock:1", "geom-end"):
+        for cmd in ("search:{}", "close", "lock:1", "geom-end"):
             self.assertFalse(pagecmd.is_drag(cmd), cmd)

@@ -104,39 +104,6 @@ THEMED = {
     ],
 }
 
-# ассистент: (название беседы, вопрос, ответ с номерами сообщений по порядку: shop-api, shop-db, бэкап, make release, npm build)
-AI_DEMO = {
-    "ru": ("Что на серверах", "Сделай отчёт по серверам: что падало, что починилось, что до сих пор не работает.",
-           "**Не работает сейчас**\n- `shop-api` падает по кругу: третий раз за 10 минут не может подключиться к базе (#{0}).\n"
-           "- Ночной бэкап `backup-nightly.service` не прошёл: на NAS кончилось место (#{2}).\n\n"
-           "**Починилось**\n- `shop-db` был нездоров (unhealthy), через 4 минуты снова работает (#{1}).\n"
-           "- Сборка `npm run build` в shop-web падала с ошибкой, повторный запуск прошёл (#{4}).\n\n"
-           "**Прошло без проблем**\n- `make release` в shop — готово за 4 минуты (#{3}).\n\n"
-           "Похоже, `shop-api` падает из-за базы: стоит проверить, что `shop-db` отвечает, и освободить место на NAS."),
-    "en": ("Servers", "Make a server report: what failed, what got fixed, what still does not work.",
-           "**Broken right now**\n- `shop-api` keeps crashing: third time in 10 minutes it can't reach the database (#{0}).\n"
-           "- The nightly backup `backup-nightly.service` failed: the NAS is out of space (#{2}).\n\n"
-           "**Fixed**\n- `shop-db` was unhealthy and works again after 4 minutes (#{1}).\n"
-           "- The `npm run build` in shop-web failed, the rerun passed (#{4}).\n\n"
-           "**Went fine**\n- `make release` in shop — done in 4 minutes (#{3}).\n\n"
-           "`shop-api` seems to fail because of the database: check that `shop-db` answers and free up space on the NAS."),
-}
-
-# беседа с облачной моделью (OpenRouter): график по дням — ответ с блоком ```chart
-_CHART = {"ru": ("Сообщения по дням", ["пн", "вт", "ср", "чт", "пт", "сб", "вс"], ["eXpress", "Telegram", "Почта"]),
-          "en": ("Messages per day", ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], ["eXpress", "Telegram", "Mail"])}
-_CHART_DATA = [[34, 41, 58, 52, 30, 4, 2], [18, 16, 20, 17, 22, 26, 24], [9, 11, 8, 10, 7, 1, 2]]
-AI_CHART = {
-    "ru": ("График за неделю", "Построй график: сколько сообщений было по дням за неделю — eXpress, Telegram и почта.",
-           "За неделю — **412 сообщений**, больше всего в среду: в eXpress обсуждали релиз (#{0}).\n\n```chart\n{1}\n```\n\n"
-           "- eXpress — больше половины, пик в среду и четверг.\n- Telegram ровный всю неделю, в выходные чуть больше.\n"
-           "- Почта — почти вся в будни."),
-    "en": ("Week chart", "Chart how many messages came per day this week: eXpress, Telegram and mail.",
-           "**412 messages** this week, most on Wednesday: the release was discussed in eXpress (#{0}).\n\n```chart\n{1}\n```\n\n"
-           "- eXpress is more than half, peaking on Wednesday and Thursday.\n- Telegram is steady all week, a bit more on the weekend.\n"
-           "- Mail comes almost only on weekdays."),
-}
-
 # журнал программы (раздел «Логи»): (минут назад, уровень, процесс, текст)
 LOGS = {
     "ru": [
@@ -313,28 +280,6 @@ def build(home, lang):
     mid = conn.execute("SELECT id FROM messages WHERE chat IN ('Стоматология', 'Dentist')").fetchone()[0]
     tomorrow = (now + timedelta(days=1)).strftime("%Y-%m-%d")
     reminders.add(conn, mid, f"{tomorrow} 10:00", f"{tomorrow} 10:30")
-    # ассистент: настроен, одна беседа с ответом (модель в снимках не нужна — ответ уже в базе)
-    import ai as ai_mod
-    rules.set_prefs(conn, {"ai": {"provider": "ollama", "model": "qwen3:8b", "setup_done": True,
-                                  "openrouter": True, "openrouter_consent": catcher.msk_time(24)}}, cloud_ok=True)
-    title, days, names = _CHART[lang]
-    spec = {"type": "bar", "title": title, "labels": days, "series": [{"name": n, "data": d} for n, d in zip(names, _CHART_DATA)]}
-    cs = ai_mod.create_session(conn, {"provider": "openrouter", "model": "google/gemini-2.5-flash", "period": "7d"}, AI_CHART[lang][0])
-    first = conn.execute("SELECT id FROM messages WHERE app = 'eXpress' ORDER BY id").fetchone()[0]
-    for role, text, meta in (("user", AI_CHART[lang][1], {}),
-                             ("assistant", AI_CHART[lang][2].format(first, json.dumps(spec, ensure_ascii=False)),
-                              {"ids": [first], "model": "openrouter: google/gemini-2.5-flash", "ms": 3100, "tokens": 286,
-                               "external": True, "cost": 0.00071})):
-        conn.execute("INSERT INTO ai_messages (session_id, role, content, created, meta) VALUES (?,?,?,?,?)",
-                     (cs["id"], role, text, catcher.msk_time(1), json.dumps(meta, ensure_ascii=False)))
-    conn.execute("UPDATE ai_sessions SET updated = ? WHERE id = ?", (catcher.msk_time(1), cs["id"]))
-    sess = ai_mod.create_session(conn, {"provider": "ollama", "model": "qwen3:8b"}, AI_DEMO[lang][0])
-    ids = [r[0] for r in conn.execute("SELECT id FROM messages WHERE app IN ('messhub-containers', 'messhub-services', "
-                                      "'messhub-commands') ORDER BY id")]
-    q, a = AI_DEMO[lang][1], AI_DEMO[lang][2].format(*ids)
-    for role, text, meta in (("user", q, {}), ("assistant", a, {"ids": ids, "model": "ollama: qwen3:8b", "ms": 6400, "tokens": 212})):
-        conn.execute("INSERT INTO ai_messages (session_id, role, content, created, meta) VALUES (?,?,?,?,?)",
-                     (sess["id"], role, text, catcher.msk_time(0.1), json.dumps(meta, ensure_ascii=False)))
     conn.commit()
 
     # журнал программы: несколько записей за сутки
