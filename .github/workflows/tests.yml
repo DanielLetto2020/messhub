@@ -6,7 +6,7 @@ on:
     branches: [main, contrib]
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.python == '3.9' && 'ubuntu-24.04' || 'ubuntu-latest' }}
     strategy:
       matrix:
         python: ["3.9", "3.12", "3.13"]

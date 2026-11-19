@@ -205,7 +205,8 @@ class ApiTest(unittest.TestCase):
         self.assertFalse(session.ok({"X-Messhub-Token": first}))
         self.assertTrue(session.ok({"X-Messhub-Token": second}))
         # файл токена - с правами 600 (он секрет)
-        self.assertEqual(os.stat(paths.SESSION_CFG).st_mode & 0o777, 0o600, paths.SESSION_CFG)
+        if os.name != "nt":                         # на Windows прав «600» нет — там профиль пользователя
+            self.assertEqual(os.stat(paths.SESSION_CFG).st_mode & 0o777, 0o600, paths.SESSION_CFG)
         # пустой {"token": ""} перегенерирует валидный токен
         paths.write_private(paths.SESSION_CFG, json.dumps({"token": ""}))
         regen = session.token()
